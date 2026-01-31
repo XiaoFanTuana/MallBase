@@ -811,6 +811,7 @@ class Docs extends Command
         }
 
         $html .= '</div>';  // 关闭 nav-menu
+        $html .= '</div>';  // 关闭 sidebar
 
         $html .= '<div class="main-content">
         <div class="content-wrapper">
@@ -869,7 +870,6 @@ class Docs extends Command
         }
 
         $html .= '</div>
-    </div>
     
     <script>
         const navApps = document.querySelectorAll(".nav-app");
