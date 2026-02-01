@@ -406,10 +406,15 @@ class Docs extends Command
 
         foreach ($arrayMatches as $am) {
             $methodName = $am[1];
-            $arrayBody = $am[2];
+            $arrayBody = trim($am[2]);
 
-            // 拆顶层数组（不递归，已够用）
-            $items = preg_split('/,(?![^\[]*\])/', $arrayBody);
+            // 拆最外层数组（避免子数组逗号干扰）
+            $items = preg_split(
+                '/,(?![^\[]*\])/',
+                $arrayBody,
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
 
             foreach ($items as $item) {
                 $item = trim($item);
@@ -423,7 +428,7 @@ class Docs extends Command
                  * ['field/d' => 111]
                  */
                 if (!preg_match(
-                    '/[\'"]([^\'"]+)[\'"]\s*(?:=>\s*(.+))?/',
+                    '/[\'"]([^\'"]+)[\'"]\s*(?:=>\s*([^\],\n]+))?/',
                     $item,
                     $m
                 )) {
@@ -431,17 +436,24 @@ class Docs extends Command
                 }
 
                 $raw = $m[1];
-                $default = $m[2] ?? null;
+                $default = isset($m[2]) ? trim($m[2]) : null;
 
+                // 解析 field/type
                 [$name, $type] = $this->parseField($raw, $typeMap);
 
                 $source = $sourceMap[$methodName];
                 $required = $default === null;
-                if ($source === 'path') $required = true;
+
+                if ($source === 'path') {
+                    $required = true; // OpenAPI 规定
+                }
+
                 $params[$source][$name] = [
                     'type' => $type,
                     'required' => $required,
-                    'default' => $default !== null ? $this->parsePhpValue($default) : 'null',
+                    'default' => $default !== null
+                        ? $this->parsePhpValue($default)
+                        : null,
                     'desc' => '',
                 ];
             }
