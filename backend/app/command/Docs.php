@@ -73,13 +73,21 @@ class Docs extends Command
         $docs = Config::get('docs');
         $docs['apps'] = [];
 
-        // 使用 ThinkPHP 原生方法获取路由列表
-        $routeList = $this->getRouteList();
+        // 根据配置文件初始化应用分组
+        foreach ($docs['app'] as $appKey => $appConfig) {
+            $appName = $appConfig['alias'] ?? $appKey;
+            $docs['apps'][$appKey] = [
+                'name' => $appName,
+                'key' => $appKey,
+                'groups' => [],
+            ];
+            // 使用 ThinkPHP 原生方法获取路由列表
+            $routeList = $this->getRouteList($appKey, $appConfig);
+            $output->writeln('<comment>解析到的' . $appConfig['alias'] . '路由数量: ' . count($routeList) . '</comment>');
+            // 按应用和分组组织路由
+            $this->organizeRoutes($routeList, $docs, $appKey, $appConfig['alias']);
+        }
 
-        $output->writeln('<comment>解析到的路由数量: ' . count($routeList) . '</comment>');
-
-        // 按应用和分组组织路由
-        $this->organizeRoutes($routeList, $docs);
 
         // 显示统计信息
         $totalGroups = 0;
@@ -125,14 +133,19 @@ class Docs extends Command
      * 使用 ThinkPHP 原生方法获取路由列表
      * 参考 RouteList 命令的实现
      */
-    protected function getRouteList(): array
+    protected function getRouteList($appName, $config): array
     {
+        $isFolder = $config['is_folder'];
         // 清除路由缓存
         $this->app->route->clear();
         $this->app->route->lazy(false);
 
         // 扫描路由目录
-        $this->scanRouteDirectory($this->app->getRootPath() . 'route' . DIRECTORY_SEPARATOR);
+        $path = $this->app->getRootPath() . 'route' . DIRECTORY_SEPARATOR . $appName . '.php';
+        if (is_file($path)) {
+            include $path;
+        }
+//        $this->scanRouteDirectory($path, $isFolder);
 
         // 获取路由列表
         return $this->app->route->getRuleList();
@@ -142,47 +155,49 @@ class Docs extends Command
      * 扫描路由目录
      * 直接包含主要路由文件，保持分组上下文
      */
-    protected function scanRouteDirectory(string $path): void
+    protected function scanRouteDirectory(string $path, bool $isFolder): void
     {
-        if (!is_dir($path)) {
-            return;
+        if ($isFolder) {
+            // 直接包含顶层的路由文件（如 admin.php、app.php）
+            // 这样可以保持外层分组的上下文（如 Route::group('api/', ...)）
+            $files = glob($path . '*.php');
+            foreach ($files as $file) {
+                // 只包含顶层文件，不包含子目录中的文件
+                // 子路由文件会通过 load_routes 函数被加载
+                if (is_file($file)) {
+                    include $file;
+                }
+            }
+        } else {
+            include $path;
         }
 
-        // 直接包含顶层的路由文件（如 admin.php、app.php）
-        // 这样可以保持外层分组的上下文（如 Route::group('api/', ...)）
-        $files = glob($path . '*.php');
-        foreach ($files as $file) {
-            // 只包含顶层文件，不包含子目录中的文件
-            // 子路由文件会通过 load_routes 函数被加载
-            if (is_file($file)) {
-                include $file;
-            }
-        }
     }
 
     /**
      * 组织路由信息
      */
-    protected function organizeRoutes(array $routeList, array &$docs): void
+    protected function organizeRoutes(array $routeList, array &$docs, $appName, $appAlias = ''): void
     {
         foreach ($routeList as $route) {
+
             // 跳过没有 option 的路由（非业务接口）
-            if (!isset($route['option']) || !is_array($route['option'])) {
-                continue;
-            }
+//            if (!isset($route['option']) || !is_array($route['option'])) {
+//                continue;
+//            }
 
             $option = $route['option'];
 
-            // 跳过没有 _alias 或 _desc 的路由
-            if (!isset($option['_alias']) && !isset($option['_desc'])) {
+//            // 跳过没有 _alias 或 _desc 的路由
+            if (!isset($option['_alias'])) {
                 continue;
             }
 
             // 解析控制器和方法
             $controllerClass = '';
-            $action = '';
             $routeValue = $route['route'];
             $prefix = $route['option']['prefix'] ?? '';
+            $appAlias = $appAlias ?: $appName;
 
             // 方法名
             $action = is_string($routeValue) ? $routeValue : '';
@@ -195,11 +210,8 @@ class Docs extends Command
 
                 // 将 / 转换为 \ 并添加命名空间前缀
                 // auth/AdminController -> app\admin\controller\auth\AdminController
-                $controllerClass = 'app\\admin\\controller\\' . str_replace('/', '\\', $prefix);
+                $controllerClass = 'app\\' . $appName . '\\controller\\' . str_replace('/', '\\', $prefix);
             }
-
-            // 应用名默认为 admin（从入口文件推断）
-            $appName = 'admin';
 
             // 获取参数
             $params = [];
@@ -222,8 +234,8 @@ class Docs extends Command
             }
 
             // 分组名：从控制器类名中提取模块名
-            if (isset($option['_group'])) {
-                $groupName = $option['_group'];
+            if (isset($option['_group_name'])) {
+                $groupName = $option['_group_name'];
             } else if (!empty($controllerClass)) {
                 // 从控制器类名中提取模块名
                 // 例如：app\admin\controller\auth\AdminController -> admin
@@ -239,7 +251,8 @@ class Docs extends Command
             // 初始化应用
             if (!isset($docs['apps'][$appName])) {
                 $docs['apps'][$appName] = [
-                    'name' => $appName,
+                    'name' => $appAlias,
+                    'key' => $appName,
                     'groups' => [],
                 ];
             }
@@ -319,35 +332,106 @@ class Docs extends Command
     {
         $params = [];
 
-        // 获取方法体内容
-        $fileName = $method->getFileName();
-        $startLine = $method->getStartLine();
-        $endLine = $method->getEndLine();
-
-        $lines = file($fileName);
-        $methodBody = implode('', array_slice($lines, $startLine - 1, $endLine - $startLine + 1));
-
-        // 根据HTTP方法确定要匹配的方法调用
-        if (in_array($httpMethod, ['GET', 'DELETE'])) {
-            $pattern = '/\$this->request->param\s*\(\s*\[(.*?)\]/s';
-            $paramSource = 'URL参数';
-        } else {
-            $pattern = '/\$this->request->param\s*\(\s*\[(.*?)\]/s';
-            $paramSource = '请求体参数';
+        $file = $method->getFileName();
+        if (!$file || !is_file($file)) {
+            return [];
         }
 
-        // 匹配所有参数调用
-        if (preg_match_all($pattern, $methodBody, $matches)) {
-            foreach ($matches[1] as $arrayContent) {
-                // 匹配数组中的所有字符串（单引号或双引号）
-                $paramPattern = '/[\'"]([^\'"]+)[\'"]/';
-                if (preg_match_all($paramPattern, $arrayContent, $paramMatches)) {
-                    foreach ($paramMatches[1] as $paramName) {
-                        if (!isset($params[$paramName])) {
-                            $params[$paramName] = 'string|' . $paramSource . '，必填';
-                        }
-                    }
+        $lines = file($file);
+        $body = implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        /** 方法 => 参数来源 */
+        $sourceMap = [
+            'param' => in_array($httpMethod, ['get', 'delete']) ? 'Query 参数' : 'Body 参数',
+            'get' => 'Query 参数',
+            'post' => 'Body 参数',
+            'route' => '路由参数',
+        ];
+
+        /** 类型映射 */
+        $typeMap = [
+            'd' => 'int',
+            'f' => 'float',
+            'b' => 'bool',
+            's' => 'string',
+        ];
+
+        /* ==========================================================
+         * 解析单参数写法：param('id', 1)
+         * ========================================================== */
+        preg_match_all(
+            '/->(param|get|post|route)\s*\(\s*[\'"]([^\'"]+)[\'"]\s*(?:,\s*([^)]+))?\)/',
+            $body,
+            $matches,
+            PREG_SET_ORDER
+        );
+
+        foreach ($matches as $m) {
+            [$full, $methodName, $raw, $default] = array_pad($m, 4, null);
+
+            [$name, $type] = $this->parseField($raw, $typeMap);
+            $source = $sourceMap[$methodName];
+
+            $params[$source][$name] = [
+                'type' => $type,
+                'required' => $default === null,
+                'default' => $default !== null ? $this->parsePhpValue($default) : 'null',
+                'desc' => '',
+            ];
+        }
+
+        /* ==========================================================
+         * 解析数组写法：param([...])
+         * ========================================================== */
+        preg_match_all(
+            '/->(param|get|post|route)\s*\(\s*\[(.*?)\]\s*\)/s',
+            $body,
+            $arrayMatches,
+            PREG_SET_ORDER
+        );
+
+        foreach ($arrayMatches as $am) {
+            $methodName = $am[1];
+            $arrayBody = $am[2];
+
+            // 拆顶层数组（不递归，已够用）
+            $items = preg_split('/,(?![^\[]*\])/', $arrayBody);
+
+            foreach ($items as $item) {
+                $item = trim($item);
+                if ($item === '') continue;
+
+                /**
+                 * 支持：
+                 * 'field'
+                 * 'field/type'
+                 * 'field' => 1
+                 * ['field/d' => 111]
+                 */
+                if (!preg_match(
+                    '/[\'"]([^\'"]+)[\'"]\s*(?:=>\s*(.+))?/',
+                    $item,
+                    $m
+                )) {
+                    continue;
                 }
+
+                $raw = $m[1];
+                $default = $m[2] ?? null;
+
+                [$name, $type] = $this->parseField($raw, $typeMap);
+
+                $source = $sourceMap[$methodName];
+                $params[$source][$name] = [
+                    'type' => $type,
+                    'required' => $default === null,
+                    'default' => $default !== null ? $this->parsePhpValue($default) : 'null',
+                    'desc' => '',
+                ];
             }
         }
 
@@ -361,37 +445,124 @@ class Docs extends Command
     {
         $params = [];
 
-        // 匹配 @param 标签
-        // 格式: @param 类型 $参数名 描述
-        if (preg_match_all('/@param\s+(\S+)\s+\$(\w+)\s*(.*)/i', $docComment, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
-                $type = $match[1];
-                $name = $match[2];
-                $desc = trim($match[3]);
+        if ($docComment === '') {
+            return [];
+        }
 
-                // 检查是否包含"可选"字样
-                $isRequired = !str_contains($desc, '可选') && !str_contains($desc, '（可选）');
+        preg_match_all(
+            '/@param\s+(\S+)\s+\$([a-zA-Z_]\w*)\s*(.*)/',
+            $docComment,
+            $matches,
+            PREG_SET_ORDER
+        );
 
-                // 根据HTTP方法确定参数来源
-                if (in_array($httpMethod, ['GET', 'DELETE'])) {
-                    $paramSource = 'URL参数';
-                } else {
-                    $paramSource = '请求体参数';
-                }
+        foreach ($matches as $m) {
+            $rawType = $m[1];
+            $name = $m[2];
+            $tail = trim($m[3] ?? '');
 
-                // 构建参数描述
-                if (empty($desc)) {
-                    $paramDesc = $isRequired ? $paramSource . '，必填' : $paramSource . '，可选';
-                } else {
-                    $paramDesc = $desc . '（' . $paramSource . '）';
-                }
+            // 类型归一化
+            $type = match (true) {
+                str_contains($rawType, 'int') => 'int',
+                str_contains($rawType, 'bool') => 'bool',
+                str_contains($rawType, 'float') => 'float',
+                str_contains($rawType, 'array') => 'array',
+                default => 'string',
+            };
 
-                $params[$name] = $type . '|' . $paramDesc;
+            // 默认值
+            $default = null;
+            if (preg_match('/\bdefault=([^\s]+)/', $tail, $dm)) {
+                $default = $this->parsePhpValue($dm[1]);
             }
+
+            // 是否必填
+            $required = str_contains($tail, 'required');
+
+            // 参数来源
+            if (preg_match('/\bsource=(path|query|body)\b/', $tail, $sm)) {
+                $source = match ($sm[1]) {
+                    'path' => '路由参数',
+                    'query' => 'Query 参数',
+                    'body' => 'Body 参数',
+                };
+            } else {
+                // fallback：按 HTTP Method 推断
+                $source = in_array($httpMethod, ['get', 'delete']) ? 'Query 参数' : 'Body 参数';
+            }
+            // 描述（把规则全部剥掉，剩下就是描述）
+            $description = trim(
+                preg_replace(
+                    '/\b(required|optional|default=[^\s]+|source=(path|query|body))\b/',
+                    '',
+                    $tail
+                )
+            );
+
+            $params[$source][$name] = [
+                'type' => $type,
+                'required' => $required && $default === null,
+                'default' => (string)$default === null,
+                'desc' => $description,
+            ];
         }
 
         return $params;
     }
+
+    protected function parseField(string $raw, array $typeMap): array
+    {
+        if (str_contains($raw, '/')) {
+            [$name, $suffix] = explode('/', $raw, 2);
+            return [$name, $typeMap[$suffix] ?? 'string'];
+        }
+
+        return [$raw, 'string'];
+    }
+
+    protected function parsePhpValue(string $value)
+    {
+        $value = trim($value);
+
+        if (is_numeric($value)) {
+            return str_contains($value, '.') ? (float)$value : (int)$value;
+        }
+
+        if ($value === 'true') return true;
+        if ($value === 'false') return false;
+        if ($value === 'null') return null;
+
+        if (
+            (str_starts_with($value, "'") && str_ends_with($value, "'")) ||
+            (str_starts_with($value, '"') && str_ends_with($value, '"'))
+        ) {
+            return substr($value, 1, -1);
+        }
+
+        return $value;
+    }
+
+    protected function stringifyForHtml(mixed $value): string
+    {
+        if ($value === null) {
+            return 'null';
+        }
+
+        if ($value === true) {
+            return 'true';
+        }
+
+        if ($value === false) {
+            return 'false';
+        }
+
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+
+        return (string)$value;
+    }
+
 
     /**
      * 生成 HTML 格式文档
@@ -727,17 +898,30 @@ class Docs extends Command
         }
         
         .param-name {
-            color: #e67e22;
+            color: #2980b9;
             font-weight: bold;
         }
         
         .param-type {
-            color: #9b59b6;
+            color: #e74c3c;
             margin-left: 10px;
+            font-weight: 600;
         }
         
-        .param-desc {
+        .param-required {
+            color: #c0392b;
+            margin-left: 10px;
+            font-weight: 600;
+        }
+        
+        .param-default {
             color: #7f8c8d;
+            margin-left: 10px;
+            font-style: italic;
+        }
+        
+        .param-source {
+            color: #27ae60;
             margin-left: 10px;
         }
         
@@ -784,7 +968,7 @@ class Docs extends Command
         // 按应用分组展示
         foreach ($docs['apps'] as $appName => $app) {
             $html .= '<div class="nav-app">
-                <div class="nav-app-title">' . $appName . ' <span class="toggle-icon">▼</span></div>
+                <div class="nav-app-title">' . $app['name'] . ' <span class="toggle-icon">▼</span></div>
                 <div class="nav-app-groups">';
 
             // 按路由分组展示
@@ -823,7 +1007,7 @@ class Docs extends Command
 
         foreach ($docs['apps'] as $appName => $app) {
             $html .= '<div class="app-section" id="app-' . md5($appName) . '">
-                <h2 class="app-title">' . $appName . '</h2>';
+                <h2 class="app-title">' . $app['name'] . '</h2>';
 
             foreach ($app['groups'] as $groupName => $group) {
                 $html .= '<div class="group-section" id="group-' . md5($groupName) . '">
@@ -840,19 +1024,24 @@ class Docs extends Command
                     <p class="route-description">' . htmlspecialchars($route['description']) . '</p>';
 
                     if (!empty($route['params'])) {
-                        $html .= '<div class="section-title">请求参数</div>
-                        <div class="params-block">';
-                        foreach ($route['params'] as $param => $desc) {
-                            $parts = explode('|', $desc);
-                            $type = $parts[0] ?? 'string';
-                            $paramDesc = $parts[1] ?? '';
-                            $html .= '<div class="param-item">
-                            <span class="param-name">' . htmlspecialchars($param) . '</span>
-                            <span class="param-type">[' . htmlspecialchars($type) . ']</span>
-                            <span class="param-desc">' . htmlspecialchars($paramDesc) . '</span>
-                        </div>';
+                        foreach ($route['params'] as $source => $params) {
+                            $html .= '<div class="section-title">请求参数(' . $source . ')</div>
+                                          <div class="params-block">';
+                            foreach ($params as $param => $paramData) {
+                                $html .= '<div class="param-item">
+                                            <span class="param-name">' . htmlspecialchars($param) . '</span>
+                                            <span class="param-type">[' . htmlspecialchars($paramData['type']) . ']</span>
+                                            <span class="param-required">是否必填:' . htmlspecialchars($paramData['required'] ? '是' : '否') . '</span>
+                                            <span class="param-default">默认值:' . htmlspecialchars($this->stringifyForHtml($paramData['default'])) . '</span>';
+
+                                // 只有 desc 非空才输出
+                                if ($paramData['desc'] !== '') {
+                                    $html .= '<span class="param-desc">描述：' . htmlspecialchars($paramData['desc']) . '</span>';
+                                }
+                                $html .= '</div>';
+                            }
+                            $html .= '</div>';
                         }
-                        $html .= '</div>';
                     }
 
                     if (!empty($route['response'])) {
@@ -961,13 +1150,13 @@ class Docs extends Command
         $openapi = [
             'openapi' => '3.0.0',
             'info' => [
-                'title' => $docs['title'],
-                'description' => $docs['description'],
-                'version' => $docs['version'],
+                'title' => $docs['title'] ?? '',
+                'description' => $docs['description'] ?? '',
+                'version' => $docs['version'] ?? '1.0.0',
             ],
             'servers' => [
                 [
-                    'url' => $docs['base_url'],
+                    'url' => $docs['base_url'] ?? '',
                     'description' => '开发环境',
                 ],
             ],
@@ -975,99 +1164,144 @@ class Docs extends Command
             'tags' => [],
         ];
 
-        // 提取所有唯一的 tags（分组名称）
-        foreach ($docs['apps'] as $appName => $app) {
-            foreach ($app['groups'] as $groupName => $group) {
-                // 为标签添加应用前缀，避免重复
-                $tagKey = $appName . '/' . $groupName;
-                $openapi['tags'][] = [
-                    'name' => $tagKey,
-                    'description' => $appName . ' - ' . $groupName . '相关接口',
-                ];
-            }
-        }
+        foreach ($docs['apps'] ?? [] as $appName => $app) {
+            foreach (($app['groups'] ?? []) as $groupName => $group) {
 
-        // 遍历所有应用、分组和路由
-        foreach ($docs['apps'] as $appName => $app) {
-            foreach ($app['groups'] as $groupName => $group) {
-                foreach ($group['routes'] as $route) {
+                // 兼容 namutes / routes 写错的问题
+                $routes = $group['routes']
+                    ?? $group['namutes']
+                    ?? [];
+
+                $tagName = $app['name'] . '/' . $groupName;
+
+                $openapi['tags'][$tagName] = [
+                    'name' => $tagName,
+                    'description' => "{$app['name']} - {$groupName}",
+                ];
+
+                foreach ($routes as $route) {
+                    if (empty($route['method']) || empty($route['path'])) {
+                        continue;
+                    }
+
                     $method = strtolower($route['method']);
                     $path = '/' . ltrim($route['path'], '/');
 
-                    $apiInfo = [
-                        'summary' => $route['alias'],
-                        'description' => $route['description'],
-                        'tags' => [$appName . '/' . $groupName],
+                    $operation = [
+                        'summary' => $route['alias'] ?? '',
+                        'description' => $route['description'] ?? '',
+                        'tags' => [$tagName],
                     ];
 
-                    // 处理参数
-                    $parameters = [];
-                    $requestBody = null;
+                    $params = $route['params'] ?? [];
 
-                    foreach ($route['params'] as $paramName => $paramDesc) {
-                        $parts = explode('|', $paramDesc);
-                        $type = $parts[0] ?? 'string';
-                        $desc = $parts[1] ?? '';
+                    // 防御：params 不是数组直接跳过
+                    if (!is_array($params)) {
+                        $params = [];
+                    }
 
-                        // 根据描述确定参数位置
-                        if (str_contains($desc, 'URL参数')) {
-                            // GET/DELETE 请求使用 query 参数
-                            $parameters[] = [
-                                'name' => $paramName,
+                    $queryParams = [];
+                    $bodyProps = [];
+                    $bodyRequired = [];
+
+                    foreach ($params as $name => $raw) {
+                        if (!is_string($raw)) {
+                            continue;
+                        }
+
+                        [$type, $desc] = array_pad(explode('|', $raw, 2), 2, '');
+                        $type = $this->mapType(trim($type));
+
+                        // 是否必填
+                        $required = str_contains($desc, '必填');
+
+                        // 参数位置由 HTTP 方法决定
+                        if (in_array($method, ['get', 'delete'])) {
+                            $queryParams[] = [
+                                'name' => $name,
                                 'in' => 'query',
+                                'required' => $required,
                                 'description' => $desc,
-                                'required' => !str_contains($desc, '可选'),
-                                'schema' => [
-                                    'type' => $this->mapType($type),
-                                ],
+                                'schema' => ['type' => $type],
                             ];
-                        } elseif (str_contains($desc, '请求体参数')) {
-                            // POST/PUT 请求使用请求体
-                            if ($requestBody === null) {
-                                $requestBody = [
-                                    'description' => '请求体参数',
-                                    'required' => true,
-                                    'content' => [
-                                        'application/json' => [
-                                            'schema' => [
-                                                'type' => 'object',
-                                                'properties' => [],
-                                            ],
-                                        ],
-                                        'application/x-www-form-urlencoded' => [
-                                            'schema' => [
-                                                'type' => 'object',
-                                                'properties' => [],
-                                            ],
-                                        ],
-                                    ],
-                                ];
+                        } else {
+                            $bodyProps[$name] = [
+                                'type' => $type,
+                                'description' => $desc,
+                            ];
+                            if ($required) {
+                                $bodyRequired[] = $name;
                             }
-
-                            $schema = [
-                                'type' => $this->mapType($type),
-                                'description' => $desc,
-                            ];
-
-                            $requestBody['content']['application/json']['schema']['properties'][$paramName] = $schema;
-                            $requestBody['content']['application/x-www-form-urlencoded']['schema']['properties'][$paramName] = $schema;
                         }
                     }
 
-                    // 添加 parameters 到接口信息
-                    if (!empty($parameters)) {
-                        $apiInfo['parameters'] = $parameters;
+                    if ($queryParams) {
+                        $operation['parameters'] = $queryParams;
                     }
 
-                    // 添加请求体到接口信息
-                    if ($requestBody !== null) {
-                        $apiInfo['requestBody'] = $requestBody;
+                    if ($bodyProps) {
+                        $schema = [
+                            'type' => 'object',
+                            'properties' => $bodyProps,
+                        ];
+                        if ($bodyRequired) {
+                            $schema['required'] = $bodyRequired;
+                        }
+
+                        $operation['requestBody'] = [
+                            'required' => true,
+                            'content' => [
+                                'multipart/form-data' => [
+                                    'schema' => $schema,
+                                ],
+                            ],
+                        ];
                     }
 
-                    $openapi['paths'][$path][$method] = $apiInfo;
+                    $operation['responses'] = [
+                        '200' => [
+                            'description' => '成功',
+                            'content' => [
+                                'application/json' => [
+                                    'schema' => [
+                                        'type' => 'object',
+                                        'properties' => [
+                                            'code' => [
+                                                'type' => 'integer',
+                                                'description' => '状态码',
+                                            ],
+                                            'message' => []
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ],
+                        '400' => [
+                            'description' => '失败',
+                            'content' => [
+                                'application/json' => [
+                                    'schema' => [
+                                        'type' => 'object',
+                                        'properties' => [
+                                            'code' => [
+                                                'type' => 'integer',
+                                                'description' => '状态码',
+                                            ],
+                                            'message' => []
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ];
+
+                    $openapi['paths'][$path][$method] = $operation;
                 }
             }
         }
+
+        // tags 去重并转为数组
+        $openapi['tags'] = array_values($openapi['tags']);
 
         return json_encode($openapi, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     }
