@@ -2,9 +2,9 @@
 
 /**
  * 接口文档配置文件
- * 
+ *
  * 此文件用于配置接口文档生成命令的相关参数
- * 
+ *
  * @package config
  */
 
@@ -38,35 +38,68 @@ return [
     'description' => '基于 Swoole + ThinkPHP 的高性能框架 API 文档',
 
     /**
+     * 应用配置
+     *
+     * 定义应用的入口路由和子路由文件夹
+     *
+     * 格式说明：
+     * - key：应用入口路由文件名（不含 .php 扩展名）
+     * - value：应用子路由文件夹名
+     *
+     * 示例：
+     * 'app' => [
+     *     'admin' => 'admin',  // admin 应用：入口路由 admin.php，子路由在 admin/ 文件夹
+     *     'app' => 'app',       // app 应用：入口路由 app.php，子路由在 app/ 文件夹
+     * ]
+     */
+    'app' => [
+        'admin' => [
+            'is_folder' => true,
+            'path' => 'admin',
+            'alias' => '后台管理',
+        ],
+        'index' => [
+            'is_folder' => true,
+            'path' => 'index',
+            'alias' => '前台',
+        ],
+        'app' => [
+            'is_folder' => false,
+            'path' => 'app',
+            'alias' => '测试',
+        ],
+    ],
+
+    /**
      * 分组配置
-     * 
+     *
      * 此参数用于控制接口文档的分组展示方式
-     * 
+     *
      * groups 参数说明：
      * - groups 不是在此配置文件中手动定义的
      * - groups 是由 Docs 命令自动从路由文件中读取并生成的
      * - 命令会扫描所有路由，提取 _alias 等选项，按控制器自动分组
-     * 
+     *
      * 分组生成规则：
      * 1. 如果路由分组使用了 ->option(['_alias' => '分组名称'])，则使用该名称作为分组名
      * 2. 如果没有配置分组别名，则使用控制器名称（去掉命名空间）作为分组名
      * 3. 每个分组下包含该控制器的所有路由
-     * 
+     *
      * 使用示例：
-     * 
+     *
      * // 方式1：使用分组别名（推荐）
      * Route::group('user', function () {
      *     Route::get('list', 'list')->option(['_alias' => '获取用户列表']);
      *     Route::get('detail', 'detail')->option(['_alias' => '获取用户详情']);
      * })->prefix('User')->option(['_alias' => '用户管理']);
-     * 
+     *
      * // 方式2：不使用分组别名（使用控制器名）
      * Route::group('user', function () {
      *     Route::get('list', 'list')->option(['_alias' => '获取用户列表']);
      *     Route::get('detail', 'detail')->option(['_alias' => '获取用户详情']);
      * })->prefix('User');
      * // 会生成名为 "User" 的分组
-     * 
+     *
      * groups 数据结构（自动生成）：
      * [
      *     '分组名称' => [
@@ -87,7 +120,7 @@ return [
      *     ],
      *     ...
      * ]
-     * 
+     *
      * 注意事项：
      * - groups 参数不需要在此配置文件中手动设置
      * - 只需在路由文件中正确配置 _alias 选项即可

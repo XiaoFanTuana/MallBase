@@ -7,49 +7,51 @@ use think\facade\Db;
 /**
  * 服务基类
  *
+ * @template TModel of BaseModel
+ *
  * 功能说明：
  * - 提供服务层通用功能
- * - 支持模型注入
+ * - Service 完全无状态，不持有 Model 实例
+ * - Model 通过方法调用时动态获取
  * - 提供事务支持
  * - 提供分页查询支持
  *
  * 设计理念：
  * - Service 负责业务逻辑处理
- * - 通过构造函数注入 Model 实例
- * - 可以调用其他 Service 协同处理业务
- * - 事务控制在 Service 层处理
- *
- * 使用示例：
- * ```php
- * class UserService extends BaseService
- * {
- *     public function __construct()
- *     {
- *         parent::__construct(new UserModel());
- *     }
- *
- *     public function getUserById(int $id)
- *     {
- *         return $this->model->findById($id);
- *     }
- * }
- * ```
+ * - Service 完全无状态，适合 Swoole 常驻进程
+ * - Model 实例在需要时动态创建，用完即弃
+ * - 避免状态污染和内存泄漏
  */
 abstract class BaseService
 {
-    /** @var mixed|null Model 实例 */
-    protected $model = null;
+    /**
+     * Model 类名（子类必须定义）
+     *
+     * @var class-string<TModel>
+     */
+    protected string $modelClass = '';
 
     /**
-     * 构造函数
+     * 获取 Model 实例（每次调用返回新实例）
      *
-     * @param BaseModel|null $model Model 实例
+     * 为什么每次返回新实例：
+     * 1. Model 可能有状态（如查询构造器）
+     * 2. 避免跨请求状态污染
+     * 3. Swoole 常驻进程下最安全
+     * 4. 实例化开销极小（ThinkPHP Model 很轻量）
+     *
+     * @param class-string<TModel>|null $modelClass
+     * @return TModel
      */
-    public function __construct(BaseModel $model = null)
+    protected function model(?string $modelClass = null)
     {
-        $this->model = $model;
-    }
+        $className = $modelClass ?? ($this->modelClass ?? '');
+        if (empty($className)) {
+            throw new \RuntimeException('Service 必须定义 $modelClass 属性');
+        }
 
+        return app()->make($className);
+    }
 
     /**
      * 执行事务

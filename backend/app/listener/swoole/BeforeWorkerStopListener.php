@@ -25,6 +25,6 @@ class BeforeWorkerStopListener
         // MyTcpClient::close();
         // MyRedisPool::close();
 
-        echo "[Swoole] Worker stopping, resources cleaned\n";
+//        echo "[Swoole] Worker stopping, resources cleaned\n";
     }
 }

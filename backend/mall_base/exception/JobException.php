@@ -39,10 +39,9 @@ class JobException extends BaseException
      * 
      * @param string $message 错误消息
      * @param int $statusCode 业务状态码，默认 400
-     * @param int $code 错误码，默认 0
      */
-    public function __construct(string $message = '任务执行失败', int $statusCode = 400, int $code = 0)
+    public function __construct(string $message = '任务执行失败', int $statusCode = 400)
     {
-        parent::__construct($message, $statusCode, $code);
+        parent::__construct($message, $statusCode);
     }
 }

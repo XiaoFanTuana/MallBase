@@ -2,57 +2,78 @@
 
 namespace mall_base\base;
 
+use mall_base\exception\BusinessException;
+use think\App;
+use think\exception\ValidateException;
 use think\facade\Request;
 use think\Response;
+use think\Validate;
 
 /**
- * 控制器基类
- *
- * 功能说明：
- * - 提供控制器通用功能
- * - 提供响应方法封装
- * - 支持魔术方法自动获取 Service 实例
- *
- * 设计理念：
- * - Controller 负责接收请求、参数验证、调用 Service、返回响应
- * - 通过魔术方法自动创建 Service 实例
- * - 不包含业务逻辑，业务逻辑由 Service 处理
- *
- * 使用示例：
- * ```php
- * class UserController extends BaseController
- * {
- *     public function list(): Response
- *     {
- *         return $this->success($this->userService->getUserList());
- *     }
- * }
- * ```
- *
- * 注意：使用魔术方法时，需要在子类中添加 @property 注释以支持 PhpStorm 代码提示
- * ```php
- * /**
- *  * User 控制器
- *  * 
- *  * @property \app\service\UserService $userService UserService 实例
- *  *\/
- * class UserController extends BaseController
- * {
- * }
- * ```
- *
- * 详细说明请参考：./SERVICE_FACTORY.md
- **/
+ * @template TService of BaseService
+ */
 abstract class BaseController
 {
     /**
-     * 构造函数
+     * Request实例
+     * @var \think\Request
      */
-    public function __construct()
+    protected $request;
+
+    /**
+     * 应用实例
+     * @var \think\App
+     */
+    protected $app;
+
+    /**
+     * 是否批量验证
+     * @var bool
+     */
+    protected $batchValidate = false;
+
+    /**
+     * 控制器中间件
+     * @var array
+     */
+    protected $middleware = [];
+
+    /**
+     * 构造方法
+     * @access public
+     * @param App $app 应用对象
+     */
+    public function __construct(App $app)
+    {
+        $this->app = $app;
+        $this->request = $this->app->request;
+
+        // 控制器初始化
+        $this->initialize();
+    }
+
+    // 初始化
+    protected function initialize()
     {
     }
 
 
+    /**
+     * 获取 Service 实例（每次返回缓存的实例）
+     * @param class-string<TService>|null $serviceClass
+     * @return TService
+     * @throws BusinessException
+     */
+    protected function service(?string $serviceClass = null)
+    {
+        $className = $serviceClass ?? ($this->serviceClass ?? '');
+
+        if (empty($className)) {
+            throw new BusinessException('请传入 serviceClass 或定义 $serviceClass 属性');
+        }
+
+        return app()->make($className);
+    }
 
     /**
      * 成功响应
@@ -90,41 +111,48 @@ abstract class BaseController
         ]);
     }
 
-    protected function getParam(?string $key = null, $default = null)
+    protected function getPagination(int $defaultPage = 1, int $defaultLimit = 10): array
     {
-        if ($key === null) {
-            return Request::param();
-        }
+        $page = (int)$this->request->param('page', $defaultPage);
+        $pageSize = (int)$this->request->param('limit', $defaultLimit);
 
-        return Request::param($key, $default);
+        return [max(1, $page), max(1, min(100, $pageSize))];
     }
 
-    protected function getGet(?string $key = null, $default = null)
+    /**
+     * 验证数据
+     * @access protected
+     * @param array $data 数据
+     * @param string|array $validate 验证器名或者验证规则数组
+     * @param array $message 提示信息
+     * @param bool $batch 是否批量验证
+     * @return array|string|true
+     * @throws ValidateException
+     */
+    protected function validate(array $data, string|array $validate, array $message = [], bool $batch = false)
     {
-        if ($key === null) {
-            return Request::get();
+        if (is_array($validate)) {
+            $v = new Validate();
+            $v->rule($validate);
+        } else {
+            if (strpos($validate, '.')) {
+                // 支持场景
+                [$validate, $scene] = explode('.', $validate);
+            }
+            $class = false !== strpos($validate, '\\') ? $validate : $this->app->parseClass('validate', $validate);
+            $v = new $class();
+            if (!empty($scene)) {
+                $v->scene($scene);
+            }
         }
 
-        return Request::get($key, $default);
-    }
+        $v->message($message);
 
-    protected function getPost(?string $key = null, $default = null)
-    {
-        if ($key === null) {
-            return Request::post();
+        // 是否批量验证
+        if ($batch || $this->batchValidate) {
+            $v->batch(true);
         }
 
-        return Request::post($key, $default);
-    }
-
-    protected function getPagination(int $defaultPage = 1, int $defaultPageSize = 10): array
-    {
-        $page = (int)$this->getParam('page', $defaultPage);
-        $pageSize = (int)$this->getParam('page_size', $defaultPageSize);
-
-        return [
-            'page' => max(1, $page),
-            'page_size' => max(1, min(100, $pageSize)),
-        ];
+        return $v->failException(true)->check($data);
     }
 }

@@ -2,7 +2,8 @@
 
 namespace app\controller;
 
-use app\BaseController;
+
+use mall_base\base\BaseController;
 
 class Index extends BaseController
 {
