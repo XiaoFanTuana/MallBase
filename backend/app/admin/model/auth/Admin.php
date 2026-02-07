@@ -25,8 +25,11 @@ class Admin extends BaseModel
     /**
      * 隐藏密码字段
      */
-    public function hidden(): array
+    public function hidden(array $hidden = [], bool $merge = false): array
     {
+        if ($merge) {
+            return array_merge($hidden, ['password']);
+        }
         return ['password'];
     }
 
@@ -35,7 +38,7 @@ class Admin extends BaseModel
      */
     public function roles()
     {
-        return $this->belongsToMany(Role::class, AdminRole::class, 'admin_id', 'role_id');
+        return $this->belongsToMany(Role::class, 'admin_role', 'admin_id', 'role_id');
     }
 
     /**
@@ -57,9 +60,9 @@ class Admin extends BaseModel
     /**
      * 设置密码
      */
-    public function setPasswordAttr(string $password): void
+    public function setPasswordAttr(string $password): string
     {
-        $this->password = password_hash($password, PASSWORD_DEFAULT);
+        return $this->password = password_hash($password, PASSWORD_DEFAULT);
     }
 
     /**
@@ -67,6 +70,6 @@ class Admin extends BaseModel
      */
     public function needsRehash(): bool
     {
-        return password_needs_rehash($this->password);
+        return password_needs_rehash($this->password, PASSWORD_DEFAULT);
     }
 }

@@ -34,28 +34,43 @@ class AdminService extends BaseService
             ->find();
 
         if (!$admin) {
-            throw new AuthException('账号不存在或已禁用', 1001);
+            throw new BusinessException('账号不存在或已禁用');
         }
 
         if (!$admin->checkPassword($password)) {
-            throw new AuthException('密码错误', 1002);
+            throw new BusinessException('密码错误');
         }
-
         // 更新登录信息
         $admin->last_login_time = date('Y-m-d H:i:s');
         $admin->last_login_ip = Request::ip();
         $admin->save();
 
         // 生成 JWT Token
-        $token = $this->generateToken($admin);
+        $jwtService = new JwtService();
+        
+        // 生成 access_token（短有效期）
+        $accessToken = $jwtService->encode([
+            'admin_id' => $admin->id,
+            'username' => $admin->username,
+            'nickname' => $admin->nickname,
+            'type' => 'access',
+        ]);
+        
+        // 生成 refresh_token（长有效期，30天）
+        $refreshToken = $jwtService->encodeWithExpire([
+            'admin_id' => $admin->id,
+            'username' => $admin->username,
+            'nickname' => $admin->nickname,
+            'type' => 'refresh',
+        ], 30 * 24 * 3600); // 30天
 
-        // 获取管理员信息（不包含密码）
-        $adminInfo = $admin->toArray();
-        unset($adminInfo['password']);
+        // 获取过期时间（秒）
+        $expiresIn = config('jwt.expire', 7200);
 
         return [
-            'token' => $token,
-            'admin' => $adminInfo,
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+            'expires_in' => $expiresIn,
         ];
     }
 
@@ -105,7 +120,8 @@ class AdminService extends BaseService
         unset($info['password']);
 
         // 获取角色ID列表
-        $info['role_ids'] = array_column($admin['roles'] ?? [], 'id');
+        $info['role_ids'] = array_column($info['roles'] ?? [], 'id');
+        $info['home_path'] = '/workspace';
 
         return $info;
     }
@@ -190,7 +206,7 @@ class AdminService extends BaseService
         }
 
         // 删除角色关联
-        $this->model(AdminRole::class)->where('admin_id', $id)->delete();
+        think\facade\Db::name('admin_role')->where('admin_id', $id)->delete();
 
         // 删除管理员
         $admin->delete();
@@ -204,7 +220,7 @@ class AdminService extends BaseService
     public function assignRoles(int $adminId, array $roleIds): void
     {
         // 删除原有角色
-        $this->model(AdminRole::class)->where('admin_id', $adminId)->delete();
+        think\facade\Db::name('admin_role')->where('admin_id', $adminId)->delete();
 
         // 批量分配新角色
         if (!empty($roleIds)) {
@@ -216,7 +232,7 @@ class AdminService extends BaseService
                     'create_time' => date('Y-m-d H:i:s'),
                 ];
             }
-            $this->model(AdminRole::class)->insertAll($insertData);
+            think\facade\Db::name('admin_role')->insertAll($insertData);
         }
     }
 
@@ -234,5 +250,192 @@ class AdminService extends BaseService
         ];
 
         return $jwtService->encode($payload);
+    }
+
+    /**
+     * 重置密码
+     */
+    public function resetPassword(int $id, string $newPassword): bool
+    {
+        $admin = $this->model()->find($id);
+
+        if (!$admin) {
+            throw new BusinessException('管理员不存在');
+        }
+
+        // 使用模型属性赋值，会触发 setPasswordAttr 修改器
+        $admin->password = $newPassword;
+        return $admin->save();
+    }
+
+    /**
+     * 获取管理员权限（权限码列表）
+     */
+    public function getAccessCodes(int $adminId): array
+    {
+        $admin = $this->model()->with(['roles.permissions'])->find($adminId);
+
+        if (!$admin) {
+            throw new BusinessException('管理员不存在');
+        }
+
+        $codes = [];
+        foreach ($admin['roles'] ?? [] as $role) {
+            foreach ($role['permissions'] ?? [] as $permission) {
+                $codes[] = $permission['code'];
+            }
+        }
+
+        return array_values(array_unique($codes));
+    }
+
+    /**
+     * 获取管理员菜单
+     */
+    public function getAccessMenus(int $adminId): array
+    {
+        $admin = $this->model()->with(['roles.permissions'])->find($adminId);
+
+        if (!$admin) {
+            throw new BusinessException('管理员不存在');
+        }
+
+        // 获取所有菜单类型权限
+        $menus = [];
+        foreach ($admin['roles'] ?? [] as $role) {
+            foreach ($role['permissions'] ?? [] as $permission) {
+                if ($permission['status'] == 1 && $permission['type'] == 1) {
+                    $menus[] = $permission;
+                }
+            }
+        }
+
+        // 构建树形结构
+        return $this->buildMenuTree($menus);
+    }
+
+    /**
+     * 获取管理员路由
+     */
+    public function getAccessRoutes(int $adminId): array
+    {
+        $admin = $this->model()->with(['roles.permissions'])->find($adminId);
+
+        if (!$admin) {
+            throw new BusinessException('管理员不存在');
+        }
+
+        // 获取所有路由权限
+        $routes = [];
+        foreach ($admin['roles'] ?? [] as $role) {
+            foreach ($role['permissions'] ?? [] as $permission) {
+                if ($permission['status'] == 1) {
+                    $routes[] = $this->convertToRoute($permission);
+                }
+            }
+        }
+
+        return $routes;
+    }
+
+    /**
+     * 构建菜单树
+     */
+    protected function buildMenuTree(array $menus, int $parentId = 0): array
+    {
+        $tree = [];
+        foreach ($menus as $menu) {
+            if ($menu['parent_id'] == $parentId) {
+                $menu['children'] = $this->buildMenuTree($menus, $menu['id']);
+                $tree[] = $menu;
+            }
+        }
+        return $tree;
+    }
+
+    /**
+     * 将权限转换为路由格式
+     */
+    protected function convertToRoute(array $permission): array
+    {
+        return [
+            'path' => $permission['path'] ?? '',
+            'name' => $permission['code'] ?? '',
+            'component' => $permission['component'] ?? '',
+            'meta' => [
+                'title' => $permission['name'] ?? '',
+                'icon' => $permission['icon'] ?? '',
+                'order' => $permission['sort'] ?? 0,
+                'show' => $permission['is_show'] == 1,
+            ],
+        ];
+    }
+
+    /**
+     * 获取管理员所有权限信息（权限码、菜单、路由）
+     */
+    public function getAccessInfo(int $adminId): array
+    {
+        return [
+            'access_codes' => $this->getAccessCodes($adminId),
+            'access_menus' => $this->getAccessMenus($adminId),
+            'access_routes' => $this->getAccessRoutes($adminId),
+        ];
+    }
+
+    /**
+     * 刷新 Token
+     */
+    public function refreshToken(string $refreshToken): array
+    {
+        $jwtService = new JwtService();
+        
+        // 解析 refresh_token
+        try {
+            $decoded = $jwtService->decode($refreshToken);
+            $payload = $decoded->data;
+        } catch (\Exception $e) {
+            throw new BusinessException('刷新令牌无效或已过期');
+        }
+
+        // 验证是否为 refresh 类型的 token
+        if (!isset($payload->type) || $payload->type !== 'refresh') {
+            throw new BusinessException('刷新令牌类型错误');
+        }
+
+        // 验证用户是否存在且启用
+        $admin = $this->model()
+            ->where('id', $payload->admin_id)
+            ->where('status', 1)
+            ->find();
+
+        if (!$admin) {
+            throw new BusinessException('用户不存在或已禁用');
+        }
+
+        // 生成新的 access_token
+        $newAccessToken = $jwtService->encode([
+            'admin_id' => $admin->id,
+            'username' => $admin->username,
+            'nickname' => $admin->nickname,
+            'type' => 'access',
+        ]);
+
+        // 生成新的 refresh_token
+        $newRefreshToken = $jwtService->encodeWithExpire([
+            'admin_id' => $admin->id,
+            'username' => $admin->username,
+            'nickname' => $admin->nickname,
+            'type' => 'refresh',
+        ], 30 * 24 * 3600); // 30天
+
+        // 获取过期时间（秒）
+        $expiresIn = config('jwt.expire', 7200);
+
+        return [
+            'access_token' => $newAccessToken,
+            'refresh_token' => $newRefreshToken,
+            'expires_in' => $expiresIn,
+        ];
     }
 }

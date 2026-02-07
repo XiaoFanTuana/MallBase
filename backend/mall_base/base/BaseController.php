@@ -101,7 +101,7 @@ abstract class BaseController
      * @param mixed $data 响应数据
      * @return Response
      */
-    protected function error(string $message = '操作失败', int $code = 500, $data = null): Response
+    protected function error(string $message = '操作失败', int $code = 400, $data = null): Response
     {
         return json([
             'code' => $code,

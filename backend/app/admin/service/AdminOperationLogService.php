@@ -72,18 +72,19 @@ class AdminOperationLogService extends BaseService
      * 记录操作日志
      */
     public function log(
-        int $adminId,
-        string $username,
+        int     $adminId,
+        string  $username,
         ?string $nickname,
-        string $path,
-        string $method,
-        ?array $params,
-        ?array $response,
-        int $status,
-        string $ip,
-        string $userAgent,
-        float $duration
-    ): int {
+        string  $path,
+        string  $method,
+        ?array  $params,
+        ?array  $response,
+        int     $status,
+        string  $ip,
+        string  $userAgent,
+        float   $duration
+    ): int
+    {
         $logData = [
             'admin_id' => $adminId,
             'username' => $username,
@@ -99,7 +100,7 @@ class AdminOperationLogService extends BaseService
         ];
 
         $log = AdminOperationLog::create($logData);
-        return $log->id;
+        return (int)$log->id;
     }
 
     /**

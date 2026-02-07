@@ -19,16 +19,13 @@ use mall_base\base\BaseException;
  */
 class AuthException extends BaseException
 {
-    /** @var int 业务状态码 */
-    protected int $statusCode = 1000;
-    
     /**
      * 构造函数
      * 
      * @param string $message 错误消息
      * @param int $statusCode 业务状态码，默认 1000
      */
-    public function __construct(string $message = '授权失败', int $statusCode = 1000)
+    public function __construct(string $message = '授权失败', int $statusCode = 401)
     {
         parent::__construct($message, $statusCode);
     }

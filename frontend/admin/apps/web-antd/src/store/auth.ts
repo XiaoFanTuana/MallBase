@@ -1,17 +1,20 @@
-import type { Recordable, UserInfo } from '@vben/types';
+import type { AuthApi } from '#/api/core/auth';
 
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
-import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
+import { resetAllStores } from '@vben/stores';
 
 import { notification } from 'ant-design-vue';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import { loginApi, logoutApi } from '#/api/core';
+import { getAdminInfoApi } from '#/api/core/auth';
 import { $t } from '#/locales';
+import { useAccessStore } from '#/modules/access';
+import { useUserStore } from '#/modules/user';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -22,33 +25,33 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 异步处理登录操作
-   * Asynchronously handle the login process
+   * Asynchronously handle login process
    * @param params 登录表单数据
+   * @param onSuccess
    */
   async function authLogin(
-    params: Recordable<any>,
+    params: Record<string, any>,
     onSuccess?: () => Promise<void> | void,
   ) {
     // 异步处理用户登录操作并获取 accessToken
-    let userInfo: null | UserInfo = null;
+    let adminInfo: AuthApi.AdminInfo | null = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
+      const loginResult = await loginApi(params as AuthApi.LoginParams);
+
+      const accessToken = loginResult.access_token;
 
       // 如果成功获取到 accessToken
       if (accessToken) {
         accessStore.setAccessToken(accessToken);
 
-        // 获取用户信息并存储到 accessStore 中
-        const [fetchUserInfoResult, accessCodes] = await Promise.all([
-          fetchUserInfo(),
-          getAccessCodesApi(),
-        ]);
+        // 获取用户信息
+        adminInfo = await getAdminInfoApi();
 
-        userInfo = fetchUserInfoResult;
-
-        userStore.setUserInfo(userInfo);
-        accessStore.setAccessCodes(accessCodes);
+        // 如果有权限信息，设置权限码
+        if (adminInfo?.permissions) {
+          accessStore.setAccessCodes(adminInfo.permissions);
+        }
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
@@ -56,13 +59,13 @@ export const useAuthStore = defineStore('auth', () => {
           onSuccess
             ? await onSuccess?.()
             : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
+                adminInfo?.home_path || preferences.app.defaultHomePath,
               );
         }
 
-        if (userInfo?.realName) {
+        if (adminInfo?.nickname) {
           notification.success({
-            description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.realName}`,
+            description: `${$t('authentication.loginSuccessDesc')}:${adminInfo?.nickname}`,
             duration: 3,
             message: $t('authentication.loginSuccess'),
           });
@@ -73,7 +76,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     return {
-      userInfo,
+      adminInfo,
     };
   }
 
@@ -98,10 +101,31 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchUserInfo() {
-    let userInfo: null | UserInfo = null;
-    userInfo = await getUserInfoApi();
-    userStore.setUserInfo(userInfo);
-    return userInfo;
+    let adminInfo: AuthApi.AdminInfo | null = null;
+    try {
+      adminInfo = await getAdminInfoApi();
+
+      // 转换为 BasicUserInfo 格式
+      if (adminInfo) {
+        const userInfo = {
+          avatar: adminInfo.avatar || '',
+          id: String(adminInfo.id),
+          nickname: adminInfo.nickname || adminInfo.username,
+          roles: adminInfo.roles?.map((role) => role.code) || [],
+          username: adminInfo.username,
+        };
+        userStore.setUserInfo(userInfo);
+      }
+
+      // 如果用户信息中有权限，直接设置
+      if (adminInfo?.permissions) {
+        accessStore.setAccessCodes(adminInfo.permissions);
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error);
+    }
+
+    return adminInfo;
   }
 
   function $reset() {

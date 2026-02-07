@@ -3,26 +3,50 @@ import { baseRequestClient, requestClient } from '#/api/request';
 export namespace AuthApi {
   /** 登录接口参数 */
   export interface LoginParams {
-    password?: string;
-    username?: string;
+    password: string;
+    username: number | string;
   }
 
   /** 登录接口返回值 */
   export interface LoginResult {
-    accessToken: string;
+    access_token: string;
+    token_type?: string;
+    expires_in?: number;
   }
 
+  /** 刷新token返回值 */
   export interface RefreshTokenResult {
-    data: string;
+    access_token: string;
+    token_type?: string;
+    expires_in?: number;
+  }
+
+  /** 用户信息 */
+  export interface AdminInfo {
+    id: number;
+    username: string;
+    nickname: string;
+    avatar: string;
+    email: string;
+    mobile: string;
     status: number;
+    roles?: Array<{
+      code: string;
+      id: number;
+      name: string;
+    }>;
+    permissions?: string[];
+    home_path: string;
   }
 }
 
 /**
  * 登录
+ * 后端接口路径：/admin/api/auth/admin/login
+ * 参数通过 body 传递：{ username, password }
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
+  return requestClient.post<AuthApi.LoginResult>('/auth/admin/login', data);
 }
 
 /**
@@ -44,8 +68,18 @@ export async function logoutApi() {
 }
 
 /**
- * 获取用户权限码
+ * 获取管理员信息
+ * 如果不传 id，则获取当前登录管理员的信息
+ */
+export async function getAdminInfoApi(id?: number) {
+  return requestClient.get<AuthApi.AdminInfo>('/auth/admin/info', {
+    params: id ? { id } : {},
+  });
+}
+
+/**
+ * 获取用户权限码（按钮级权限）
  */
 export async function getAccessCodesApi() {
-  return requestClient.get<string[]>('/auth/codes');
+  return requestClient.get<string[]>('/auth/admin/permissions');
 }

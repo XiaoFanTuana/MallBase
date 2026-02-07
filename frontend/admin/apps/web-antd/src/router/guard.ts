@@ -52,12 +52,23 @@ function setupAccessGuard(router: Router) {
 
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
-      if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) ||
-            userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
-        );
+      return true;
+    }
+
+    // 登录页特殊处理
+    if (to.path === LOGIN_PATH) {
+      if (accessStore.accessToken) {
+        if (userStore.userInfo) {
+          // 有有效的 token 和用户信息，重定向到首页
+          return decodeURIComponent(
+            (to.query?.redirect as string) ||
+              userStore.userInfo?.homePath ||
+              preferences.app.defaultHomePath,
+          );
+        } else {
+          // 如果有 token 但没有用户信息，说明 token 可能无效，清除它
+          accessStore.setAccessToken(null);
+        }
       }
       return true;
     }
@@ -82,7 +93,8 @@ function setupAccessGuard(router: Router) {
           replace: true,
         };
       }
-      return to;
+      // 已经在登录页了，不需要做任何操作
+      return true;
     }
 
     // 是否已经生成过动态路由
@@ -92,8 +104,20 @@ function setupAccessGuard(router: Router) {
 
     // 生成路由表
     // 当前登录用户拥有的角色标识列表
-    const userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
-    const userRoles = userInfo.roles ?? [];
+    let userInfo = userStore.userInfo;
+    if (!userInfo) {
+      const adminInfo = await authStore.fetchUserInfo();
+      if (!adminInfo) {
+        // 如果获取用户信息失败，跳转到登录页
+        return {
+          path: LOGIN_PATH,
+          replace: true,
+        };
+      }
+      userInfo = userStore.userInfo;
+    }
+
+    const userRoles = userInfo?.roles ?? [];
 
     // 生成菜单和路由
     const { accessibleMenus, accessibleRoutes } = await generateAccess({
@@ -107,10 +131,7 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessMenus(accessibleMenus);
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo.homePath || preferences.app.defaultHomePath
-        : to.fullPath)) as string;
+    const redirectPath = (from.query.redirect ?? to.fullPath) as string;
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

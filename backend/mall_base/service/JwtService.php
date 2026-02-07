@@ -63,6 +63,28 @@ class JwtService
     }
 
     /**
+     * 生成 Token（自定义过期时间）
+     *
+     * @param array $payload 载荷数据
+     * @param int $expire 过期时间（秒）
+     * @return string
+     */
+    public function encodeWithExpire(array $payload, int $expire): string
+    {
+        $now = time();
+
+        $tokenPayload = [
+            'iss' => $this->issuer,           // 颁发者
+            'iat' => $now,                   // 签发时间
+            'nbf' => $now,                   // 生效时间
+            'exp' => $now + $expire,         // 过期时间
+            'data' => $payload,                // 自定义数据
+        ];
+
+        return FirebaseJWT::encode($tokenPayload, $this->key, $this->algorithm);
+    }
+
+    /**
      * 解析 Token
      *
      * @param string $token Token

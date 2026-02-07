@@ -17,30 +17,12 @@ class RoleValidate extends Validate
      * @var array
      */
     protected $rule = [
-        'name' => 'require|max:50',
-        'code' => 'require|length:2,30|alphaNum',
-        'status' => 'in:0,1',
-        'sort' => 'number|between:0,9999',
-        'remark' => 'max:500',
-        'permission_ids' => 'array',
-    ];
-
-    /**
-     * 错误提示
-     *
-     * @var array
-     */
-    protected $message = [
-        'name.require' => '角色名称不能为空',
-        'name.max' => '角色名称不能超过50个字符',
-        'code.require' => '角色编码不能为空',
-        'code.length' => '角色编码长度必须在2-30个字符之间',
-        'code.alphaNum' => '角色编码只能包含字母和数字',
-        'status.in' => '状态值不正确',
-        'sort.number' => '排序必须是数字',
-        'sort.between' => '排序值必须在0-9999之间',
-        'remark.max' => '备注不能超过500个字符',
-        'permission_ids.array' => '权限ID必须是数组',
+        'name|角色名称' => 'require|max:50',
+        'code|角色编码' => 'require|alphaNum|max:30|min:2',
+        'status|状态' => 'in:0,1',
+        'sort|排序' => 'number|between:0,9999',
+        'remark|备注' => 'max:500',
+        'permission_ids|权限ID' => 'array',
     ];
 
     /**

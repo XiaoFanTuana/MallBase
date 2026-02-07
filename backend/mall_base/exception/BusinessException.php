@@ -19,9 +19,6 @@ use mall_base\base\BaseException;
  */
 class BusinessException extends BaseException
 {
-    /** @var int 业务状态码 */
-    protected int $statusCode = 400;
-
     /**
      * 构造函数
      *

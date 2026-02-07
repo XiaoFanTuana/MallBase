@@ -51,7 +51,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   async function doRefreshToken() {
     const accessStore = useAccessStore();
     const resp = await refreshTokenApi();
-    const newToken = resp.data;
+    const newToken = resp.access_token;
     accessStore.setAccessToken(newToken);
     return newToken;
   }
@@ -72,11 +72,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   });
 
   // 处理返回的响应数据格式
+  // 后端返回格式：{ code: 200, data: {...}, message: "成功" }
   client.addResponseInterceptor(
     defaultResponseInterceptor({
       codeField: 'code',
       dataField: 'data',
-      successCode: 0,
+      successCode: 200,
     }),
   );
 
@@ -90,6 +91,17 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       formatToken,
     }),
   );
+
+  // 添加响应拦截器，处理后端返回的 access_token 字段
+  client.addResponseInterceptor({
+    fulfilled: (response) => {
+      // 如果返回数据中有 access_token，转换为 accessToken
+      if (response.data?.access_token) {
+        response.data.accessToken = response.data.access_token;
+      }
+      return response;
+    },
+  });
 
   // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
   client.addResponseInterceptor(

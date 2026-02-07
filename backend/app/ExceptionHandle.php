@@ -53,7 +53,6 @@ class ExceptionHandle extends Handle
      */
     public function render($request, Throwable $e): Response
     {
-        // 添加自定义异常处理机制
         switch (true) {
             case $e instanceof BusinessException:
             case $e instanceof AuthException:
@@ -69,7 +68,7 @@ class ExceptionHandle extends Handle
                     $details = [];
                 }
                 $message = $e->getMessage();
-                $code = $e->getCode();
+                $code = $e->getCode() ?: 400;
                 return json([
                     'success' => false,
                     'code' => $code,
@@ -80,7 +79,6 @@ class ExceptionHandle extends Handle
             default:
                 // 其他错误交给系统处理
                 return parent::render($request, $e);
-                break;
         }
     }
 }

@@ -9,6 +9,8 @@ Route::group('auth/admin', function () {
     Route::group('', function () {
         // 登录
         Route::post('login', 'login')->option(['_alias' => '登录', '_desc' => '管理员登录']);
+        // 刷新 Token
+        Route::post('refreshToken', 'refreshToken')->option(['_alias' => '刷新Token', '_desc' => '刷新访问令牌']);
     })->option([
         '_alias' => '无需授权',
     ])->withoutMiddleware([JwtAuth::class, CheckPermission::class]);
@@ -23,6 +25,10 @@ Route::group('auth/admin', function () {
     Route::post('update', 'update')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true]);
     // 删除
     Route::post('delete', 'delete')->option(['_alias' => '删除', '_desc' => '删除管理员', '_auth' => true]);
+    // 重置密码
+    Route::post('resetPassword', 'resetPassword')->option(['_alias' => '重置密码', '_desc' => '重置管理员密码', '_auth' => true]);
+    // 获取权限信息
+    Route::get('getAccessInfo', 'getAccessInfo')->option(['_alias' => '权限信息', '_desc' => '获取权限信息', '_auth' => true]);
 })->prefix('auth/AdminController/')
     ->option([
         '_group_name' => '管理员',

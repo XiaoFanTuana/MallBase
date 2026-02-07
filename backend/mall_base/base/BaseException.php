@@ -23,9 +23,6 @@ use Throwable;
  */
 abstract class BaseException extends \Exception
 {
-    /** @var int 业务状态码 */
-    protected int $statusCode = 400;
-
     /**
      * 构造函数
      *

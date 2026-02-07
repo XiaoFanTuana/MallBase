@@ -17,40 +17,16 @@ class AdminValidate extends Validate
      * @var array
      */
     protected $rule = [
-        'username' => 'require|length:3,20|alphaNum',
-        'password' => 'require|length:6,32',
-        'password_confirm' => 'require|confirm:password',
-        'nickname' => 'max:50',
-        'avatar' => 'max:255',
-        'email' => 'email|max:100',
-        'mobile' => 'mobile|max:20',
-        'status' => 'in:0,1',
-        'remark' => 'max:500',
-        'role_ids' => 'array',
-    ];
-
-    /**
-     * 错误提示
-     *
-     * @var array
-     */
-    protected $message = [
-        'username.require' => '用户名不能为空',
-        'username.length' => '用户名长度必须在3-20个字符之间',
-        'username.alphaNum' => '用户名只能包含字母和数字',
-        'password.require' => '密码不能为空',
-        'password.length' => '密码长度必须在6-32个字符之间',
-        'password_confirm.require' => '确认密码不能为空',
-        'password_confirm.confirm' => '两次密码输入不一致',
-        'nickname.max' => '昵称不能超过50个字符',
-        'avatar.max' => '头像地址不能超过255个字符',
-        'email.email' => '邮箱格式不正确',
-        'email.max' => '邮箱不能超过100个字符',
-        'mobile.mobile' => '手机号格式不正确',
-        'mobile.max' => '手机号不能超过20个字符',
-        'status.in' => '状态值不正确',
-        'remark.max' => '备注不能超过500个字符',
-        'role_ids.array' => '角色ID必须是数组',
+        'username|用户名' => 'require|alphaNum|max:20|min:3',
+        'password|密码' => 'require|max:32|min:6',
+        'password_confirm|确认密码' => 'require|confirm:password',
+        'nickname|昵称' => 'max:50',
+        'avatar|头像' => 'max:255',
+        'email|邮箱' => 'email|max:100',
+        'mobile|手机号' => 'mobile|max:20',
+        'status|状态' => 'in:0,1',
+        'remark|备注' => 'max:500',
+        'role_ids|角色ID' => 'array',
     ];
 
     /**
@@ -62,6 +38,7 @@ class AdminValidate extends Validate
         'login' => ['username', 'password'],
         'create' => ['username', 'password', 'password_confirm', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids'],
         'update' => ['username', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids'],
+        'resetPassword' => ['password', 'password_confirm'],
     ];
 
     /**
