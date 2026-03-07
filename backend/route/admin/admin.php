@@ -22,9 +22,9 @@ Route::group('auth/admin', function () {
     // 创建
     Route::post('create', 'create')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true]);
     // 更新
-    Route::post('update', 'update')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true]);
+    Route::put('update/:id', 'update')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true]);
     // 删除
-    Route::post('delete', 'delete')->option(['_alias' => '删除', '_desc' => '删除管理员', '_auth' => true]);
+    Route::delete('delete/:id', 'delete')->option(['_alias' => '删除', '_desc' => '删除管理员', '_auth' => true]);
     // 重置密码
     Route::post('resetPassword', 'resetPassword')->option(['_alias' => '重置密码', '_desc' => '重置管理员密码', '_auth' => true]);
     // 获取权限信息

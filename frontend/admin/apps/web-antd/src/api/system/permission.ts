@@ -54,9 +54,12 @@ export namespace PermissionApi {
  * 获取权限树形列表
  */
 export async function getPermissionTreeApi(params?: PermissionApi.ListParams) {
-  return requestClient.get<PermissionApi.PermissionItem[]>('/auth/permission/tree', {
-    params,
-  });
+  return requestClient.get<PermissionApi.PermissionItem[]>(
+    '/auth/permission/tree',
+    {
+      params,
+    },
+  );
 }
 
 /**
@@ -65,9 +68,9 @@ export async function getPermissionTreeApi(params?: PermissionApi.ListParams) {
 export async function getPermissionListApi(params?: PermissionApi.ListParams) {
   return requestClient.get<{
     data: PermissionApi.PermissionItem[];
-    total: number;
-    page: number;
     limit: number;
+    page: number;
+    total: number;
   }>('/auth/permission/list', { params });
 }
 

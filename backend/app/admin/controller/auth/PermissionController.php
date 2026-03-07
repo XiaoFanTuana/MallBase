@@ -55,10 +55,8 @@ class PermissionController extends BaseController
     /**
      * 获取详情
      */
-    public function info()
+    public function info($id)
     {
-        $id = $this->request->param('id');
-
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
         }
@@ -92,10 +90,9 @@ class PermissionController extends BaseController
     /**
      * 更新
      */
-    public function update()
+    public function update($id)
     {
-        $data = $this->request->param(['id', 'parent_id', 'name', 'code', 'type', 'path', 'icon', 'component', 'sort', 'status', 'is_show', 'remark']);
-        $id = $data['id'] ?? null;
+        $data = $this->request->param(['parent_id', 'name', 'code', 'type', 'path', 'icon', 'component', 'sort', 'status', 'is_show', 'remark']);
 
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
@@ -115,10 +112,8 @@ class PermissionController extends BaseController
     /**
      * 删除
      */
-    public function delete()
+    public function delete($id)
     {
-        $id = $this->request->param('id');
-
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
         }

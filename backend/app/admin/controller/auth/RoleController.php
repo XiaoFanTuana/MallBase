@@ -53,10 +53,8 @@ class RoleController extends BaseController
     /**
      * 获取详情
      */
-    public function info()
+    public function info($id)
     {
-        $id = $this->request->param('id');
-
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
         }
@@ -90,10 +88,9 @@ class RoleController extends BaseController
     /**
      * 更新
      */
-    public function update()
+    public function update($id)
     {
-        $data = $this->request->param(['id', 'name', 'code', 'status', 'sort', 'remark', 'permission_ids']);
-        $id = $data['id'] ?? null;
+        $data = $this->request->param(['name', 'code', 'status', 'sort', 'remark', 'permission_ids']);
 
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
@@ -113,10 +110,8 @@ class RoleController extends BaseController
     /**
      * 删除
      */
-    public function delete()
+    public function delete($id)
     {
-        $id = $this->request->param('id');
-
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
         }

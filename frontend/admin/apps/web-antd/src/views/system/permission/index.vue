@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { message, Modal } from 'ant-design-vue';
 import { ref } from 'vue';
+
+import { message, Modal } from 'ant-design-vue';
 
 import {
   createPermissionApi,
@@ -123,15 +124,13 @@ const columns = [
     title: '状态',
     dataIndex: 'status',
     width: 80,
-    customRender: ({ record }: any) =>
-      record.status === 1 ? '启用' : '禁用',
+    customRender: ({ record }: any) => (record.status === 1 ? '启用' : '禁用'),
   },
   {
     title: '显示',
     dataIndex: 'is_show',
     width: 80,
-    customRender: ({ record }: any) =>
-      record.is_show === 1 ? '显示' : '隐藏',
+    customRender: ({ record }: any) => (record.is_show === 1 ? '显示' : '隐藏'),
   },
   {
     title: '操作',
@@ -147,12 +146,8 @@ loadData();
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate">
-        新增权限
-      </a-button>
-      <a-button class="ml-2" @click="loadData">
-        刷新
-      </a-button>
+      <a-button type="primary" @click="handleCreate"> 新增权限 </a-button>
+      <a-button class="ml-2" @click="loadData"> 刷新 </a-button>
     </div>
 
     <a-table
@@ -237,7 +232,11 @@ loadData();
           />
         </a-form-item>
         <a-form-item label="排序" name="sort">
-          <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
+          <a-input-number
+            v-model:value="formData.sort"
+            :min="0"
+            style="width: 100%"
+          />
         </a-form-item>
         <a-form-item label="状态" name="status">
           <a-radio-group v-model:value="formData.status">

@@ -63,7 +63,7 @@ class RoleService extends BaseService
         $info = $role->toArray();
 
         // 获取权限ID列表
-        $info['permission_ids'] = array_column($role['permissions'] ?? [], 'id');
+        $info['permission_ids'] = array_column($info['permissions'] ?? [], 'id');
 
         return $info;
     }
@@ -125,11 +125,13 @@ class RoleService extends BaseService
             }
         }
         return $this->transaction(function () use ($id, $data) {
-            $this->model()->updateById($id, $data);
             // 重新分配权限
             if (!empty($data['permission_ids'])) {
                 $this->assignPermissions($id, $data['permission_ids']);
             }
+            unset($data['permission_ids']);
+            $this->model()->updateById($id, $data);
+
 
             return true;
         });

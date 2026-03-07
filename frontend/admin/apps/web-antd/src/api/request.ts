@@ -7,7 +7,6 @@ import { useAppConfig } from '@vben/hooks';
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
-  defaultResponseInterceptor,
   errorMessageResponseInterceptor,
   RequestClient,
 } from '@vben/request';
@@ -73,13 +72,31 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
 
   // 处理返回的响应数据格式
   // 后端返回格式：{ code: 200, data: {...}, message: "成功" }
-  client.addResponseInterceptor(
-    defaultResponseInterceptor({
-      codeField: 'code',
-      dataField: 'data',
-      successCode: 200,
-    }),
-  );
+  // 自定义响应拦截器，处理 data 可能为 null 的情况
+  client.addResponseInterceptor({
+    fulfilled: (response) => {
+      const { config, data: responseData, status } = response;
+
+      if (config.responseReturn === 'raw') {
+        return response;
+      }
+
+      // 检查 responseData 是否为 null
+      if (responseData === null || responseData === undefined) {
+        throw Object.assign({}, response, { response });
+      }
+
+      if (status >= 200 && status < 400) {
+        if (config.responseReturn === 'body') {
+          return responseData;
+        } else if (responseData.code === 200) {
+          // 返回 data 字段，data 可能为 null
+          return responseData.data;
+        }
+      }
+      throw Object.assign({}, response, { response });
+    },
+  });
 
   // token过期的处理
   client.addResponseInterceptor(
@@ -96,8 +113,13 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   client.addResponseInterceptor({
     fulfilled: (response) => {
       // 如果返回数据中有 access_token，转换为 accessToken
-      if (response.data?.access_token) {
-        response.data.accessToken = response.data.access_token;
+      // 注意：由于 responseReturn: 'data'，此时 response 可能已经是 data 字段的值，而不是完整的响应对象
+      if (
+        response &&
+        typeof response === 'object' &&
+        (response as any)?.access_token
+      ) {
+        (response as any).accessToken = (response as any).access_token;
       }
       return response;
     },
@@ -108,8 +130,11 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     errorMessageResponseInterceptor((msg: string, error) => {
       // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
       // 当前mock接口返回的错误字段是 error 或者 message
-      const responseData = error?.response?.data ?? {};
-      const errorMessage = responseData?.error ?? responseData?.message ?? '';
+      const responseData = error?.response?.data;
+      const errorMessage =
+        responseData && typeof responseData === 'object'
+          ? (responseData?.error ?? responseData?.message ?? '')
+          : '';
       // 如果没有错误信息，则会根据状态码进行提示
       message.error(errorMessage || msg);
     }),

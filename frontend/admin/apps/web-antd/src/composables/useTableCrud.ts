@@ -1,5 +1,6 @@
-import { message, Modal } from 'ant-design-vue';
 import { reactive, ref } from 'vue';
+
+import { message, Modal } from 'ant-design-vue';
 
 /**
  * 通用表格 CRUD 操作 composable
@@ -8,11 +9,11 @@ import { reactive, ref } from 'vue';
  */
 export function useTableCrud<T, P>(
   api: {
-    list: (params?: P) => Promise<{ list: T[]; total: number }>;
     create?: (data: any) => Promise<any>;
-    update?: (id: number, data: any) => Promise<any>;
     delete?: (id: number) => Promise<any>;
     getInfo?: (id: number) => Promise<T>;
+    list: (params?: P) => Promise<{ list: T[]; total: number }>;
+    update?: (id: number, data: any) => Promise<any>;
   },
   options?: {
     defaultPageSize?: number;
@@ -36,6 +37,8 @@ export function useTableCrud<T, P>(
   const loadData = async (params?: P) => {
     loading.value = true;
     try {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       const result = await api.list({
         page: pagination.current,
         limit: pagination.pageSize,
@@ -103,7 +106,10 @@ export function useFormModal<T>() {
   };
 
   // 打开编辑弹窗
-  const openEditModal = async (record: T, getInfoApi?: (id: number) => Promise<T>) => {
+  const openEditModal = async (
+    record: T,
+    getInfoApi?: (id: number) => Promise<T>,
+  ) => {
     modalTitle.value = '编辑';
     if (getInfoApi) {
       const detail = await getInfoApi((record as any).id);

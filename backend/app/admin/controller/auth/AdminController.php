@@ -117,10 +117,9 @@ class AdminController extends BaseController
     /**
      * 更新
      */
-    public function update()
+    public function update($id)
     {
-        $data = $this->request->param(['id', 'username', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids']);
-        $id = $data['id'] ?? null;
+        $data = $this->request->param(['username', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids']);
 
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
@@ -140,10 +139,8 @@ class AdminController extends BaseController
     /**
      * 删除
      */
-    public function delete()
+    public function delete($id)
     {
-        $id = $this->request->param('id');
-
         if (empty($id)) {
             return $this->error('ID不能为空', 400);
         }
