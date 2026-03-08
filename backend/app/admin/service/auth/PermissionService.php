@@ -22,7 +22,7 @@ class PermissionService extends BaseService
     /**
      * 获取权限树形列表
      */
-    public function getTree(array $where = [], $is_menu = false): array
+    public function getTree(array $where = []): array
     {
         $keyword = $where['keyword'] ?? '';
         $type = $where['type'] ?? null;
@@ -46,13 +46,15 @@ class PermissionService extends BaseService
         }
 
         $list = $query->select()->toArray();
+        return $this->buildTree($list);
+    }
+
+    public function getMenu()
+    {
+        $query = $this->model()->where(['status' => 1, 'is_show' => 1, 'type' => 1])->order(['sort' => 'asc', 'id' => 'asc']);
+        $list = $query->select()->toArray();
         $tree = $this->buildTree($list);
-        if ($is_menu) {
-            // 转换为前端路由格式
-            return $this->transformToRoutes($tree);
-        } else {
-            return $tree;
-        }
+        return $this->transformToRoutes($tree);
     }
 
     /**
@@ -222,6 +224,11 @@ class PermissionService extends BaseService
     {
         $routes = [];
         foreach ($nodes as $node) {
+            // 跳过空数据
+            if (empty($node['code']) || empty($node['name'])) {
+                continue;
+            }
+
             $route = [
                 'name' => convertToRouteName($node['code']),
                 'path' => $node['path'] ?: '/' . strtolower($node['code']),
@@ -236,12 +243,12 @@ class PermissionService extends BaseService
             }
 
             // 如果有排序，添加到 meta
-            if (!empty($node['sort'])) {
-                $route['meta']['order'] = $node['sort'];
-            }
+//            if (!empty($node['sort'])) {
+//                $route['meta']['order'] = (int)$node['sort'];
+//            }
 
             // 如果需要固定标签页，添加 affixTab
-            if (!empty($node['affix_tab'])) {
+            if (!empty($node['affix_tab']) && $node['affix_tab'] == 1) {
                 $route['meta']['affixTab'] = true;
             }
 
@@ -264,13 +271,16 @@ class PermissionService extends BaseService
             }
 
             // 处理特殊配置（如 noBasicLayout）
-            if (!empty($node['no_basic_layout'])) {
+            if (!empty($node['no_basic_layout']) && $node['no_basic_layout'] == 1) {
                 $route['meta']['noBasicLayout'] = true;
             }
 
             // 如果有子节点，递归处理
             if (!empty($node['children']) && is_array($node['children'])) {
-                $route['children'] = $this->transformToRoutes($node['children']);
+                $children = $this->transformToRoutes($node['children']);
+                if (!empty($children)) {
+                    $route['children'] = $children;
+                }
             }
 
             $routes[] = $route;

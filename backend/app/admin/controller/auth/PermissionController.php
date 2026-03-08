@@ -35,15 +35,10 @@ class PermissionController extends BaseController
      */
     public function menu()
     {
-        $where = $this->request->param(['keyword', 'type', 'status']);
+        // 第二个参数为 true，表示需要转换为前端路由格式
+        $routes = $this->service()->getMenu();
 
-        // 只获取菜单类型的权限，且状态为启用
-        $where['type'] = 1;
-        $where['status'] = 1;
-
-        $tree = $this->service()->getTree($where);
-
-        return $this->success($tree, '获取成功');
+        return $this->success($routes, '获取成功');
 
     }
 
@@ -86,12 +81,8 @@ class PermissionController extends BaseController
         // 验证创建参数
         $this->validate($data, PermissionValidate::class . '.create');
 
-        try {
-            $id = $this->service()->create($data);
-            return $this->success(['id' => $id], '创建成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $id = $this->service()->create($data);
+        return $this->success(['id' => $id], '创建成功');
     }
 
     /**
@@ -108,12 +99,8 @@ class PermissionController extends BaseController
         // 验证更新参数
         $this->validate($data, PermissionValidate::class . '.update');
 
-        try {
-            $this->service()->update((int)$id, $data);
-            return $this->success(null, '更新成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $this->service()->update((int)$id, $data);
+        return $this->success(null, '更新成功');
     }
 
     /**

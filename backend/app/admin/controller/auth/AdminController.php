@@ -31,12 +31,8 @@ class AdminController extends BaseController
         // 验证登录参数
         $this->validate($data, AdminValidate::class . '.login');
 
-        try {
-            $result = $this->service()->login($data['username'], $data['password']);
-            return $this->success($result, '登录成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $result = $this->service()->login($data['username'], $data['password']);
+        return $this->success($result, '登录成功');
     }
 
     /**
@@ -51,12 +47,8 @@ class AdminController extends BaseController
             return $this->error('刷新令牌不能为空');
         }
 
-        try {
-            $result = $this->service()->refreshToken($refreshToken);
-            return $this->success($result, '刷新成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $result = $this->service()->refreshToken($refreshToken);
+        return $this->success($result, '刷新成功');
     }
 
     /**
@@ -69,12 +61,8 @@ class AdminController extends BaseController
         // 获取分页参数
         [$page, $limit] = $this->getPagination(1, 15);
 
-        try {
-            $list = $this->service()->getList($where, $page, $limit);
-            return $this->success($list, '获取成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $list = $this->service()->getList($where, $page, $limit);
+        return $this->success($list, '获取成功');
     }
 
     /**
@@ -88,12 +76,8 @@ class AdminController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        try {
-            $info = $this->service()->getInfo((int)$id);
-            return $this->success($info, '获取成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $info = $this->service()->getInfo((int)$id);
+        return $this->success($info, '获取成功');
     }
 
     /**
@@ -106,12 +90,8 @@ class AdminController extends BaseController
         // 验证创建参数（包括密码确认）
         $this->validate($data, AdminValidate::class . '.create');
 
-        try {
-            $id = $this->service()->create($data);
-            return $this->success(['id' => $id], '创建成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $id = $this->service()->create($data);
+        return $this->success(['id' => $id], '创建成功');
     }
 
     /**
@@ -128,12 +108,8 @@ class AdminController extends BaseController
         // 验证更新参数
         $this->validate($data, AdminValidate::class . '.update');
 
-        try {
-            $this->service()->update((int)$id, $data);
-            return $this->success(null, '更新成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $this->service()->update((int)$id, $data);
+        return $this->success(null, '更新成功');
     }
 
     /**
@@ -145,12 +121,8 @@ class AdminController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        try {
-            $this->service()->delete((int)$id);
-            return $this->success(null, '删除成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $this->service()->delete((int)$id);
+        return $this->success(null, '删除成功');
     }
 
     /**
@@ -171,12 +143,8 @@ class AdminController extends BaseController
         // 验证重置密码参数
         $this->validate($data, AdminValidate::class . '.resetPassword');
 
-        try {
-            $this->service()->resetPassword((int)$id, $data['password']);
-            return $this->success(null, '密码重置成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $this->service()->resetPassword((int)$id, $data['password']);
+        return $this->success(null, '密码重置成功');
     }
 
     /**
@@ -184,12 +152,8 @@ class AdminController extends BaseController
      */
     public function getAccessInfo()
     {
-        try {
-            $adminId = $this->request->admin_id;
-            $info = $this->service()->getAccessInfo($adminId);
-            return $this->success($info, '获取成功');
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $adminId = $this->request->admin_id;
+        $info = $this->service()->getAccessInfo($adminId);
+        return $this->success($info, '获取成功');
     }
 }

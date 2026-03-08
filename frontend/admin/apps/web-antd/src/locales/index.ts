@@ -94,7 +94,8 @@ async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   await coreSetup(app, {
     defaultLocale: preferences.app.locale,
     loadMessages,
-    missingWarn: !import.meta.env.PROD,
+    // missingWarn: !import.meta.env.PROD,
+    missingWarn: false,
     ...options,
   });
 }
