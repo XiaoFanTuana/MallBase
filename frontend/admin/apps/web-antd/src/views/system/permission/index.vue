@@ -4,9 +4,10 @@ import { h, ref } from 'vue';
 import { IconPicker } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
-import { message, Modal } from 'ant-design-vue';
+import { message, Modal, Switch } from 'ant-design-vue';
 
 import {
+  batchUpdatePermissionApi,
   createPermissionApi,
   deletePermissionApi,
   getPermissionInfoApi,
@@ -94,6 +95,9 @@ const handleCreate = () => {
     path: '',
     icon: '',
     component: '',
+    redirect: '',
+    affix_tab: 0,
+    no_basic_layout: 0,
     sort: 0,
     status: 1,
     is_show: 1,
@@ -111,7 +115,9 @@ const handleFormSubmit = async () => {
   await handleSubmit(
     {
       create: createPermissionApi,
-      update: updatePermissionApi,
+      update: async (id: number, data: any) => {
+        return updatePermissionApi(id, data);
+      },
     },
     () => {
       loadData();
@@ -194,18 +200,145 @@ const columns = [
       });
     },
   },
+  { title: '重定向', dataIndex: 'redirect', width: 150 },
   { title: '排序', dataIndex: 'sort', width: 80 },
   {
     title: '状态',
     dataIndex: 'status',
     width: 80,
-    customRender: ({ record }: any) => (record.status === 1 ? '启用' : '禁用'),
+    customRender: ({ record }: any) => {
+      return h(Switch, {
+        checked: record.status === 1,
+        onChange: async (checked: boolean) => {
+          const hasChildren = record.children && record.children.length > 0;
+
+          if (hasChildren) {
+            Modal.confirm({
+              title: '确认操作',
+              content: checked
+                ? '是否同时启用所有子权限？'
+                : '是否同时禁用所有子权限？',
+              okText: '是',
+              cancelText: '否',
+              onOk: async () => {
+                await batchUpdatePermissionApi(record.id, {
+                  field: 'status',
+                  value: checked ? 1 : 0,
+                  include_children: true,
+                });
+                message.success('更新成功');
+                loadData();
+              },
+              onCancel: async () => {
+                await batchUpdatePermissionApi(record.id, {
+                  field: 'status',
+                  value: checked ? 1 : 0,
+                  include_children: false,
+                });
+                message.success('更新成功');
+                loadData();
+              },
+            });
+          } else {
+            await batchUpdatePermissionApi(record.id, {
+              field: 'status',
+              value: checked ? 1 : 0,
+              include_children: false,
+            });
+            message.success('更新成功');
+            loadData();
+          }
+        },
+      });
+    },
   },
   {
     title: '显示',
     dataIndex: 'is_show',
     width: 80,
-    customRender: ({ record }: any) => (record.is_show === 1 ? '显示' : '隐藏'),
+    customRender: ({ record }: any) => {
+      return h(Switch, {
+        checked: record.is_show === 1,
+        onChange: async (checked: boolean) => {
+          const hasChildren = record.children && record.children.length > 0;
+
+          if (hasChildren) {
+            Modal.confirm({
+              title: '确认操作',
+              content: checked
+                ? '是否同时显示所有子菜单？'
+                : '是否同时隐藏所有子菜单？',
+              okText: '是',
+              cancelText: '否',
+              onOk: async () => {
+                await batchUpdatePermissionApi(record.id, {
+                  field: 'is_show',
+                  value: checked ? 1 : 0,
+                  include_children: true,
+                });
+                message.success('更新成功');
+                loadData();
+              },
+              onCancel: async () => {
+                await batchUpdatePermissionApi(record.id, {
+                  field: 'is_show',
+                  value: checked ? 1 : 0,
+                  include_children: false,
+                });
+                message.success('更新成功');
+                loadData();
+              },
+            });
+          } else {
+            await batchUpdatePermissionApi(record.id, {
+              field: 'is_show',
+              value: checked ? 1 : 0,
+              include_children: false,
+            });
+            message.success('更新成功');
+            loadData();
+          }
+        },
+      });
+    },
+  },
+  {
+    title: '固定标签',
+    dataIndex: 'affix_tab',
+    width: 100,
+    customRender: ({ record }: any) => {
+      return h(Switch, {
+        checked: record.affix_tab === 1,
+        onChange: async (checked: any) => {
+          await batchUpdatePermissionApi(record.id, {
+            field: 'affix_tab',
+            value: checked ? 1 : 0,
+            include_children: false,
+          });
+          message.success('更新成功');
+          loadData();
+        },
+      });
+    },
+  },
+  {
+    title: '基础布局',
+    dataIndex: 'no_basic_layout',
+    width: 100,
+    customRender: ({ record }: any) => {
+      return h(Switch, {
+        checked: record.no_basic_layout === 1,
+        onChange: async (checked: any) => {
+          await batchUpdatePermissionApi(record.id, {
+            field: 'no_basic_layout',
+            value: checked ? 1 : 0,
+            include_children: false,
+          });
+          message.success('更新成功');
+          loadData();
+        },
+      });
+    },
   },
   {
     title: '操作',
@@ -376,6 +509,26 @@ loadData();
             placeholder="请输入组件路径"
           />
         </a-form-item>
+        <a-form-item label="重定向路径" name="redirect">
+          <a-input
+            v-model:value="formData.redirect"
+            placeholder="请输入重定向路径，如：/dashboard"
+          />
+        </a-form-item>
+        <a-form-item label="固定标签" name="affix_tab">
+          <a-switch
+            v-model:checked="formData.affix_tab"
+            checked-children="固定"
+            un-checked-children="不固定"
+          />
+        </a-form-item>
+        <a-form-item label="基础布局" name="no_basic_layout">
+          <a-switch
+            v-model:checked="formData.no_basic_layout"
+            checked-children="不需要"
+            un-checked-children="需要"
+          />
+        </a-form-item>
         <a-form-item label="排序" name="sort">
           <a-input-number
             v-model:value="formData.sort"
@@ -384,16 +537,18 @@ loadData();
           />
         </a-form-item>
         <a-form-item label="状态" name="status">
-          <a-radio-group v-model:value="formData.status">
-            <a-radio :value="1">启用</a-radio>
-            <a-radio :value="0">禁用</a-radio>
-          </a-radio-group>
+          <a-switch
+            v-model:checked="formData.status"
+            checked-children="启用"
+            un-checked-children="禁用"
+          />
         </a-form-item>
         <a-form-item label="是否显示" name="is_show">
-          <a-radio-group v-model:value="formData.is_show">
-            <a-radio :value="1">显示</a-radio>
-            <a-radio :value="0">隐藏</a-radio>
-          </a-radio-group>
+          <a-switch
+            v-model:checked="formData.is_show"
+            checked-children="显示"
+            un-checked-children="隐藏"
+          />
         </a-form-item>
         <a-form-item label="备注" name="remark">
           <a-textarea

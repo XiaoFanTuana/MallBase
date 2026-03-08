@@ -7,6 +7,8 @@ use think\facade\Route;
 Route::group('auth/permission', function () {
     // 树形列表
     Route::get('tree', 'tree')->option(['_alias' => '树形列表', '_desc' => '权限树形列表', '_auth' => true]);
+    // 菜单列表
+    Route::get('menu', 'menu')->option(['_alias' => '菜单', '_desc' => '菜单列表']);
     // 列表
     Route::get('list', 'list')->option(['_alias' => '列表', '_desc' => '权限列表', '_auth' => true]);
     // 详情
@@ -15,6 +17,8 @@ Route::group('auth/permission', function () {
     Route::post('create', 'create')->option(['_alias' => '创建', '_desc' => '创建权限', '_auth' => true]);
     // 更新
     Route::put('update/:id', 'update')->option(['_alias' => '更新', '_desc' => '更新权限', '_auth' => true]);
+    // 批量更新
+    Route::put('batchUpdate/:id', 'batchUpdate')->option(['_alias' => '批量更新', '_desc' => '批量更新字段', '_auth' => true]);
     // 删除
     Route::delete('delete/:id', 'delete')->option(['_alias' => '删除', '_desc' => '删除权限', '_auth' => true]);
 })->prefix('auth/PermissionController/')

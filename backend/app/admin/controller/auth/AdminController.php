@@ -35,7 +35,7 @@ class AdminController extends BaseController
             $result = $this->service()->login($data['username'], $data['password']);
             return $this->success($result, '登录成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -48,14 +48,14 @@ class AdminController extends BaseController
         $refreshToken = $data['refresh_token'] ?? '';
 
         if (empty($refreshToken)) {
-            return $this->error('刷新令牌不能为空', 400);
+            return $this->error('刷新令牌不能为空');
         }
 
         try {
             $result = $this->service()->refreshToken($refreshToken);
             return $this->success($result, '刷新成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -73,7 +73,7 @@ class AdminController extends BaseController
             $list = $this->service()->getList($where, $page, $limit);
             return $this->success($list, '获取成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -92,7 +92,7 @@ class AdminController extends BaseController
             $info = $this->service()->getInfo((int)$id);
             return $this->success($info, '获取成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -110,7 +110,7 @@ class AdminController extends BaseController
             $id = $this->service()->create($data);
             return $this->success(['id' => $id], '创建成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -122,7 +122,7 @@ class AdminController extends BaseController
         $data = $this->request->param(['username', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids']);
 
         if (empty($id)) {
-            return $this->error('ID不能为空', 400);
+            return $this->error('ID不能为空');
         }
 
         // 验证更新参数
@@ -132,7 +132,7 @@ class AdminController extends BaseController
             $this->service()->update((int)$id, $data);
             return $this->success(null, '更新成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -142,14 +142,14 @@ class AdminController extends BaseController
     public function delete($id)
     {
         if (empty($id)) {
-            return $this->error('ID不能为空', 400);
+            return $this->error('ID不能为空');
         }
 
         try {
             $this->service()->delete((int)$id);
             return $this->success(null, '删除成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -165,7 +165,7 @@ class AdminController extends BaseController
         $id = $this->request->admin_id;
 
         if (empty($id)) {
-            return $this->error('ID不能为空', 400);
+            return $this->error('ID不能为空');
         }
 
         // 验证重置密码参数
@@ -175,7 +175,7 @@ class AdminController extends BaseController
             $this->service()->resetPassword((int)$id, $data['password']);
             return $this->success(null, '密码重置成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -189,7 +189,7 @@ class AdminController extends BaseController
             $info = $this->service()->getAccessInfo($adminId);
             return $this->success($info, '获取成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 }

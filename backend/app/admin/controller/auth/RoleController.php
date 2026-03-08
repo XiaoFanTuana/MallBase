@@ -33,7 +33,7 @@ class RoleController extends BaseController
             $list = $this->service()->getList($where, $page, $limit);
             return $this->success($list, '获取成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -46,7 +46,7 @@ class RoleController extends BaseController
             $list = $this->service()->getAll();
             return $this->success($list, '获取成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -56,14 +56,14 @@ class RoleController extends BaseController
     public function info($id)
     {
         if (empty($id)) {
-            return $this->error('ID不能为空', 400);
+            return $this->error('ID不能为空');
         }
 
         try {
             $info = $this->service()->getInfo((int)$id);
             return $this->success($info, '获取成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -81,7 +81,7 @@ class RoleController extends BaseController
             $id = $this->service()->create($data);
             return $this->success(['id' => $id], '创建成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -93,7 +93,7 @@ class RoleController extends BaseController
         $data = $this->request->param(['name', 'code', 'status', 'sort', 'remark', 'permission_ids']);
 
         if (empty($id)) {
-            return $this->error('ID不能为空', 400);
+            return $this->error('ID不能为空');
         }
 
         // 验证更新参数
@@ -103,7 +103,7 @@ class RoleController extends BaseController
             $this->service()->update((int)$id, $data);
             return $this->success(null, '更新成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 
@@ -113,14 +113,14 @@ class RoleController extends BaseController
     public function delete($id)
     {
         if (empty($id)) {
-            return $this->error('ID不能为空', 400);
+            return $this->error('ID不能为空');
         }
 
         try {
             $this->service()->delete((int)$id);
             return $this->success(null, '删除成功');
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), $e->getCode() ?: 500);
+            return $this->error($e->getMessage());
         }
     }
 }

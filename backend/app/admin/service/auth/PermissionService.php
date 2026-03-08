@@ -22,7 +22,7 @@ class PermissionService extends BaseService
     /**
      * 获取权限树形列表
      */
-    public function getTree(array $where = []): array
+    public function getTree(array $where = [], $is_menu = false): array
     {
         $keyword = $where['keyword'] ?? '';
         $type = $where['type'] ?? null;
@@ -46,8 +46,13 @@ class PermissionService extends BaseService
         }
 
         $list = $query->select()->toArray();
-
-        return $this->buildTree($list);
+        $tree = $this->buildTree($list);
+        if ($is_menu) {
+            // 转换为前端路由格式
+            return $this->transformToRoutes($tree);
+        } else {
+            return $tree;
+        }
     }
 
     /**
@@ -113,6 +118,9 @@ class PermissionService extends BaseService
                 'path' => $data['path'] ?? '',
                 'icon' => $data['icon'] ?? '',
                 'component' => $data['component'] ?? '',
+                'redirect' => $data['redirect'] ?? '',
+                'affix_tab' => $data['affix_tab'] ?? 0,
+                'no_basic_layout' => $data['no_basic_layout'] ?? 0,
                 'sort' => $data['sort'] ?? 0,
                 'status' => $data['status'] ?? 1,
                 'is_show' => $data['is_show'] ?? 1,
@@ -171,6 +179,24 @@ class PermissionService extends BaseService
     }
 
     /**
+     * 获取所有子节点 ID（递归）
+     */
+    public function getAllChildIds(int $parentId): array
+    {
+        $ids = [];
+        $children = $this->model()->where('parent_id', $parentId)->column('id');
+
+        if (!empty($children)) {
+            $ids = array_merge($ids, $children);
+            foreach ($children as $childId) {
+                $ids = array_merge($ids, $this->getAllChildIds($childId));
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * 构建树形结构
      */
     protected function buildTree(array $list, int $parentId = 0): array
@@ -186,5 +212,69 @@ class PermissionService extends BaseService
             }
         }
         return $tree;
+    }
+
+
+    /**
+     * 转换为前端路由格式
+     */
+    protected function transformToRoutes($nodes)
+    {
+        $routes = [];
+        foreach ($nodes as $node) {
+            $route = [
+                'name' => convertToRouteName($node['code']),
+                'path' => $node['path'] ?: '/' . strtolower($node['code']),
+                'meta' => [
+                    'title' => $node['name'],
+                ],
+            ];
+
+            // 如果有图标，添加到 meta
+            if (!empty($node['icon'])) {
+                $route['meta']['icon'] = $node['icon'];
+            }
+
+            // 如果有排序，添加到 meta
+            if (!empty($node['sort'])) {
+                $route['meta']['order'] = $node['sort'];
+            }
+
+            // 如果需要固定标签页，添加 affixTab
+            if (!empty($node['affix_tab'])) {
+                $route['meta']['affixTab'] = true;
+            }
+
+            // 如果有组件路径，添加 component
+            if (!empty($node['component'])) {
+                // 移除 views/ 前缀和 .vue 后缀，只保留相对路径
+                $component = $node['component'];
+                if (strpos($component, 'views/') === 0) {
+                    $component = substr($component, 6); // 移除 "views/" 前缀
+                }
+                // 移除 .vue 后缀
+                $component = str_replace('.vue', '', $component);
+                // 添加前缀斜杠
+                $route['component'] = '/' . $component;
+            }
+
+            // 如果有 redirect，添加到路由
+            if (!empty($node['redirect'])) {
+                $route['redirect'] = $node['redirect'];
+            }
+
+            // 处理特殊配置（如 noBasicLayout）
+            if (!empty($node['no_basic_layout'])) {
+                $route['meta']['noBasicLayout'] = true;
+            }
+
+            // 如果有子节点，递归处理
+            if (!empty($node['children']) && is_array($node['children'])) {
+                $route['children'] = $this->transformToRoutes($node['children']);
+            }
+
+            $routes[] = $route;
+        }
+        return $routes;
     }
 }

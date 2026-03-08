@@ -38,6 +38,9 @@ export namespace PermissionApi {
     path?: string;
     icon?: string;
     component?: string;
+    redirect?: string;
+    affix_tab?: number;
+    no_basic_layout?: number;
     sort?: number;
     status?: number;
     is_show?: number;
@@ -47,6 +50,13 @@ export namespace PermissionApi {
   /** 更新权限参数 */
   export interface UpdateParams extends CreateParams {
     id: number;
+  }
+
+  /** 批量更新参数 */
+  export interface BatchUpdateParams {
+    field: 'affix_tab' | 'is_show' | 'no_basic_layout' | 'status';
+    value: number;
+    include_children?: boolean;
   }
 }
 
@@ -98,6 +108,16 @@ export async function updatePermissionApi(
   data: Omit<PermissionApi.UpdateParams, 'id'>,
 ) {
   return requestClient.put(`/auth/permission/update/${id}`, data);
+}
+
+/**
+ * 批量更新权限字段
+ */
+export async function batchUpdatePermissionApi(
+  id: number,
+  params: PermissionApi.BatchUpdateParams,
+) {
+  return requestClient.put(`/auth/permission/batchUpdate/${id}`, params);
 }
 
 /**

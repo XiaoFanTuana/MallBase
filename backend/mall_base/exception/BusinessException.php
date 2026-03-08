@@ -14,7 +14,7 @@ use mall_base\base\BaseException;
  * ```php
  * throw new BusinessException('用户不存在');
  * throw new BusinessException('参数错误', 400);
- * throw new BusinessException('自定义错误', 500);
+ * throw new BusinessException('自定义错误', 400);
  * ```
  */
 class BusinessException extends BaseException
