@@ -164,9 +164,9 @@ class DriverManager
      * 获取缓存的驱动实例（协程级别）
      * 
      * @param string $key 缓存键
-     * @return BaseDriver|null
+     * @return BaseDriver[]|null
      */
-    private static function getCachedInstance(string $key): ?BaseDriver
+    private static function getCachedInstance(string $key): ?array
     {
         if (self::isCoroutineContext()) {
             return Co::getContext()[$key] ?? null;
@@ -197,7 +197,29 @@ class DriverManager
      */
     private static function isCoroutineContext(): bool
     {
-        return extension_loaded('swoole') && Co::exists();
+        if (!extension_loaded('swoole')) {
+            return false;
+        }
+        
+        try {
+            // Swoole 4.x 版本
+            if (method_exists(Co::class, 'getuid')) {
+                return Co::getuid() > 0;
+            }
+            
+            // Swoole 5.x 版本或兼容版本
+            $reflection = new \ReflectionMethod(Co::class, 'exists');
+            $params = $reflection->getNumberOfParameters();
+            
+            if ($params === 0) {
+                return Co::exists();
+            } else {
+                // 旧版本需要传递参数
+                return Co::exists(-1);
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**

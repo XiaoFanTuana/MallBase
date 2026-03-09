@@ -80,7 +80,10 @@ export async function createAdminApi(data: AdminApi.CreateParams) {
 /**
  * 更新管理员
  */
-export async function updateAdminApi(id: number, data: Omit<AdminApi.UpdateParams, 'id'>) {
+export async function updateAdminApi(
+  id: number,
+  data: Omit<AdminApi.UpdateParams, 'id'>,
+) {
   return requestClient.put(`/auth/admin/update/${id}`, data);
 }
 

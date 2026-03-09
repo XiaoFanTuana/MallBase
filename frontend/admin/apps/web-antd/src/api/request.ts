@@ -86,6 +86,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         throw Object.assign({}, response, { response });
       }
 
+      // 检查 401 未授权错误，让 authenticateResponseInterceptor 处理
+      if (responseData && responseData.code === 401) {
+        console.log(response);
+        throw response;
+      }
+
       if (status >= 200 && status < 400) {
         if (config.responseReturn === 'body') {
           return responseData;

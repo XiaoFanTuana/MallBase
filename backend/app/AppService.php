@@ -3,6 +3,9 @@ declare (strict_types = 1);
 
 namespace app;
 
+use mall_base\drivers\DriverManager;
+use mall_base\drivers\upload\LocalUploadDriver;
+use mall_base\drivers\upload\OssUploadDriver;
 use think\Service;
 
 /**
@@ -12,7 +15,14 @@ class AppService extends Service
 {
     public function register()
     {
-        // 服务注册
+        // 注册上传驱动
+        DriverManager::register('upload', [
+            'local' => LocalUploadDriver::class,
+            'oss' => OssUploadDriver::class,
+        ]);
+        
+        // 设置默认上传驱动
+        DriverManager::setDefault('upload', config('upload.driver', 'local'));
     }
 
     public function boot()

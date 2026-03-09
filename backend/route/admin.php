@@ -40,6 +40,31 @@ Route::group('api/', function () {
     ]);
 /*
 |--------------------------------------------------------------------------
+| 静态文件访问（上传的文件）
+|--------------------------------------------------------------------------
+*/
+Route::group('uploads', function () {
+    Route::miss(function () {
+        $path = request()->pathinfo();
+        $filePath = public_path() . 'uploads' . DIRECTORY_SEPARATOR . str_replace('/uploads/', '', $path);
+        
+        if (!file_exists($filePath)) {
+            abort(404, '文件不存在');
+        }
+        
+        // 获取文件 MIME 类型
+        $mimeType = mime_content_type($filePath);
+        
+        // 返回文件
+        return response(file_get_contents($filePath), 200, [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'public, max-age=31536000',
+        ]);
+    });
+})->allowCrossDomain();
+
+/*
+|--------------------------------------------------------------------------
 | 后台管理页面（HTML）
 |--------------------------------------------------------------------------
 */
