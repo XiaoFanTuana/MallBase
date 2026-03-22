@@ -16,22 +16,30 @@ Route::group('auth/admin', function () {
     ])->withoutMiddleware([JwtAuth::class, CheckPermission::class]);
 
     // 列表
-    Route::get('list', 'list')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true]);
     // 详情
-    Route::get('info', 'info')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
+    Route::get('info', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
     // 创建
-    Route::post('create', 'create')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true]);
+    Route::post('create', 'create')->name('SystemAdminCreate')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true]);
     // 更新
-    Route::put('update/:id', 'update')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true]);
+    Route::put('update/:id', 'update')->name('SystemAdminUpdate')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true]);
+    // 更新状态
+    Route::put('changeStatus/:id', 'changeStatus')->name('SystemAdminChangeStatus')->option(['_alias' => '更新状态', '_desc' => '更新管理员状态', '_auth' => true]);
     // 删除
-    Route::delete('delete/:id', 'delete')->option(['_alias' => '删除', '_desc' => '删除管理员', '_auth' => true]);
+    Route::delete('delete/:id', 'delete')->name('SystemAdminDelete')->option(['_alias' => '删除', '_desc' => '删除管理员', '_auth' => true]);
     // 重置密码
-    Route::post('resetPassword', 'resetPassword')->option(['_alias' => '重置密码', '_desc' => '重置管理员密码', '_auth' => true]);
+    Route::post('resetPassword/:id', 'resetPassword')->name('SystemAdminResetPassword')->option(['_alias' => '重置密码', '_desc' => '重置管理员密码', '_auth' => true]);
+    // 修改密码
+    Route::post('changePassword', 'changePassword')->name('SystemAdminChangePassword')->option(['_alias' => '修改密码', '_desc' => '修改管理员密码', '_auth' => true]);
     // 获取权限信息
-    Route::get('getAccessInfo', 'getAccessInfo')->option(['_alias' => '权限信息', '_desc' => '获取权限信息', '_auth' => true]);
+    Route::get('getAccessInfo', 'getAccessInfo')->name('SystemAdminGetAccessInfo')->option(['_alias' => '权限信息', '_desc' => '获取权限信息', '_auth' => true]);
 })->prefix('auth/AdminController/')
+    ->name('SystemAdmin')
     ->option([
-        '_group_name' => '管理员',
-        '_path' => '',
+        '_group_name' => '管理员管理',
+        '_path' => '/admin',
         '_auth' => true,
+        '_icon' => 'lucide:users',
+        '_parent' => 'SystemPermissionManagement',
+        '_component' => 'system/admin/index',
     ]);
