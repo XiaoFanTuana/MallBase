@@ -7,6 +7,7 @@ namespace app\admin\service\auth;
 use app\admin\model\auth\Role as RoleModel;
 use app\admin\model\auth\RolePermission;
 use app\admin\model\auth\Permission;
+use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -26,20 +27,13 @@ class RoleService extends BaseService
      */
     public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $keyword = $where['keyword'] ?? '';
-        $status = $where['status'] ?? null;
-
-        $query = $this->model();
-
-        // 关键字搜索
-        if ($keyword) {
-            $query->whereLike('name|code', "%{$keyword}%");
-        }
-
-        // 状态筛选
-        if ($status !== null) {
-            $query->where('status', $status);
-        }
+        $query = $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('name|code', "%{$where['keyword']}%");
+            })
+            ->when(($where['status'] ?? null) !== null, function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            });
 
         $total = $query->count();
         $list = $query->order('sort', 'asc')
@@ -183,12 +177,12 @@ class RoleService extends BaseService
         }
         return $this->transaction(function () use ($id, $data) {
             // 重新分配权限
-            if (!empty($data['permission_ids'])) {
-                $this->assignPermissions($id, $data['permission_ids']);
-            }
+            $this->assignPermissions($id, $data['permission_ids']);
             unset($data['permission_ids']);
             $this->model()->updateById($id, $data);
 
+            // 清除拥有该角色的用户权限缓存
+            $this->clearRoleUsersCache($id);
 
             return true;
         });
@@ -226,6 +220,9 @@ class RoleService extends BaseService
         // 删除角色
         $role->delete();
 
+        // 清除拥有该角色的用户权限缓存
+        $this->clearRoleUsersCache($id);
+
         return true;
     }
 
@@ -243,11 +240,31 @@ class RoleService extends BaseService
             foreach ($permissionIds as $permissionId) {
                 $insertData[] = [
                     'role_id' => $roleId,
-                    'permission_id' => $permissionId,
-                    'create_time' => date('Y-m-d H:i:s'),
+                    'permission_id' => $permissionId
                 ];
             }
             $this->model(RolePermission::class)->insertAll($insertData);
+        }
+
+        // 清除拥有该角色的用户权限缓存
+        $this->clearRoleUsersCache($roleId);
+    }
+
+    /**
+     * 清除拥有指定角色的所有用户权限缓存
+     *
+     * @param int $roleId 角色ID
+     */
+    protected function clearRoleUsersCache(int $roleId): void
+    {
+        // 获取拥有该角色的所有用户ID
+        $adminIds = $this->model(\app\admin\model\auth\AdminRole::class)
+            ->where('role_id', $roleId)
+            ->column('admin_id');
+
+        if (!empty($adminIds)) {
+            $cacheService = new PermissionCacheService();
+            $cacheService->clearUsers($adminIds);
         }
     }
 }

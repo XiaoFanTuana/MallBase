@@ -5,9 +5,9 @@ declare (strict_types=1);
 namespace app\admin\middleware;
 
 use app\admin\model\auth\Permission;
+use app\admin\service\cache\PermissionCacheService;
 use Closure;
 use mall_base\exception\AuthException;
-use think\facade\Cache;
 use think\Request;
 use think\Response;
 
@@ -20,21 +20,6 @@ class CheckPermission
      * 超级管理员ID（拥有所有权限）
      */
     protected int $superAdminId = 1;
-
-    /**
-     * 缓存前缀
-     */
-    protected string $cachePrefix = 'admin:permissions:';
-
-    /**
-     * 缓存时间（秒）
-     */
-    protected int $cacheExpire = 3600;
-
-    /**
-     * 是否启用缓存
-     */
-    protected bool $enableCache = true;
 
     /**
      * 处理请求
@@ -85,13 +70,8 @@ class CheckPermission
         // 从路由规则中获取权限标识
         $route = $request->rule();
 
-        $options = $route->getOption();
         if ($route) {
-            // 路由规则示例：admin/auth/admin/list
-            $rule = $route->getRule();
-
-            // 将路由转换为权限标识：admin.auth.admin.list
-            return str_replace('/', '.', $rule);
+            return $route->getName();
         }
 
         return null;
@@ -109,7 +89,6 @@ class CheckPermission
         // 获取用户的所有权限
         $permissions = $this->getUserPermissions($adminId);
 
-        var_dump($permissions, $permissionCode);
         // 检查是否包含当前权限
         return in_array($permissionCode, $permissions);
     }
@@ -122,29 +101,24 @@ class CheckPermission
      */
     protected function getUserPermissions(int $adminId): array
     {
-        $cacheKey = $this->cachePrefix . $adminId;
+        $cacheService = new PermissionCacheService();
 
-//        // 尝试从缓存获取
-//        if ($this->enableCache) {
-//            $cached = Cache::get($cacheKey);
-//            if ($cached !== false) {
-//                return $cached;
-//            }
-//        }
+        // 尝试从缓存获取
+        $cached = $cacheService->get($adminId);
+        if (!empty($cached)) {
+            return $cached;
+        }
 
         // 查询数据库获取用户权限
         $permissions = Permission::alias('p')
             ->join('role_permission rp', 'rp.permission_id = p.id')
-            ->join('admin_role ar', 'ar.id = rp.role_id')
+            ->join('admin_role ar', 'ar.role_id = rp.role_id')
             ->where('ar.admin_id', $adminId)
             ->where('p.status', 1)
             ->column('p.code');
 
-
         // 存入缓存
-        if ($this->enableCache) {
-            Cache::set($cacheKey, $permissions, $this->cacheExpire);
-        }
+        $cacheService->set($adminId, $permissions ?: []);
 
         return $permissions ?: [];
     }
@@ -157,8 +131,7 @@ class CheckPermission
      */
     public static function clearCache(int $adminId): bool
     {
-        $cachePrefix = 'admin:permissions:';
-        $cacheKey = $cachePrefix . $adminId;
-        return Cache::delete($cacheKey);
+        $cacheService = new PermissionCacheService();
+        return $cacheService->clearUser($adminId);
     }
 }

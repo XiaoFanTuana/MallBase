@@ -35,8 +35,9 @@ class PermissionController extends BaseController
      */
     public function menu()
     {
+        $adminId = $this->request->admin_id;
         // 第二个参数为 true，表示需要转换为前端路由格式
-        $routes = $this->service()->getMenu();
+        $routes = $this->service()->getMenu($adminId);
 
         return $this->success($routes, '获取成功');
 

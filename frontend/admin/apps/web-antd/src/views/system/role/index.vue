@@ -76,9 +76,24 @@ const handleFormSubmit = async () => {
       update: updateRoleApi,
     },
     () => {
-      loadData();
+      loadData(searchParams.value);
     },
   );
+};
+
+// 搜索参数
+const searchParams = ref({
+  keyword: '',
+  status: undefined as number | undefined,
+});
+
+// 重置搜索
+const resetSearch = () => {
+  searchParams.value = {
+    keyword: '',
+    status: undefined,
+  };
+  loadData(searchParams.value);
 };
 
 // 表格列定义
@@ -99,7 +114,7 @@ const columns = [
             status: checked ? 1 : 0,
           });
           message.success('更新成功');
-          await loadData();
+          await loadData(searchParams.value);
         },
       });
     },
@@ -113,7 +128,7 @@ const columns = [
 ];
 
 // 初始化加载数据
-loadData();
+loadData(searchParams.value);
 </script>
 
 <template>
@@ -123,13 +138,42 @@ loadData();
       <a-button class="ml-2" @click="refresh"> 刷新 </a-button>
     </div>
 
+    <!-- 搜索表单 -->
+    <a-form layout="inline" class="mb-4">
+      <a-form-item label="关键词">
+        <a-input
+          v-model:value="searchParams.keyword"
+          placeholder="角色名称/角色编码/备注"
+          allow-clear
+          style="width: 200px"
+        />
+      </a-form-item>
+      <a-form-item label="状态">
+        <a-select
+          v-model:value="searchParams.status"
+          placeholder="请选择"
+          allow-clear
+          style="width: 150px"
+        >
+          <a-select-option :value="1">启用</a-select-option>
+          <a-select-option :value="0">禁用</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" @click="loadData(searchParams)">
+          搜索
+        </a-button>
+        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
+      </a-form-item>
+    </a-form>
+
     <a-table
       :columns="columns"
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
       :scroll="{ x: 900 }"
-      @change="loadData"
+      @change="loadData(searchParams)"
       row-key="id"
     >
       <template #bodyCell="{ column, record }">

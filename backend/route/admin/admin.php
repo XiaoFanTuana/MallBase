@@ -18,7 +18,9 @@ Route::group('auth/admin', function () {
     // 列表
     Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true]);
     // 详情
-    Route::get('info', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
+    Route::get('info/:id', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
+    // 当前登录管理员详情
+    Route::get('adminInfo', 'adminInfo')->name('SystemLoginAdminInfo')->option(['_alias' => '当前登录详情', '_desc' => '当前登录管理员详情', '_auth' => true]);
     // 创建
     Route::post('create', 'create')->name('SystemAdminCreate')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true]);
     // 更新

@@ -8,6 +8,7 @@ use app\admin\model\auth\Admin as AdminModel;
 use app\admin\model\auth\AdminRole;
 use app\admin\model\auth\Role;
 use app\admin\model\auth\RolePermission;
+use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\AuthException;
 use mall_base\exception\BusinessException;
@@ -80,15 +81,12 @@ class AdminService extends BaseService
      */
     public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $keyword = $where['keyword'] ?? '';
-        $status = $where['status'] ?? null;
-
         $query = $this->model()
-            ->when($keyword, function ($q) use ($keyword) {
-                $q->whereLike('username|nickname|mobile|email', "%{$keyword}%");
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('username|nickname|mobile|email', "%{$where['keyword']}%");
             })
-            ->when($status !== null, function ($q) use ($status) {
-                $q->where('status', $status);
+            ->when(($where['status'] ?? null) !== null, function ($q) use ($where) {
+                $q->where('status', $where['status']);
             });
 
         $total = $query->count();
@@ -236,9 +234,10 @@ class AdminService extends BaseService
             unset($data['role_ids']);
             $this->model()->updateById($id, $data);
             // 重新分配角色
-            if (!empty($role_ids)) {
-                $this->assignRoles($id, $role_ids);
-            }
+            $this->assignRoles($id, $role_ids);
+
+            // 清除该用户的权限缓存
+            $this->clearUserPermissionCache($id);
 
             return true;
         });
@@ -276,6 +275,9 @@ class AdminService extends BaseService
         // 删除管理员
         $admin->delete();
 
+        // 清除该用户的权限缓存
+        $this->clearUserPermissionCache($id);
+
         return true;
     }
 
@@ -299,6 +301,20 @@ class AdminService extends BaseService
             }
             $this->model(AdminRole::class)->insertAll($insertData);
         }
+
+        // 清除该用户的权限缓存
+        $this->clearUserPermissionCache($adminId);
+    }
+
+    /**
+     * 清除指定用户的权限缓存
+     *
+     * @param int $adminId 管理员ID
+     */
+    protected function clearUserPermissionCache(int $adminId): void
+    {
+        $cacheService = new PermissionCacheService();
+        $cacheService->clearUser($adminId);
     }
 
     /**

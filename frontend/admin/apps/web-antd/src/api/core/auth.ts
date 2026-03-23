@@ -55,9 +55,12 @@ export async function loginApi(data: AuthApi.LoginParams) {
  * 刷新accessToken
  */
 export async function refreshTokenApi() {
-  return baseRequestClient.post<AuthApi.RefreshTokenResult>('/auth/refresh', {
-    withCredentials: true,
-  });
+  return baseRequestClient.post<AuthApi.RefreshTokenResult>(
+    '/auth/admin/refreshToken',
+    {
+      withCredentials: true,
+    },
+  );
 }
 
 /**
@@ -73,7 +76,7 @@ export async function logoutApi() {
  * 获取当前登录管理员信息
  */
 export async function getCurrentAdminInfoApi() {
-  return requestClient.get<AuthApi.CurrentAdminInfo>('/auth/admin/info');
+  return requestClient.get<AuthApi.CurrentAdminInfo>('/auth/admin/adminInfo');
 }
 
 /**

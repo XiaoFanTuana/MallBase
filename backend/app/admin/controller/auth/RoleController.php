@@ -24,9 +24,8 @@ class RoleController extends BaseController
      */
     public function list()
     {
-        $where = $this->request->param(['name', 'code', 'status']);
+        $where = $this->request->param(['keyword', 'status']);
 
-        // 获取分页参数
         [$page, $limit] = $this->getPagination(1, 15);
 
         $list = $this->service()->getList($where, $page, $limit);

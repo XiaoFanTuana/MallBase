@@ -5,6 +5,7 @@ declare (strict_types=1);
 namespace app\admin\service\auth;
 
 use app\admin\model\auth\Permission as PermissionModel;
+use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -49,10 +50,14 @@ class PermissionService extends BaseService
         return $this->buildTree($list);
     }
 
-    public function getMenu()
+    public function getMenu(int $adminId): array
     {
-        $query = $this->model()->where(['status' => 1, 'is_show' => 1, 'type' => 1])->order(['sort' => 'asc', 'id' => 'asc']);
-        $list = $query->select()->toArray();
+        $query = $this->model()->alias('p')
+            ->join('role_permission rp', 'rp.permission_id = p.id')
+            ->join('admin_role ar', 'ar.role_id = rp.role_id')
+            ->where('ar.admin_id', $adminId)
+            ->where(['p.status' => 1, 'p.is_show' => 1, 'p.type' => 1])->order(['p.sort' => 'asc', 'p.id' => 'asc']);
+        $list = $query->field('p.*')->select()->toArray();
         $tree = $this->buildTree($list);
         return $this->transformToRoutes($tree);
     }
@@ -129,6 +134,9 @@ class PermissionService extends BaseService
                 'remark' => $data['remark'] ?? '',
             ]);
 
+            // 清除所有用户权限缓存
+            $this->clearAllUserPermissionCache();
+
             return $permission->id;
         });
     }
@@ -156,6 +164,10 @@ class PermissionService extends BaseService
         }
 
         $this->model()->updateById($id, $data);
+
+        // 清除所有用户权限缓存
+        $this->clearAllUserPermissionCache();
+
         return true;
     }
 
@@ -176,6 +188,9 @@ class PermissionService extends BaseService
 
         // 删除权限
         $permission->delete();
+
+        // 清除所有用户权限缓存
+        $this->clearAllUserPermissionCache();
 
         return true;
     }
@@ -286,5 +301,14 @@ class PermissionService extends BaseService
             $routes[] = $route;
         }
         return $routes;
+    }
+
+    /**
+     * 清除所有用户权限缓存
+     */
+    protected function clearAllUserPermissionCache(): void
+    {
+        $cacheService = new PermissionCacheService();
+        $cacheService->clearAll();
     }
 }

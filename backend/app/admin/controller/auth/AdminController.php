@@ -68,7 +68,17 @@ class AdminController extends BaseController
     /**
      * 获取详情
      */
-    public function info()
+    public function info($id)
+    {
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        $info = $this->service()->getInfo((int)$id);
+        return $this->success($info, '获取成功');
+    }
+
+    public function adminInfo()
     {
         $id = $this->request->admin_id;
 
