@@ -198,36 +198,6 @@ function buildMenuPermissionMap(
 }
 
 /**
- * 菜单权限变化时，自动更新按钮和接口权限
- */
-watch(
-  () => formData.value?.menu_permission_ids,
-  (newMenuIds) => {
-    if (!formData.value || !newMenuIds) return;
-
-    // 合并所有选中菜单的按钮权限
-    const allButtonIds: number[] = [];
-    newMenuIds.forEach((menuId: number) => {
-      const buttonIds = menuButtonPermissionMap.value[menuId] || [];
-      allButtonIds.push(...buttonIds);
-    });
-    // 去重并更新按钮权限
-    formData.value.button_permission_ids = [
-      ...new Set(allButtonIds),
-    ] as number[];
-
-    // 合并所有选中菜单的接口权限
-    const allApiIds: number[] = [];
-    newMenuIds.forEach((menuId: number) => {
-      const apiIds = menuApiPermissionMap.value[menuId] || [];
-      allApiIds.push(...apiIds);
-    });
-    // 去重并更新接口权限
-    formData.value.api_permission_ids = [...new Set(allApiIds)] as number[];
-  },
-);
-
-/**
  * 根据菜单 ID 查找菜单名称
  */
 function findMenuName(menuId: number): string {
