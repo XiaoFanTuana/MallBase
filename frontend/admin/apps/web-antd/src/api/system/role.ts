@@ -9,8 +9,9 @@ export namespace RoleApi {
     status: number;
     sort: number;
     remark: string;
-    permission_ids?: number[];
-    permissions?: PermissionItem[];
+    menu_permission_ids?: number[];
+    button_permission_ids?: number[];
+    api_permission_ids?: number[];
     create_time?: string;
     update_time?: string;
   }
@@ -21,7 +22,7 @@ export namespace RoleApi {
     parent_id: number;
     name: string;
     code: string;
-    type: number; // 1=菜单, 2=按钮
+    type: number; // 1=菜单, 2=按钮, 3=接口
     path?: string;
     icon?: string;
     component?: string;
@@ -47,7 +48,9 @@ export namespace RoleApi {
     status?: number;
     sort?: number;
     remark?: string;
-    permission_ids?: number[];
+    menu_permission_ids?: number[];
+    button_permission_ids?: number[];
+    api_permission_ids?: number[];
   }
 
   /** 更新角色参数 */

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { h, ref } from 'vue';
+import { computed, h, ref } from 'vue';
 
-import { message, Switch } from 'ant-design-vue';
+import { message, Switch, Tag } from 'ant-design-vue';
 
 import { getPermissionTreeApi } from '#/api/system/permission';
 import {
@@ -40,31 +40,220 @@ const {
   handleSubmit,
 } = useFormModal();
 
-// 权限树数据
+// 权限树数据（菜单）
 const permissionTree = ref<any[]>([]);
 
-// 加载权限树
-const loadPermissionTree = async () => {
+// 菜单 ID 到名称的映射
+const menuNameMap = ref<Record<number, string>>({});
+
+// 按钮权限列表
+const buttonPermissions = ref<any[]>([]);
+
+// 接口权限列表
+const apiPermissions = ref<any[]>([]);
+
+// 所有按钮权限 ID（用于全选）
+const allButtonPermissionIds = ref<number[]>([]);
+
+// 所有接口权限 ID（用于全选）
+const allApiPermissionIds = ref<number[]>([]);
+
+// 按钮权限搜索关键词
+const buttonSearchKeyword = ref('');
+
+// 接口权限搜索关键词
+const apiSearchKeyword = ref('');
+
+// 加载权限数据
+const loadPermissionData = async () => {
   const result = await getPermissionTreeApi();
-  permissionTree.value = result;
+  // 过滤出菜单节点（用于树形选择）
+  permissionTree.value = filterMenuTree(result);
+  // 构建菜单 ID 到名称的映射
+  menuNameMap.value = buildMenuNameMap(result);
+  // 收集按钮权限
+  buttonPermissions.value = collectPermissions(result, 2);
+  // 收集接口权限
+  apiPermissions.value = collectPermissions(result, 3);
+  // 收集所有按钮权限 ID
+  allButtonPermissionIds.value = buttonPermissions.value.map((p) => p.id);
+  // 收集所有接口权限 ID
+  allApiPermissionIds.value = apiPermissions.value.map((p) => p.id);
 };
+
+/**
+ * 过滤权限树，只保留菜单节点（type: 1）
+ */
+function filterMenuTree(permissions: any[]): any[] {
+  return permissions
+    .filter((item) => item.type === 1) // 只保留菜单
+    .map((item) => ({
+      ...item,
+      children: item.children ? filterMenuTree(item.children) : [],
+    }));
+}
+
+/**
+ * 收集指定类型的权限
+ */
+function collectPermissions(permissions: any[], type: number): any[] {
+  const result: any[] = [];
+
+  function traverse(nodes: any[]) {
+    for (const node of nodes) {
+      if (node.type === type) {
+        result.push(node);
+      }
+      if (node.children?.length > 0) {
+        traverse(node.children);
+      }
+    }
+  }
+
+  traverse(permissions);
+  return result;
+}
+
+/**
+ * 构建菜单 ID 到名称的映射
+ */
+function buildMenuNameMap(permissions: any[]): Record<number, string> {
+  const map: Record<number, string> = {};
+
+  function traverse(nodes: any[]) {
+    for (const node of nodes) {
+      if (node.type === 1) {
+        // 只映射菜单节点
+        map[node.id] = node.name;
+      }
+      if (node.children?.length > 0) {
+        traverse(node.children);
+      }
+    }
+  }
+
+  traverse(permissions);
+  return map;
+}
+
+/**
+ * 根据菜单 ID 查找菜单名称
+ */
+function findMenuName(menuId: number): string {
+  return menuNameMap.value[menuId] || '其他';
+}
+
+/**
+ * 过滤后的按钮权限（根据搜索关键词）
+ */
+const filteredButtonPermissions = computed(() => {
+  if (!buttonSearchKeyword.value) {
+    return buttonPermissions.value;
+  }
+  const keyword = buttonSearchKeyword.value.toLowerCase();
+  return buttonPermissions.value.filter(
+    (p) =>
+      p.name.toLowerCase().includes(keyword) ||
+      p.code.toLowerCase().includes(keyword),
+  );
+});
+
+/**
+ * 按钮权限按菜单分组
+ */
+const buttonPermissionsGrouped = computed(() => {
+  const groups: Record<string, any[]> = {};
+  filteredButtonPermissions.value.forEach((btn) => {
+    const menuName = findMenuName(btn.parent_id);
+    const groupName = menuName || '其他';
+    if (!groups[groupName]) {
+      groups[groupName] = [];
+    }
+    groups[groupName].push(btn);
+  });
+  return groups;
+});
+
+/**
+ * 过滤后的接口权限（根据搜索关键词）
+ */
+const filteredApiPermissions = computed(() => {
+  if (!apiSearchKeyword.value) {
+    return apiPermissions.value;
+  }
+  const keyword = apiSearchKeyword.value.toLowerCase();
+  return apiPermissions.value.filter(
+    (p) =>
+      p.name.toLowerCase().includes(keyword) ||
+      p.code.toLowerCase().includes(keyword),
+  );
+});
+
+/**
+ * 接口权限按菜单分组
+ */
+const apiPermissionsGrouped = computed(() => {
+  const groups: Record<string, any[]> = {};
+  filteredApiPermissions.value.forEach((api) => {
+    const menuName = findMenuName(api.parent_id);
+    const groupName = menuName || '其他';
+    if (!groups[groupName]) {
+      groups[groupName] = [];
+    }
+    groups[groupName].push(api);
+  });
+  return groups;
+});
+
+/**
+ * 全选所有按钮权限
+ */
+function selectAllButtonPermissions() {
+  formData.value.button_permission_ids = [...allButtonPermissionIds.value];
+}
+
+/**
+ * 清空所有按钮权限
+ */
+function clearAllButtonPermissions() {
+  formData.value.button_permission_ids = [];
+}
+
+/**
+ * 全选所有接口权限
+ */
+function selectAllApiPermissions() {
+  formData.value.api_permission_ids = [...allApiPermissionIds.value];
+}
+
+/**
+ * 清空所有接口权限
+ */
+function clearAllApiPermissions() {
+  formData.value.api_permission_ids = [];
+}
 
 // 打开新增弹窗
 const handleCreate = async () => {
-  await loadPermissionTree();
+  await loadPermissionData();
   openCreateModal({
     name: '',
     code: '',
     remark: '',
     status: 1,
     sort: 0,
-    permission_ids: [],
+    menu_permission_ids: [], // 菜单权限 ID
+    button_permission_ids: [], // 按钮权限 ID
+    api_permission_ids: [], // 接口权限 ID
   });
+  // 默认不选任何权限
+  formData.value.button_permission_ids = [];
+  formData.value.api_permission_ids = [];
 };
 
 // 打开编辑弹窗
 const handleEdit = async (row: any) => {
-  await loadPermissionTree();
+  await loadPermissionData();
   await openEditModal(row, getRoleInfoApi);
 };
 
@@ -199,7 +388,8 @@ loadData(searchParams.value);
     <a-modal
       v-model:open="modalVisible"
       :title="modalTitle"
-      width="700px"
+      width="1600px"
+      class="role-modal"
       @ok="handleFormSubmit"
     >
       <a-form
@@ -235,9 +425,12 @@ loadData(searchParams.value);
             <a-radio :value="0">禁用</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="权限分配" name="permission_ids">
+
+        <!-- 菜单权限 -->
+        <a-form-item label="菜单权限" name="menu_permission_ids">
+          <div class="permission-description">选择角色可以访问的菜单</div>
           <a-tree
-            v-model:checked-keys="formData.permission_ids"
+            v-model:checked-keys="formData.menu_permission_ids"
             checkable
             :tree-data="permissionTree"
             :field-names="{
@@ -246,10 +439,128 @@ loadData(searchParams.value);
               children: 'children',
             }"
             :check-strictly="false"
-            class="w-full"
-            style="max-height: 400px; overflow-y: auto"
+            class="permission-tree w-full"
           />
         </a-form-item>
+
+        <!-- 按钮权限 -->
+        <a-form-item label="按钮权限" name="button_permission_ids">
+          <div class="permission-controls">
+            <a-input
+              v-model:value="buttonSearchKeyword"
+              placeholder="搜索按钮权限"
+              allow-clear
+              style="width: 200px"
+            >
+              <template #prefix>
+                <span class="text-gray-400">🔍</span>
+              </template>
+            </a-input>
+            <a-space>
+              <a-button size="small" @click="selectAllButtonPermissions">
+                全选
+              </a-button>
+              <a-button size="small" @click="clearAllButtonPermissions">
+                清空
+              </a-button>
+              <span class="text-sm text-gray-500">
+                已选择 {{ formData.button_permission_ids?.length || 0 }} /
+                {{ filteredButtonPermissions.length }} 项
+              </span>
+            </a-space>
+          </div>
+          <div class="permission-description">选择角色可以使用的按钮功能</div>
+          <div class="permission-list">
+            <a-checkbox-group
+              v-model:value="formData.button_permission_ids"
+              class="w-full"
+            >
+              <div
+                v-for="(buttons, menuName) in buttonPermissionsGrouped"
+                :key="menuName"
+                class="permission-group"
+              >
+                <div class="permission-group-title">
+                  {{ menuName }}
+                </div>
+                <div class="permission-items">
+                  <a-checkbox
+                    v-for="btn in buttons"
+                    :key="btn.id"
+                    :value="btn.id"
+                  >
+                    <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
+                    {{ btn.name }}
+                  </a-checkbox>
+                </div>
+              </div>
+              <div
+                v-if="Object.keys(buttonPermissionsGrouped).length === 0"
+                class="w-full py-8 text-center text-gray-400"
+              >
+                暂无按钮权限
+              </div>
+            </a-checkbox-group>
+          </div>
+        </a-form-item>
+
+        <!-- 接口权限 -->
+        <a-form-item label="接口权限" name="api_permission_ids">
+          <div class="permission-controls">
+            <a-input
+              v-model:value="apiSearchKeyword"
+              placeholder="搜索接口权限"
+              allow-clear
+              style="width: 200px"
+            >
+              <template #prefix>
+                <span class="text-gray-400">🔍</span>
+              </template>
+            </a-input>
+            <a-space>
+              <a-button size="small" @click="selectAllApiPermissions">
+                全选
+              </a-button>
+              <a-button size="small" @click="clearAllApiPermissions">
+                清空
+              </a-button>
+              <span class="text-sm text-gray-500">
+                已选择 {{ formData.api_permission_ids?.length || 0 }} /
+                {{ filteredApiPermissions.length }} 项
+              </span>
+            </a-space>
+          </div>
+          <div class="permission-description">选择角色可以调用的 API 接口</div>
+          <div class="permission-list">
+            <a-checkbox-group
+              v-model:value="formData.api_permission_ids"
+              class="w-full"
+            >
+              <div
+                v-for="(apis, menuName) in apiPermissionsGrouped"
+                :key="menuName"
+                class="permission-group"
+              >
+                <div class="permission-group-title">
+                  {{ menuName }}
+                </div>
+                <div class="permission-items">
+                  <a-checkbox v-for="api in apis" :key="api.id" :value="api.id">
+                    <Tag color="green" class="mr-1">{{ api.code }}</Tag>
+                    {{ api.name }}
+                  </a-checkbox>
+                </div>
+              </div>
+              <div
+                v-if="Object.keys(apiPermissionsGrouped).length === 0"
+                class="w-full py-8 text-center text-gray-400"
+              >
+                暂无接口权限
+              </div>
+            </a-checkbox-group>
+          </div>
+        </a-form-item>
+
         <a-form-item label="备注" name="remark">
           <a-textarea
             v-model:value="formData.remark"
@@ -261,3 +572,56 @@ loadData(searchParams.value);
     </a-modal>
   </div>
 </template>
+
+<style scoped>
+.role-modal :deep(.ant-modal-body) {
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.permission-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 0.75rem;
+}
+
+.permission-description {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: rgb(107, 114, 128);
+}
+
+.permission-tree {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid rgb(217, 217, 217);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.permission-list {
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.permission-group {
+  margin-bottom: 1rem;
+}
+
+.permission-group-title {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid rgb(209, 213, 219);
+  font-weight: 700;
+  color: rgb(75, 85, 99);
+}
+
+.permission-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+</style>

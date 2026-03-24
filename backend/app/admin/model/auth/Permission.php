@@ -11,6 +11,21 @@ use mall_base\base\BaseModel;
  */
 class Permission extends BaseModel
 {
+    /**
+     * 权限类型：菜单
+     */
+    const TYPE_MENU = 1;
+
+    /**
+     * 权限类型：按钮
+     */
+    const TYPE_BUTTON = 2;
+
+    /**
+     * 权限类型：接口
+     */
+    const TYPE_API = 3;
+
     protected $name = 'permission';
 
     protected $pk = 'id';

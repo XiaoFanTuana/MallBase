@@ -1,6 +1,7 @@
 <?php
 
 use app\admin\middleware\JwtAuth;
+use app\admin\model\auth\Permission;
 use think\facade\Route;
 
 // 权限接口路由
@@ -10,13 +11,13 @@ Route::group('auth/permission', function () {
     // 菜单列表
     Route::get('menu', 'menu')->name('SystemPermissionMenu')->option(['_alias' => '菜单', '_desc' => '菜单列表']);
     // 列表
-    Route::get('list', 'list')->name('SystemPermissionList')->option(['_alias' => '列表', '_desc' => '权限列表', '_auth' => true]);
+    Route::get('list', 'list')->name('SystemPermissionList')->option(['_alias' => '列表', '_desc' => '权限列表', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 详情
-    Route::get('info/:id', 'info')->name('SystemPermissionInfo')->option(['_alias' => '详情', '_desc' => '权限详情', '_auth' => true]);
+    Route::get('info/:id', 'info')->name('SystemPermissionInfo')->option(['_alias' => '详情', '_desc' => '权限详情', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 创建
-    Route::post('create', 'create')->name('SystemPermissionCreate')->option(['_alias' => '创建', '_desc' => '创建权限', '_auth' => true]);
+    Route::post('create', 'create')->name('SystemPermissionCreate')->option(['_alias' => '创建', '_desc' => '创建权限', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 更新
-    Route::put('update/:id', 'update')->name('SystemPermissionUpdate')->option(['_alias' => '更新', '_desc' => '更新权限', '_auth' => true]);
+    Route::put('update/:id', 'update')->name('SystemPermissionUpdate')->option(['_alias' => '更新', '_desc' => '更新权限', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 批量更新
     Route::put('batchUpdate/:id', 'batchUpdate')->name('SystemPermissionBatchUpdate')->option(['_alias' => '批量更新', '_desc' => '批量更新字段', '_auth' => true]);
     // 删除

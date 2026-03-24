@@ -8,6 +8,7 @@ use app\admin\model\auth\Role as RoleModel;
 use app\admin\model\auth\RolePermission;
 use app\admin\model\auth\Permission;
 use app\admin\service\cache\PermissionCacheService;
+use app\admin\model\auth\Permission as PermissionModel;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -98,7 +99,11 @@ class RoleService extends BaseService
             ->toArray();
 
         // 组装 pivot 数据
-        $permissions = [];
+        $menuPermissions = [];
+        // 按钮权限
+        $buttonPermissions = [];
+        // 接口权限
+        $apiPermissions = [];
         foreach ($rolePermissions as $item) {
             if (!empty($item['id'])) {
                 $permission = $item;
@@ -109,12 +114,27 @@ class RoleService extends BaseService
                     'create_time' => $item['pivot_create_time'],
                 ];
                 unset($permission['pivot_id'], $permission['role_id'], $permission['pivot_create_time']);
-                $permissions[] = $permission;
+                switch ($item['type']) {
+                    case PermissionModel::TYPE_MENU:
+                        $menuPermissions[] = $permission;
+                        break;
+                    case PermissionModel::TYPE_BUTTON:
+                        $buttonPermissions[] = $permission;
+                        break;
+                    case PermissionModel::TYPE_API:
+                        $apiPermissions[] = $permission;
+                        break;
+                }
+
             }
         }
 
-        $info['permissions'] = $permissions;
-        $info['permission_ids'] = array_column($permissions, 'id');
+        $info['menu_permissions'] = $menuPermissions;
+        $info['menu_permission_ids'] = array_column($menuPermissions, 'id');
+        $info['button_permissions'] = $buttonPermissions;
+        $info['button_permission_ids'] = array_column($buttonPermissions, 'id');
+        $info['api_permissions'] = $apiPermissions;
+        $info['api_permission_ids'] = array_column($apiPermissions, 'id');
 
         return $info;
     }
