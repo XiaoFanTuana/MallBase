@@ -389,7 +389,11 @@ loadData(searchParams.value);
       v-model:open="modalVisible"
       :title="modalTitle"
       width="1600px"
-      class="role-modal"
+      :body-style="{
+        maxHeight: '70vh',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+      }"
       @ok="handleFormSubmit"
     >
       <a-form
@@ -444,19 +448,20 @@ loadData(searchParams.value);
         </a-form-item>
 
         <!-- 按钮权限 -->
-        <a-form-item label="按钮权限" name="button_permission_ids">
-          <div class="permission-controls">
-            <a-input
-              v-model:value="buttonSearchKeyword"
-              placeholder="搜索按钮权限"
-              allow-clear
-              style="width: 200px"
-            >
-              <template #prefix>
-                <span class="text-gray-400">🔍</span>
-              </template>
-            </a-input>
-            <a-space>
+        <a-form-item label="按钮权限">
+          <template #extra>
+            <div class="permission-description">选择角色可以使用的按钮功能</div>
+            <div class="permission-controls">
+              <a-input
+                v-model:value="buttonSearchKeyword"
+                placeholder="搜索按钮权限"
+                allow-clear
+                style="width: 200px"
+              >
+                <template #prefix>
+                  <span class="text-gray-400">🔍</span>
+                </template>
+              </a-input>
               <a-button size="small" @click="selectAllButtonPermissions">
                 全选
               </a-button>
@@ -467,57 +472,58 @@ loadData(searchParams.value);
                 已选择 {{ formData.button_permission_ids?.length || 0 }} /
                 {{ filteredButtonPermissions.length }} 项
               </span>
-            </a-space>
-          </div>
-          <div class="permission-description">选择角色可以使用的按钮功能</div>
-          <div class="permission-list">
-            <a-checkbox-group
-              v-model:value="formData.button_permission_ids"
-              class="w-full"
-            >
-              <div
-                v-for="(buttons, menuName) in buttonPermissionsGrouped"
-                :key="menuName"
-                class="permission-group"
-              >
-                <div class="permission-group-title">
-                  {{ menuName }}
+            </div>
+          </template>
+          <a-form-item name="button_permission_ids" no-style>
+            <div class="permission-list">
+              <a-checkbox-group v-model:value="formData.button_permission_ids">
+                <div
+                  v-for="(buttons, menuName) in buttonPermissionsGrouped"
+                  :key="menuName"
+                  class="permission-group"
+                >
+                  <div class="permission-group-title">
+                    {{ menuName }}
+                  </div>
+                  <div class="permission-items">
+                    <a-checkbox
+                      v-for="btn in buttons"
+                      :key="btn.id"
+                      :value="btn.id"
+                    >
+                      <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
+                      {{ btn.name }}
+                    </a-checkbox>
+                  </div>
                 </div>
-                <div class="permission-items">
-                  <a-checkbox
-                    v-for="btn in buttons"
-                    :key="btn.id"
-                    :value="btn.id"
-                  >
-                    <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
-                    {{ btn.name }}
-                  </a-checkbox>
+                <div
+                  v-if="Object.keys(buttonPermissionsGrouped).length === 0"
+                  class="w-full py-8 text-center text-gray-400"
+                >
+                  暂无按钮权限
                 </div>
-              </div>
-              <div
-                v-if="Object.keys(buttonPermissionsGrouped).length === 0"
-                class="w-full py-8 text-center text-gray-400"
-              >
-                暂无按钮权限
-              </div>
-            </a-checkbox-group>
-          </div>
+              </a-checkbox-group>
+            </div>
+          </a-form-item>
         </a-form-item>
 
         <!-- 接口权限 -->
-        <a-form-item label="接口权限" name="api_permission_ids">
-          <div class="permission-controls">
-            <a-input
-              v-model:value="apiSearchKeyword"
-              placeholder="搜索接口权限"
-              allow-clear
-              style="width: 200px"
-            >
-              <template #prefix>
-                <span class="text-gray-400">🔍</span>
-              </template>
-            </a-input>
-            <a-space>
+        <a-form-item label="接口权限">
+          <template #extra>
+            <div class="permission-description">
+              选择角色可以调用的 API 接口
+            </div>
+            <div class="permission-controls">
+              <a-input
+                v-model:value="apiSearchKeyword"
+                placeholder="搜索接口权限"
+                allow-clear
+                style="width: 200px"
+              >
+                <template #prefix>
+                  <span class="text-gray-400">🔍</span>
+                </template>
+              </a-input>
               <a-button size="small" @click="selectAllApiPermissions">
                 全选
               </a-button>
@@ -528,37 +534,39 @@ loadData(searchParams.value);
                 已选择 {{ formData.api_permission_ids?.length || 0 }} /
                 {{ filteredApiPermissions.length }} 项
               </span>
-            </a-space>
-          </div>
-          <div class="permission-description">选择角色可以调用的 API 接口</div>
-          <div class="permission-list">
-            <a-checkbox-group
-              v-model:value="formData.api_permission_ids"
-              class="w-full"
-            >
-              <div
-                v-for="(apis, menuName) in apiPermissionsGrouped"
-                :key="menuName"
-                class="permission-group"
-              >
-                <div class="permission-group-title">
-                  {{ menuName }}
+            </div>
+          </template>
+          <a-form-item name="api_permission_ids" no-style>
+            <div class="permission-list">
+              <a-checkbox-group v-model:value="formData.api_permission_ids">
+                <div
+                  v-for="(apis, menuName) in apiPermissionsGrouped"
+                  :key="menuName"
+                  class="permission-group"
+                >
+                  <div class="permission-group-title">
+                    {{ menuName }}
+                  </div>
+                  <div class="permission-items">
+                    <a-checkbox
+                      v-for="api in apis"
+                      :key="api.id"
+                      :value="api.id"
+                    >
+                      <Tag color="green" class="mr-1">{{ api.code }}</Tag>
+                      {{ api.name }}
+                    </a-checkbox>
+                  </div>
                 </div>
-                <div class="permission-items">
-                  <a-checkbox v-for="api in apis" :key="api.id" :value="api.id">
-                    <Tag color="green" class="mr-1">{{ api.code }}</Tag>
-                    {{ api.name }}
-                  </a-checkbox>
+                <div
+                  v-if="Object.keys(apiPermissionsGrouped).length === 0"
+                  class="w-full py-8 text-center text-gray-400"
+                >
+                  暂无接口权限
                 </div>
-              </div>
-              <div
-                v-if="Object.keys(apiPermissionsGrouped).length === 0"
-                class="w-full py-8 text-center text-gray-400"
-              >
-                暂无接口权限
-              </div>
-            </a-checkbox-group>
-          </div>
+              </a-checkbox-group>
+            </div>
+          </a-form-item>
         </a-form-item>
 
         <a-form-item label="备注" name="remark">
@@ -574,12 +582,6 @@ loadData(searchParams.value);
 </template>
 
 <style scoped>
-.role-modal :deep(.ant-modal-body) {
-  max-height: 70vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
 .permission-controls {
   display: flex;
   align-items: center;

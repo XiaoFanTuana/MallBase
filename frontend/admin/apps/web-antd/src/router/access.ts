@@ -32,10 +32,9 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       // 获取菜单数据（包含 home_path）
       const menuResponse = await getAllMenusApi();
 
-      // 将 home_path 保存到 preferences 中，供后续使用
-      if (menuResponse.home_path) {
-        preferences.app.defaultHomePath = menuResponse.home_path;
-      }
+      // 注意：defaultHomePath 是只读属性，不能直接修改
+      // 如果需要设置首页路径，需要在 preferences 配置文件中预设
+      // 或者使用其他方式传递 home_path
 
       // 只返回 routes 给 generateAccessible
       return menuResponse.routes;
