@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, h, ref } from 'vue';
+import { computed, h, ref, watch } from 'vue';
 
 import { message, Switch, Tag } from 'ant-design-vue';
 
@@ -46,6 +46,12 @@ const permissionTree = ref<any[]>([]);
 // 菜单 ID 到名称的映射
 const menuNameMap = ref<Record<number, string>>({});
 
+// 菜单 ID 到按钮权限 ID 列表的映射
+const menuButtonPermissionMap = ref<Record<number, number[]>>({});
+
+// 菜单 ID 到接口权限 ID 列表的映射
+const menuApiPermissionMap = ref<Record<number, number[]>>({});
+
 // 按钮权限列表
 const buttonPermissions = ref<any[]>([]);
 
@@ -64,6 +70,24 @@ const buttonSearchKeyword = ref('');
 // 接口权限搜索关键词
 const apiSearchKeyword = ref('');
 
+// 分组折叠状态（默认折叠）
+const buttonGroupCollapsed = ref<Record<string, boolean>>({});
+
+// 接口权限分组折叠状态（默认折叠）
+const apiGroupCollapsed = ref<Record<string, boolean>>({});
+
+// 初始化分组为折叠状态
+function initGroupCollapsedState(
+  groups: Record<string, any[]>,
+  collapsed: Record<string, boolean>,
+) {
+  Object.keys(groups).forEach((menuName) => {
+    if (collapsed[menuName] === undefined) {
+      collapsed[menuName] = true; // 默认折叠
+    }
+  });
+}
+
 // 加载权限数据
 const loadPermissionData = async () => {
   const result = await getPermissionTreeApi();
@@ -71,6 +95,10 @@ const loadPermissionData = async () => {
   permissionTree.value = filterMenuTree(result);
   // 构建菜单 ID 到名称的映射
   menuNameMap.value = buildMenuNameMap(result);
+  // 构建菜单到按钮权限的映射
+  menuButtonPermissionMap.value = buildMenuPermissionMap(result, 2);
+  // 构建菜单到接口权限的映射
+  menuApiPermissionMap.value = buildMenuPermissionMap(result, 3);
   // 收集按钮权限
   buttonPermissions.value = collectPermissions(result, 2);
   // 收集接口权限
@@ -135,6 +163,69 @@ function buildMenuNameMap(permissions: any[]): Record<number, string> {
   traverse(permissions);
   return map;
 }
+
+/**
+ * 构建菜单 ID 到权限 ID 列表的映射
+ */
+function buildMenuPermissionMap(
+  permissions: any[],
+  type: number,
+): Record<number, number[]> {
+  const map: Record<number, number[]> = {};
+
+  function traverse(nodes: any[]) {
+    for (const node of nodes) {
+      if (node.type === 1) {
+        // 为菜单节点初始化空数组
+        if (!map[node.id]) {
+          map[node.id] = [];
+        }
+        // 收集该菜单下的所有指定类型权限
+        const permissions = collectPermissions([node], type);
+        const permissionIds = permissions.map((p) => p.id);
+        if (permissionIds.length > 0) {
+          map[node.id].push(...permissionIds);
+        }
+      }
+      if (node.children?.length > 0) {
+        traverse(node.children);
+      }
+    }
+  }
+
+  traverse(permissions);
+  return map;
+}
+
+/**
+ * 菜单权限变化时，自动更新按钮和接口权限
+ */
+watch(
+  () => formData.value?.menu_permission_ids,
+  (newMenuIds) => {
+    if (!formData.value || !newMenuIds) return;
+
+    // 合并所有选中菜单的按钮权限
+    const allButtonIds: number[] = [];
+    newMenuIds.forEach((menuId: number) => {
+      const buttonIds = menuButtonPermissionMap.value[menuId] || [];
+      allButtonIds.push(...buttonIds);
+    });
+    // 去重并更新按钮权限
+    formData.value.button_permission_ids = [
+      ...new Set(allButtonIds),
+    ] as number[];
+
+    // 合并所有选中菜单的接口权限
+    const allApiIds: number[] = [];
+    newMenuIds.forEach((menuId: number) => {
+      const apiIds = menuApiPermissionMap.value[menuId] || [];
+      allApiIds.push(...apiIds);
+    });
+    // 去重并更新接口权限
+    formData.value.api_permission_ids = [...new Set(allApiIds)] as number[];
+  },
+);
 
 /**
  * 根据菜单 ID 查找菜单名称
@@ -205,6 +296,23 @@ const apiPermissionsGrouped = computed(() => {
   return groups;
 });
 
+// 监听分组变化，初始化折叠状态
+watch(
+  () => buttonPermissionsGrouped.value,
+  (groups) => {
+    initGroupCollapsedState(groups, buttonGroupCollapsed.value);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => apiPermissionsGrouped.value,
+  (groups) => {
+    initGroupCollapsedState(groups, apiGroupCollapsed.value);
+  },
+  { immediate: true },
+);
+
 /**
  * 全选所有按钮权限
  */
@@ -231,6 +339,140 @@ function selectAllApiPermissions() {
  */
 function clearAllApiPermissions() {
   formData.value.api_permission_ids = [];
+}
+
+/**
+ * 切换按钮权限分组折叠状态
+ */
+function toggleButtonGroupCollapsed(menuName: string) {
+  buttonGroupCollapsed.value[menuName] = !buttonGroupCollapsed.value[menuName];
+}
+
+/**
+ * 切换接口权限分组折叠状态
+ */
+function toggleApiGroupCollapsed(menuName: string) {
+  apiGroupCollapsed.value[menuName] = !apiGroupCollapsed.value[menuName];
+}
+
+/**
+ * 切换某个菜单下的按钮权限全选/清空
+ */
+function toggleButtonPermissionsByMenu(menuName: string) {
+  const buttons = buttonPermissionsGrouped.value[menuName];
+  if (!buttons || !formData.value) return;
+
+  const buttonIds = new Set(buttons.map((b) => b.id));
+  const currentIds = new Set(formData.value.button_permission_ids || []);
+
+  // 检查是否所有按钮都已选中
+  const allSelected = buttons.every((btn) => currentIds.has(btn.id));
+
+  if (allSelected) {
+    // 如果全部选中，则清空该分类
+    formData.value.button_permission_ids = (
+      formData.value.button_permission_ids || []
+    ).filter((id: number) => !buttonIds.has(id));
+  } else {
+    // 如果没有全部选中，则全选该分类
+    const merged = new Set([...buttonIds, ...currentIds]);
+    formData.value.button_permission_ids = [...merged];
+  }
+}
+
+/**
+ * 切换某个菜单下的接口权限全选/清空
+ */
+function toggleApiPermissionsByMenu(menuName: string) {
+  const apis = apiPermissionsGrouped.value[menuName];
+  if (!apis || !formData.value) return;
+
+  const apiIds = new Set(apis.map((a) => a.id));
+  const currentIds = new Set(formData.value.api_permission_ids || []);
+
+  // 检查是否所有接口都已选中
+  const allSelected = apis.every((api) => currentIds.has(api.id));
+
+  if (allSelected) {
+    // 如果全部选中，则清空该分类
+    formData.value.api_permission_ids = (
+      formData.value.api_permission_ids || []
+    ).filter((id: number) => !apiIds.has(id));
+  } else {
+    // 如果没有全部选中，则全选该分类
+    const merged = new Set([...apiIds, ...currentIds]);
+    formData.value.api_permission_ids = [...merged];
+  }
+}
+
+/**
+ * 检查某个菜单下的按钮权限是否全部选中
+ */
+function isButtonGroupAllSelected(menuName: string): boolean {
+  const buttons = buttonPermissionsGrouped.value[menuName];
+  if (!buttons || !formData.value) return false;
+
+  const currentIds = new Set(formData.value.button_permission_ids || []);
+  return buttons.every((btn) => currentIds.has(btn.id));
+}
+
+/**
+ * 检查某个菜单下的按钮权限是否部分选中
+ */
+function isButtonGroupIndeterminate(menuName: string): boolean {
+  const buttons = buttonPermissionsGrouped.value[menuName];
+  if (!buttons || !formData.value) return false;
+
+  const currentIds = new Set(formData.value.button_permission_ids || []);
+  const someSelected = buttons.some((btn) => currentIds.has(btn.id));
+  const allSelected = buttons.every((btn) => currentIds.has(btn.id));
+  return someSelected && !allSelected;
+}
+
+/**
+ * 检查某个菜单下的接口权限是否全部选中
+ */
+function isApiGroupAllSelected(menuName: string): boolean {
+  const apis = apiPermissionsGrouped.value[menuName];
+  if (!apis || !formData.value) return false;
+
+  const currentIds = new Set(formData.value.api_permission_ids || []);
+  return apis.every((api) => currentIds.has(api.id));
+}
+
+/**
+ * 检查某个菜单下的接口权限是否部分选中
+ */
+function isApiGroupIndeterminate(menuName: string): boolean {
+  const apis = apiPermissionsGrouped.value[menuName];
+  if (!apis || !formData.value) return false;
+
+  const currentIds = new Set(formData.value.api_permission_ids || []);
+  const someSelected = apis.some((api) => currentIds.has(api.id));
+  const allSelected = apis.every((api) => currentIds.has(api.id));
+  return someSelected && !allSelected;
+}
+
+/**
+ * 计算某个菜单下的按钮权限选中数量
+ */
+function getButtonPermissionSelectedCount(menuName: string): number {
+  const buttons = buttonPermissionsGrouped.value[menuName];
+  if (!buttons || !formData.value) return 0;
+
+  const currentIds = new Set(formData.value.button_permission_ids || []);
+  return buttons.filter((btn) => currentIds.has(btn.id)).length;
+}
+
+/**
+ * 计算某个菜单下的接口权限选中数量
+ */
+function getApiPermissionSelectedCount(menuName: string): number {
+  const apis = apiPermissionsGrouped.value[menuName];
+  if (!apis || !formData.value) return 0;
+
+  const currentIds = new Set(formData.value.api_permission_ids || []);
+  return apis.filter((api) => currentIds.has(api.id)).length;
 }
 
 // 打开新增弹窗
@@ -388,7 +630,7 @@ loadData(searchParams.value);
     <a-modal
       v-model:open="modalVisible"
       :title="modalTitle"
-      width="1600px"
+      width="800px"
       :body-style="{
         maxHeight: '70vh',
         overflowY: 'auto',
@@ -448,7 +690,7 @@ loadData(searchParams.value);
         </a-form-item>
 
         <!-- 按钮权限 -->
-        <a-form-item label="按钮权限">
+        <a-form-item label="按钮权限" name="button_permission_ids">
           <template #extra>
             <div class="permission-description">选择角色可以使用的按钮功能</div>
             <div class="permission-controls">
@@ -474,18 +716,47 @@ loadData(searchParams.value);
               </span>
             </div>
           </template>
-          <a-form-item name="button_permission_ids" no-style>
+          <a-form-item-rest>
             <div class="permission-list">
-              <a-checkbox-group v-model:value="formData.button_permission_ids">
-                <div
-                  v-for="(buttons, menuName) in buttonPermissionsGrouped"
-                  :key="menuName"
-                  class="permission-group"
-                >
-                  <div class="permission-group-title">
-                    {{ menuName }}
+              <div
+                v-for="(buttons, menuName) in buttonPermissionsGrouped"
+                :key="menuName"
+                class="permission-group"
+              >
+                <a-form-item no-style>
+                  <div class="permission-group-header">
+                    <div
+                      class="permission-group-header-left"
+                      @click="toggleButtonGroupCollapsed(menuName)"
+                    >
+                      <span class="collapse-icon">
+                        {{ buttonGroupCollapsed[menuName] ? '▶' : '▼' }}
+                      </span>
+                      <span class="permission-group-title">
+                        {{ menuName }}
+                      </span>
+                    </div>
+                    <div class="permission-group-actions">
+                      <a-checkbox
+                        :checked="isButtonGroupAllSelected(menuName)"
+                        :indeterminate="isButtonGroupIndeterminate(menuName)"
+                        @change="toggleButtonPermissionsByMenu(menuName)"
+                      />
+                      <span class="permission-count">
+                        已选择
+                        {{ getButtonPermissionSelectedCount(menuName) }} /
+                        {{ buttons.length }} 项
+                      </span>
+                    </div>
                   </div>
-                  <div class="permission-items">
+                </a-form-item>
+                <div
+                  v-show="!buttonGroupCollapsed[menuName]"
+                  class="permission-items"
+                >
+                  <a-checkbox-group
+                    v-model:value="formData.button_permission_ids"
+                  >
                     <a-checkbox
                       v-for="btn in buttons"
                       :key="btn.id"
@@ -494,21 +765,21 @@ loadData(searchParams.value);
                       <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
                       {{ btn.name }}
                     </a-checkbox>
-                  </div>
+                  </a-checkbox-group>
                 </div>
-                <div
-                  v-if="Object.keys(buttonPermissionsGrouped).length === 0"
-                  class="w-full py-8 text-center text-gray-400"
-                >
-                  暂无按钮权限
-                </div>
-              </a-checkbox-group>
+              </div>
+              <div
+                v-if="Object.keys(buttonPermissionsGrouped).length === 0"
+                class="w-full py-8 text-center text-gray-400"
+              >
+                暂无按钮权限
+              </div>
             </div>
-          </a-form-item>
+          </a-form-item-rest>
         </a-form-item>
 
         <!-- 接口权限 -->
-        <a-form-item label="接口权限">
+        <a-form-item label="接口权限" name="api_permission_ids">
           <template #extra>
             <div class="permission-description">
               选择角色可以调用的 API 接口
@@ -536,18 +807,44 @@ loadData(searchParams.value);
               </span>
             </div>
           </template>
-          <a-form-item name="api_permission_ids" no-style>
+          <a-form-item-rest>
             <div class="permission-list">
-              <a-checkbox-group v-model:value="formData.api_permission_ids">
-                <div
-                  v-for="(apis, menuName) in apiPermissionsGrouped"
-                  :key="menuName"
-                  class="permission-group"
-                >
-                  <div class="permission-group-title">
-                    {{ menuName }}
+              <div
+                v-for="(apis, menuName) in apiPermissionsGrouped"
+                :key="menuName"
+                class="permission-group"
+              >
+                <a-form-item no-style>
+                  <div class="permission-group-header">
+                    <div
+                      class="permission-group-header-left"
+                      @click="toggleApiGroupCollapsed(menuName)"
+                    >
+                      <span class="collapse-icon">
+                        {{ apiGroupCollapsed[menuName] ? '▶' : '▼' }}
+                      </span>
+                      <span class="permission-group-title">
+                        {{ menuName }}
+                      </span>
+                    </div>
+                    <div class="permission-group-actions">
+                      <a-checkbox
+                        :checked="isApiGroupAllSelected(menuName)"
+                        :indeterminate="isApiGroupIndeterminate(menuName)"
+                        @change="toggleApiPermissionsByMenu(menuName)"
+                      />
+                      <span class="permission-count">
+                        已选择 {{ getApiPermissionSelectedCount(menuName) }} /
+                        {{ apis.length }} 项
+                      </span>
+                    </div>
                   </div>
-                  <div class="permission-items">
+                </a-form-item>
+                <div
+                  v-show="!apiGroupCollapsed[menuName]"
+                  class="permission-items"
+                >
+                  <a-checkbox-group v-model:value="formData.api_permission_ids">
                     <a-checkbox
                       v-for="api in apis"
                       :key="api.id"
@@ -556,17 +853,17 @@ loadData(searchParams.value);
                       <Tag color="green" class="mr-1">{{ api.code }}</Tag>
                       {{ api.name }}
                     </a-checkbox>
-                  </div>
+                  </a-checkbox-group>
                 </div>
-                <div
-                  v-if="Object.keys(apiPermissionsGrouped).length === 0"
-                  class="w-full py-8 text-center text-gray-400"
-                >
-                  暂无接口权限
-                </div>
-              </a-checkbox-group>
+              </div>
+              <div
+                v-if="Object.keys(apiPermissionsGrouped).length === 0"
+                class="w-full py-8 text-center text-gray-400"
+              >
+                暂无接口权限
+              </div>
             </div>
-          </a-form-item>
+          </a-form-item-rest>
         </a-form-item>
 
         <a-form-item label="备注" name="remark">
@@ -613,17 +910,52 @@ loadData(searchParams.value);
   margin-bottom: 1rem;
 }
 
-.permission-group-title {
+.permission-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid rgb(209, 213, 219);
+  padding: 0.5rem;
+  background-color: rgb(249, 250, 251);
+  border-radius: 4px;
+}
+
+.permission-group-header-left {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapse-icon {
+  display: inline-block;
+  width: 16px;
+  margin-right: 8px;
+  font-size: 12px;
+  color: rgb(107, 114, 128);
+  transition: transform 0.2s;
+}
+
+.permission-group-title {
   font-weight: 700;
   color: rgb(75, 85, 99);
+}
+
+.permission-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.permission-count {
+  font-size: 0.875rem;
+  color: rgb(107, 114, 128);
 }
 
 .permission-items {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding: 0 0.5rem;
 }
 </style>
