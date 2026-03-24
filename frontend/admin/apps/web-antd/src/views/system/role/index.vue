@@ -356,101 +356,65 @@ function toggleApiGroupCollapsed(menuName: string) {
 }
 
 /**
- * 切换某个菜单下的按钮权限全选/清空
+ * 全选某个菜单下的按钮权限
  */
-function toggleButtonPermissionsByMenu(menuName: string) {
+function selectButtonPermissionsByMenu(menuName: string) {
+  const buttons = buttonPermissionsGrouped.value[menuName];
+  if (!buttons || !formData.value) return;
+
+  const buttonIds = buttons.map((b) => b.id);
+  const currentIds = formData.value.button_permission_ids || [];
+
+  // 合并所有该菜单的按钮权限
+  const merged = new Set([...buttonIds, ...currentIds]);
+  formData.value.button_permission_ids = [...merged];
+}
+
+/**
+ * 清空某个菜单下的按钮权限
+ */
+function clearButtonPermissionsByMenu(menuName: string) {
   const buttons = buttonPermissionsGrouped.value[menuName];
   if (!buttons || !formData.value) return;
 
   const buttonIds = new Set(buttons.map((b) => b.id));
-  const currentIds = new Set(formData.value.button_permission_ids || []);
+  const currentIds = formData.value.button_permission_ids || [];
 
-  // 检查是否所有按钮都已选中
-  const allSelected = buttons.every((btn) => currentIds.has(btn.id));
-
-  if (allSelected) {
-    // 如果全部选中，则清空该分类
-    formData.value.button_permission_ids = (
-      formData.value.button_permission_ids || []
-    ).filter((id: number) => !buttonIds.has(id));
-  } else {
-    // 如果没有全部选中，则全选该分类
-    const merged = new Set([...buttonIds, ...currentIds]);
-    formData.value.button_permission_ids = [...merged];
-  }
+  // 移除所有该菜单的按钮权限
+  formData.value.button_permission_ids = currentIds.filter(
+    (id: number) => !buttonIds.has(id),
+  );
 }
 
 /**
- * 切换某个菜单下的接口权限全选/清空
+ * 全选某个菜单下的接口权限
  */
-function toggleApiPermissionsByMenu(menuName: string) {
+function selectApiPermissionsByMenu(menuName: string) {
+  const apis = apiPermissionsGrouped.value[menuName];
+  if (!apis || !formData.value) return;
+
+  const apiIds = apis.map((a) => a.id);
+  const currentIds = formData.value.api_permission_ids || [];
+
+  // 合并所有该菜单的接口权限
+  const merged = new Set([...apiIds, ...currentIds]);
+  formData.value.api_permission_ids = [...merged];
+}
+
+/**
+ * 清空某个菜单下的接口权限
+ */
+function clearApiPermissionsByMenu(menuName: string) {
   const apis = apiPermissionsGrouped.value[menuName];
   if (!apis || !formData.value) return;
 
   const apiIds = new Set(apis.map((a) => a.id));
-  const currentIds = new Set(formData.value.api_permission_ids || []);
+  const currentIds = formData.value.api_permission_ids || [];
 
-  // 检查是否所有接口都已选中
-  const allSelected = apis.every((api) => currentIds.has(api.id));
-
-  if (allSelected) {
-    // 如果全部选中，则清空该分类
-    formData.value.api_permission_ids = (
-      formData.value.api_permission_ids || []
-    ).filter((id: number) => !apiIds.has(id));
-  } else {
-    // 如果没有全部选中，则全选该分类
-    const merged = new Set([...apiIds, ...currentIds]);
-    formData.value.api_permission_ids = [...merged];
-  }
-}
-
-/**
- * 检查某个菜单下的按钮权限是否全部选中
- */
-function isButtonGroupAllSelected(menuName: string): boolean {
-  const buttons = buttonPermissionsGrouped.value[menuName];
-  if (!buttons || !formData.value) return false;
-
-  const currentIds = new Set(formData.value.button_permission_ids || []);
-  return buttons.every((btn) => currentIds.has(btn.id));
-}
-
-/**
- * 检查某个菜单下的按钮权限是否部分选中
- */
-function isButtonGroupIndeterminate(menuName: string): boolean {
-  const buttons = buttonPermissionsGrouped.value[menuName];
-  if (!buttons || !formData.value) return false;
-
-  const currentIds = new Set(formData.value.button_permission_ids || []);
-  const someSelected = buttons.some((btn) => currentIds.has(btn.id));
-  const allSelected = buttons.every((btn) => currentIds.has(btn.id));
-  return someSelected && !allSelected;
-}
-
-/**
- * 检查某个菜单下的接口权限是否全部选中
- */
-function isApiGroupAllSelected(menuName: string): boolean {
-  const apis = apiPermissionsGrouped.value[menuName];
-  if (!apis || !formData.value) return false;
-
-  const currentIds = new Set(formData.value.api_permission_ids || []);
-  return apis.every((api) => currentIds.has(api.id));
-}
-
-/**
- * 检查某个菜单下的接口权限是否部分选中
- */
-function isApiGroupIndeterminate(menuName: string): boolean {
-  const apis = apiPermissionsGrouped.value[menuName];
-  if (!apis || !formData.value) return false;
-
-  const currentIds = new Set(formData.value.api_permission_ids || []);
-  const someSelected = apis.some((api) => currentIds.has(api.id));
-  const allSelected = apis.every((api) => currentIds.has(api.id));
-  return someSelected && !allSelected;
+  // 移除所有该菜单的接口权限
+  formData.value.api_permission_ids = currentIds.filter(
+    (id: number) => !apiIds.has(id),
+  );
 }
 
 /**
@@ -737,11 +701,20 @@ loadData(searchParams.value);
                       </span>
                     </div>
                     <div class="permission-group-actions">
-                      <a-checkbox
-                        :checked="isButtonGroupAllSelected(menuName)"
-                        :indeterminate="isButtonGroupIndeterminate(menuName)"
-                        @change="toggleButtonPermissionsByMenu(menuName)"
-                      />
+                      <a-space>
+                        <a-button
+                          size="small"
+                          @click="selectButtonPermissionsByMenu(menuName)"
+                        >
+                          全选
+                        </a-button>
+                        <a-button
+                          size="small"
+                          @click="clearButtonPermissionsByMenu(menuName)"
+                        >
+                          清空
+                        </a-button>
+                      </a-space>
                       <span class="permission-count">
                         已选择
                         {{ getButtonPermissionSelectedCount(menuName) }} /
@@ -754,18 +727,14 @@ loadData(searchParams.value);
                   v-show="!buttonGroupCollapsed[menuName]"
                   class="permission-items"
                 >
-                  <a-checkbox-group
-                    v-model:value="formData.button_permission_ids"
+                  <a-checkbox
+                    v-for="btn in buttons"
+                    :key="btn.id"
+                    :value="btn.id"
                   >
-                    <a-checkbox
-                      v-for="btn in buttons"
-                      :key="btn.id"
-                      :value="btn.id"
-                    >
-                      <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
-                      {{ btn.name }}
-                    </a-checkbox>
-                  </a-checkbox-group>
+                    <Tag color="blue" class="mr-1">{{ btn.code }}</Tag>
+                    {{ btn.name }}
+                  </a-checkbox>
                 </div>
               </div>
               <div
@@ -828,11 +797,20 @@ loadData(searchParams.value);
                       </span>
                     </div>
                     <div class="permission-group-actions">
-                      <a-checkbox
-                        :checked="isApiGroupAllSelected(menuName)"
-                        :indeterminate="isApiGroupIndeterminate(menuName)"
-                        @change="toggleApiPermissionsByMenu(menuName)"
-                      />
+                      <a-space>
+                        <a-button
+                          size="small"
+                          @click="selectApiPermissionsByMenu(menuName)"
+                        >
+                          全选
+                        </a-button>
+                        <a-button
+                          size="small"
+                          @click="clearApiPermissionsByMenu(menuName)"
+                        >
+                          清空
+                        </a-button>
+                      </a-space>
                       <span class="permission-count">
                         已选择 {{ getApiPermissionSelectedCount(menuName) }} /
                         {{ apis.length }} 项
