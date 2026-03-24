@@ -46,21 +46,14 @@ export const useAuthStore = defineStore('auth', () => {
         accessStore.setAccessToken(accessToken);
 
         // 获取用户信息
-        adminInfo = await getCurrentAdminInfoApi();
-
-        // 如果有权限信息，设置权限码
-        if (adminInfo?.permissions) {
-          accessStore.setAccessCodes(adminInfo.permissions);
-        }
+        adminInfo = await fetchUserInfo();
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
         } else {
-          onSuccess
-            ? await onSuccess?.()
-            : await router.push(
-                adminInfo?.home_path || preferences.app.defaultHomePath,
-              );
+          await (onSuccess
+            ? onSuccess?.()
+            : router.push(preferences.app.defaultHomePath));
         }
 
         if (adminInfo?.nickname) {
@@ -115,11 +108,6 @@ export const useAuthStore = defineStore('auth', () => {
           username: adminInfo.username,
         };
         userStore.setUserInfo(userInfo);
-      }
-
-      // 如果用户信息中有权限，直接设置
-      if (adminInfo?.permissions) {
-        accessStore.setAccessCodes(adminInfo.permissions);
       }
     } catch (error) {
       console.error('获取用户信息失败:', error);

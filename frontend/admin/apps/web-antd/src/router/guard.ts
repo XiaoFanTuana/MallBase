@@ -5,6 +5,7 @@ import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
+import { getAccessCodesApi } from '#/api/core/auth';
 import { useAccessStore } from '#/modules/access';
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
@@ -118,6 +119,14 @@ function setupAccessGuard(router: Router) {
       userInfo = userStore.userInfo;
     }
 
+    // 获取用户权限码（按钮级权限）
+    try {
+      const permissions = await getAccessCodesApi();
+      accessStore.setAccessCodes(permissions.access_codes);
+    } catch (error) {
+      console.error('获取权限码失败:', error);
+    }
+
     const userRoles = userInfo?.roles ?? [];
 
     // 生成菜单和路由
@@ -132,7 +141,12 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessMenus(accessibleMenus);
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
-    const redirectPath = (from.query.redirect ?? to.fullPath) as string;
+
+    // 使用后端返回的 home_path（已在 access.ts 中设置到 preferences.app.defaultHomePath）
+    const redirectPath = (from.query.redirect ||
+      to.fullPath ||
+      userStore.userInfo?.homePath ||
+      preferences.app.defaultHomePath) as string;
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

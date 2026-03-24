@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\middleware;
 
+use app\admin\model\auth\Admin;
 use app\admin\model\auth\Permission;
 use app\admin\service\cache\PermissionCacheService;
 use Closure;
@@ -16,10 +17,6 @@ use think\Response;
  */
 class CheckPermission
 {
-    /**
-     * 超级管理员ID（拥有所有权限）
-     */
-    protected int $superAdminId = 1;
 
     /**
      * 处理请求
@@ -39,7 +36,7 @@ class CheckPermission
         }
 
         // 超级管理员拥有所有权限
-        if ($adminId == $this->superAdminId) {
+        if ($adminId == Admin::SUPER_ADMIN_ID) {
             return $next($request);
         }
 

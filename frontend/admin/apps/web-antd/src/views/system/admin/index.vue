@@ -194,7 +194,13 @@ loadData(searchParams.value);
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate">新增管理员</a-button>
+      <a-button
+        type="primary"
+        @click="handleCreate"
+        v-auth="'SystemAdminCreate'"
+      >
+        新增管理员
+      </a-button>
       <a-button class="ml-2" @click="refresh">刷新</a-button>
     </div>
 
@@ -220,7 +226,9 @@ loadData(searchParams.value);
         </a-select>
       </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="loadData(searchParams)"> 搜索 </a-button>
+        <a-button type="primary" @click="loadData(searchParams)">
+          搜索
+        </a-button>
         <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
       </a-form-item>
     </a-form>

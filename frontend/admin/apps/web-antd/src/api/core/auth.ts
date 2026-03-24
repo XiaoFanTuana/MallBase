@@ -37,8 +37,12 @@ export namespace AuthApi {
       id: number;
       name: string;
     }>;
-    permissions?: string[];
     home_path: string;
+  }
+
+  /** 用户权限码返回值 */
+  export interface AccessCodesResult {
+    access_codes: string[];
   }
 }
 
@@ -83,5 +87,7 @@ export async function getCurrentAdminInfoApi() {
  * 获取用户权限码（按钮级权限）
  */
 export async function getAccessCodesApi() {
-  return requestClient.get<string[]>('/auth/admin/permissions');
+  return requestClient.get<AuthApi.AccessCodesResult>(
+    '/auth/admin/getAccessInfo',
+  );
 }

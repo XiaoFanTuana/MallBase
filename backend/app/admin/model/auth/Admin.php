@@ -11,6 +11,9 @@ use mall_base\base\BaseModel;
  */
 class Admin extends BaseModel
 {
+
+    const SUPER_ADMIN_ID = 1; // 超级管理员ID
+
     protected $name = 'admin';
 
     protected $pk = 'id';

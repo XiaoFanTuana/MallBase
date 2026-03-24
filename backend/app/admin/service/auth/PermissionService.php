@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\service\auth;
 
+use app\admin\model\auth\Admin;
 use app\admin\model\auth\Permission as PermissionModel;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
@@ -52,14 +53,28 @@ class PermissionService extends BaseService
 
     public function getMenu(int $adminId): array
     {
-        $query = $this->model()->alias('p')
-            ->join('role_permission rp', 'rp.permission_id = p.id')
-            ->join('admin_role ar', 'ar.role_id = rp.role_id')
-            ->where('ar.admin_id', $adminId)
-            ->where(['p.status' => 1, 'p.is_show' => 1, 'p.type' => 1])->order(['p.sort' => 'asc', 'p.id' => 'asc']);
+        if ($adminId === Admin::SUPER_ADMIN_ID) {
+            $query = $this->model()->alias('p')
+                ->where(['status' => 1, 'is_show' => 1, 'type' => 1])->order(['sort' => 'asc', 'id' => 'asc']);
+        } else {
+            $query = $this->model()->alias('p')
+                ->join('role_permission rp', 'rp.permission_id = p.id')
+                ->join('admin_role ar', 'ar.role_id = rp.role_id')
+                ->where('ar.admin_id', $adminId)
+                ->where(['p.status' => 1, 'p.is_show' => 1, 'p.type' => 1])->order(['p.sort' => 'asc', 'p.id' => 'asc']);
+        }
+
         $list = $query->field('p.*')->select()->toArray();
         $tree = $this->buildTree($list);
-        return $this->transformToRoutes($tree);
+        $routes = $this->transformToRoutes($tree);
+
+        // 递归查找第一个有 path 的菜单作为默认首页
+        $homePath = $this->findFirstPath($routes);
+
+        return [
+            'home_path' => $homePath ?: '/workspace',
+            'routes' => $routes,
+        ];
     }
 
     /**
@@ -301,6 +316,29 @@ class PermissionService extends BaseService
             $routes[] = $route;
         }
         return $routes;
+    }
+
+    /**
+     * 递归查找第一个有效的 path
+     *
+     * @param array $routes 路由数组
+     * @return string|null
+     */
+    protected function findFirstPath(array $routes): ?string
+    {
+        foreach ($routes as $route) {
+            if (!empty($route['path']) && strpos($route['path'], '/') === 0) {
+                return $route['path'];
+            }
+            // 递归查找子路由
+            if (!empty($route['children']) && is_array($route['children'])) {
+                $path = $this->findFirstPath($route['children']);
+                if ($path !== null) {
+                    return $path;
+                }
+            }
+        }
+        return null;
     }
 
     /**

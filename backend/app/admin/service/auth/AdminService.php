@@ -477,8 +477,8 @@ class AdminService extends BaseService
     {
         return [
             'access_codes' => $this->getAccessCodes($adminId),
-            'access_menus' => $this->getAccessMenus($adminId),
-            'access_routes' => $this->getAccessRoutes($adminId),
+//            'access_menus' => $this->getAccessMenus($adminId),
+//            'access_routes' => $this->getAccessRoutes($adminId),
         ];
     }
 
