@@ -10,6 +10,8 @@ Route::group('auth/permission', function () {
     Route::get('tree', 'tree')->name('SystemPermissionTree')->option(['_alias' => '树形列表', '_desc' => '权限树形列表', '_auth' => true]);
     // 菜单列表
     Route::get('menu', 'menu')->name('SystemPermissionMenu')->option(['_alias' => '菜单', '_desc' => '菜单列表']);
+    // 获取权限码
+    Route::get('getAccessCodes', 'getAccessCodes')->name('SystemPermissionGetAccessInCodes')->option(['_alias' => '权限信息', '_desc' => '获取权限码', '_auth' => true]);
     // 列表
     Route::get('list', 'list')->name('SystemPermissionList')->option(['_alias' => '列表', '_desc' => '权限列表', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 详情

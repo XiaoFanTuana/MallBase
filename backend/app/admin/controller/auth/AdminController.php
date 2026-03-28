@@ -193,14 +193,4 @@ class AdminController extends BaseController
         $this->service()->resetPassword((int)$id, $data['password']);
         return $this->success(null, '密码重置成功');
     }
-
-    /**
-     * 获取权限信息（权限码、菜单、路由）
-     */
-    public function getAccessInfo()
-    {
-        $adminId = $this->request->admin_id;
-        $info = $this->service()->getAccessInfo($adminId);
-        return $this->success($info, '获取成功');
-    }
 }

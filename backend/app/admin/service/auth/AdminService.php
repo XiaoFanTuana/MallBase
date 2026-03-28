@@ -260,7 +260,7 @@ class AdminService extends BaseService
     public function delete(int $id): bool
     {
         // 不允许删除超级管理员
-        if ($id === 1) {
+        if ($id === AdminModel::SUPER_ADMIN_ID) {
             throw new BusinessException('不能删除超级管理员');
         }
 
@@ -270,7 +270,7 @@ class AdminService extends BaseService
         }
 
         // 删除角色关联
-        think\facade\Db::name('admin_role')->where('admin_id', $id)->delete();
+        $this->model(AdminRole::class)->where('admin_id', $id)->delete();
 
         // 删除管理员
         $admin->delete();
@@ -350,94 +350,6 @@ class AdminService extends BaseService
     }
 
     /**
-     * 获取管理员权限（权限码列表）
-     */
-    public function getAccessCodes(int $adminId): array
-    {
-        // 获取管理员的角色ID
-        $roleIds = $this->model(AdminRole::class)
-            ->where('admin_id', $adminId)
-            ->column('role_id');
-
-        if (empty($roleIds)) {
-            return [];
-        }
-
-        // 获取这些角色的所有权限码
-        $codes = $this->model(RolePermission::class)
-            ->alias('rp')
-            ->leftJoin('permission p', 'rp.permission_id = p.id')
-            ->whereIn('rp.role_id', $roleIds)
-            ->where('p.status', 1)
-            ->column('p.code');
-
-        return array_values(array_unique($codes));
-    }
-
-    /**
-     * 获取管理员菜单
-     */
-    public function getAccessMenus(int $adminId): array
-    {
-        // 获取管理员的角色ID
-        $roleIds = $this->model(AdminRole::class)
-            ->where('admin_id', $adminId)
-            ->column('role_id');
-
-        if (empty($roleIds)) {
-            return [];
-        }
-
-        // 获取所有菜单类型权限
-        $menus = $this->model(RolePermission::class)
-            ->alias('rp')
-            ->leftJoin('permission p', 'rp.permission_id = p.id')
-            ->whereIn('rp.role_id', $roleIds)
-            ->where('p.status', 1)
-            ->where('p.type', 1)
-            ->field('p.*')
-            ->distinct()
-            ->select()
-            ->toArray();
-
-        // 构建树形结构
-        return $this->buildMenuTree($menus);
-    }
-
-    /**
-     * 获取管理员路由
-     */
-    public function getAccessRoutes(int $adminId): array
-    {
-        // 获取管理员的角色ID
-        $roleIds = $this->model(AdminRole::class)
-            ->where('admin_id', $adminId)
-            ->column('role_id');
-
-        if (empty($roleIds)) {
-            return [];
-        }
-
-        // 获取所有路由权限
-        $permissions = $this->model(RolePermission::class)
-            ->alias('rp')
-            ->leftJoin('permission p', 'rp.permission_id = p.id')
-            ->whereIn('rp.role_id', $roleIds)
-            ->where('p.status', 1)
-            ->field('p.*')
-            ->distinct()
-            ->select()
-            ->toArray();
-
-        $routes = [];
-        foreach ($permissions as $permission) {
-            $routes[] = $this->convertToRoute($permission);
-        }
-
-        return $routes;
-    }
-
-    /**
      * 构建菜单树
      */
     protected function buildMenuTree(array $menus, int $parentId = 0): array
@@ -470,17 +382,6 @@ class AdminService extends BaseService
         ];
     }
 
-    /**
-     * 获取管理员所有权限信息（权限码、菜单、路由）
-     */
-    public function getAccessInfo(int $adminId): array
-    {
-        return [
-            'access_codes' => $this->getAccessCodes($adminId),
-//            'access_menus' => $this->getAccessMenus($adminId),
-//            'access_routes' => $this->getAccessRoutes($adminId),
-        ];
-    }
 
     /**
      * 刷新 Token

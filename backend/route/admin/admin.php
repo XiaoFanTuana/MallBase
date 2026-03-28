@@ -34,8 +34,6 @@ Route::group('auth/admin', function () {
     Route::post('resetPassword/:id', 'resetPassword')->name('SystemAdminResetPassword')->option(['_alias' => '重置密码', '_desc' => '重置管理员密码', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 修改密码
     Route::post('changePassword', 'changePassword')->name('SystemAdminChangePassword')->option(['_alias' => '修改密码', '_desc' => '修改管理员密码', '_auth' => true]);
-    // 获取权限信息
-    Route::get('getAccessInfo', 'getAccessInfo')->name('SystemAdminGetAccessInfo')->option(['_alias' => '权限信息', '_desc' => '获取权限信息', '_auth' => true]);
 })->prefix('auth/AdminController/')
     ->option([
         '_group_name' => '管理员管理',

@@ -15,7 +15,6 @@ import { $t, setupI18n } from '#/locales';
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
-import permissionDirective from './directives/permission';
 import { router } from './router';
 
 import 'ant-design-vue/dist/reset.css';
@@ -55,9 +54,6 @@ async function bootstrap(namespace: string) {
 
   // 安装权限指令
   registerAccessDirective(app);
-
-  // 注册自定义按钮级权限指令
-  app.directive('auth', permissionDirective);
 
   // 初始化 tippy
   const { initTippy } = await import('@vben/common-ui/es/tippy');

@@ -88,6 +88,6 @@ export async function getCurrentAdminInfoApi() {
  */
 export async function getAccessCodesApi() {
   return requestClient.get<AuthApi.AccessCodesResult>(
-    '/auth/admin/getAccessInfo',
+    '/auth/permission/getAccessCodes',
   );
 }

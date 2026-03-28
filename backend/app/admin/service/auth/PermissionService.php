@@ -5,6 +5,7 @@ declare (strict_types=1);
 namespace app\admin\service\auth;
 
 use app\admin\model\auth\Admin;
+use app\admin\model\auth\AdminRole;
 use app\admin\model\auth\Permission as PermissionModel;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
@@ -75,6 +76,39 @@ class PermissionService extends BaseService
             'home_path' => $homePath ?: '/workspace',
             'routes' => $routes,
         ];
+    }
+
+
+    /**
+     * 获取管理员权限（权限码列表）
+     */
+    public function getAccessCodes(int $adminId): array
+    {
+
+        if ($adminId == Admin::SUPER_ADMIN_ID) {
+            $codes = $this->model()->whereIn('type', [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API])->where('status', 1)->column('code');
+        } else {
+            // 获取管理员的角色ID
+            $roleIds = $this->model(AdminRole::class)
+                ->where('admin_id', $adminId)
+                ->column('role_id');
+
+            if (empty($roleIds)) {
+                return [];
+            }
+
+            // 获取这些角色的所有权限码
+            $codes = $this->model()
+                ->alias('p')
+                ->leftJoin('role_permission rp', 'rp.permission_id = p.id')
+                ->whereIn('rp.role_id', $roleIds)
+                ->whereIn('p.type', [PermissionModel::TYPE_BUTTON, PermissionModel::TYPE_API])
+                ->where('p.status', 1)
+                ->column('p.code');
+        }
+
+
+        return ['access_codes' => array_values(array_unique($codes))];
     }
 
     /**

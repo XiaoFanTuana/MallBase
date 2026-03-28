@@ -42,6 +42,16 @@ class PermissionController extends BaseController
 
     }
 
+    /**
+     * 获取权限信息（权限码）
+     */
+    public function getAccessCodes()
+    {
+        $adminId = $this->request->admin_id;
+        $info = $this->service()->getAccessCodes($adminId);
+        return $this->success($info, '获取成功');
+    }
+
 
     /**
      * 获取列表

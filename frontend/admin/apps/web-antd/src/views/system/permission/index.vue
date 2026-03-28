@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { h, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { IconPicker } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
@@ -19,6 +20,8 @@ import { useFormModal } from '#/composables/useTableCrud';
 defineOptions({
   name: 'SystemPermission',
 });
+
+const { hasAccessByCodes } = useAccess();
 
 // 表格数据
 const tableData = ref<any[]>([]);
@@ -202,6 +205,9 @@ const columns = [
     dataIndex: 'status',
     width: 80,
     customRender: ({ record }: any) => {
+      if (!hasAccessByCodes(['SystemPermissionBatchUpdate'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         onChange: async (checked: boolean) => {
@@ -252,6 +258,9 @@ const columns = [
     dataIndex: 'is_show',
     width: 80,
     customRender: ({ record }: any) => {
+      if (!hasAccessByCodes(['SystemPermissionBatchUpdate'])) {
+        return record.is_show === 1 ? '显示' : '隐藏';
+      }
       return h(Switch, {
         checked: record.is_show === 1,
         onChange: async (checked: boolean) => {
@@ -302,6 +311,9 @@ const columns = [
     dataIndex: 'affix_tab',
     width: 100,
     customRender: ({ record }: any) => {
+      if (!hasAccessByCodes(['SystemPermissionBatchUpdate'])) {
+        return record.affix_tab === 1 ? '固定' : '不固定';
+      }
       return h(Switch, {
         checked: record.affix_tab === 1,
         onChange: async (checked: any) => {
@@ -321,6 +333,9 @@ const columns = [
     dataIndex: 'no_basic_layout',
     width: 100,
     customRender: ({ record }: any) => {
+      if (!hasAccessByCodes(['SystemPermissionBatchUpdate'])) {
+        return record.no_basic_layout === 1 ? '不需要' : '需要';
+      }
       return h(Switch, {
         checked: record.no_basic_layout === 1,
         onChange: async (checked: any) => {
@@ -343,14 +358,16 @@ const columns = [
 ];
 
 // 初始化加载数据
-loadData();
+if (hasAccessByCodes(['SystemPermissionTree'])) {
+  loadData();
+}
 </script>
 
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate"> 新增权限 </a-button>
-      <a-button class="ml-2" @click="loadData"> 刷新 </a-button>
+      <a-button type="primary" @click="handleCreate" v-access:code="'SystemPermissionCreate'"> 新增权限 </a-button>
+      <a-button class="ml-2" @click="loadData" v-access:code="'SystemPermissionTree'"> 刷新 </a-button>
     </div>
 
     <!-- 搜索表单 -->
@@ -417,7 +434,7 @@ loadData();
 
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemPermissionUpdate'">
               编辑
             </a-button>
             <a-button
@@ -425,6 +442,7 @@ loadData();
               danger
               size="small"
               @click="handleDelete(record)"
+              v-access:code="'SystemPermissionDelete'"
             >
               删除
             </a-button>

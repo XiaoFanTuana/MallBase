@@ -3,6 +3,8 @@ import type { AdminApi } from '#/api/system/admin';
 
 import { computed, h, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import { message, Modal, Switch } from 'ant-design-vue';
 
 import { uploadImageApi } from '#/api/core/upload';
@@ -20,6 +22,8 @@ import Upload from '#/components/upload/index.vue';
 import { useFormModal, useTableCrud } from '#/composables/useTableCrud';
 
 defineOptions({ name: 'SystemAdmin' });
+
+const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
 
@@ -164,6 +168,9 @@ const columns = [
     dataIndex: 'status',
     width: 80,
     customRender: ({ record }: any) => {
+      if (!hasAccessByCodes(['SystemAdminChangeStatus'])) {
+        return record.status === 1 ? '启用' : '禁用';
+      }
       return h(Switch, {
         checked: record.status === 1,
         onChange: async (checked: any) => {
@@ -188,7 +195,9 @@ const columns = [
 
 /* ---------------- 初始化 ---------------- */
 
-loadData(searchParams.value);
+if (hasAccessByCodes(['SystemAdminList'])) {
+  loadData(searchParams.value);
+}
 </script>
 
 <template>
@@ -197,15 +206,17 @@ loadData(searchParams.value);
       <a-button
         type="primary"
         @click="handleCreate"
-        v-auth="'SystemAdminCreate'"
+        v-access:code="'SystemAdminCreate'"
       >
         新增管理员
       </a-button>
-      <a-button class="ml-2" @click="refresh">刷新</a-button>
+      <a-button class="ml-2" @click="refresh" v-access:code="'SystemAdminList'">
+        刷新
+      </a-button>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
+    <a-form layout="inline" class="mb-4" v-access:code="'SystemAdminList'">
       <a-form-item label="关键词">
         <a-input
           v-model:value="searchParams.keyword"
@@ -240,7 +251,8 @@ loadData(searchParams.value);
       :pagination="pagination"
       :scroll="{ x: 1200 }"
       row-key="id"
-      @change="() => loadData(searchParams.value)"
+      @change="() => loadData(searchParams)"
+      v-access:code="'SystemAdminList'"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.title === '头像'">
@@ -256,7 +268,12 @@ loadData(searchParams.value);
 
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+              v-access:code="'SystemAdminUpdate'"
+            >
               编辑
             </a-button>
 
@@ -264,6 +281,7 @@ loadData(searchParams.value);
               type="link"
               size="small"
               @click="handleResetPassword(record)"
+              v-access:code="'SystemAdminResetPassword'"
             >
               重置密码
             </a-button>
@@ -273,6 +291,7 @@ loadData(searchParams.value);
               danger
               size="small"
               @click="handleDelete(record, 'nickname')"
+              v-access:code="'SystemAdminDelete'"
             >
               删除
             </a-button>
