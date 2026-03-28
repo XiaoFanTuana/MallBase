@@ -62,7 +62,6 @@ class SyncPermissions extends Command
         'is_show' => 1,
         'affix_tab' => 0,
         'no_basic_layout' => 0,
-        'source' => self::SOURCE_ROUTE,
         'remark' => null,
     ];
 
@@ -85,10 +84,16 @@ class SyncPermissions extends Command
     protected $baseMenus = [];
 
     /**
-     * 数据库权限数据（按 code 索引）
+     * 数据库权限数据（全量，按 code 索引，用于 parent_id 查找）
      * @var array
      */
     protected $dbPermissions = [];
+
+    /**
+     * 数据库权限数据（仅 source=2 路由同步的，用于比对增删改）
+     * @var array
+     */
+    protected $syncDbPermissions = [];
 
     /**
      * 数据库权限数据（按 name 索引，用于查找 parent_id）
@@ -259,6 +264,11 @@ class SyncPermissions extends Command
 
                     // 修改子路由的 _parent 为路由组 code，这样子路由会挂在路由组菜单下
                     $option['_parent'] = $groupCode;
+                }
+
+                // 跳过不需要权限验证的路由（_auth => false）
+                if (isset($option['_auth']) && $option['_auth'] === false) {
+                    continue;
                 }
 
                 // 处理有 _alias 或 _group_name 的路由
@@ -494,12 +504,17 @@ class SyncPermissions extends Command
         foreach ($permissions as $permission) {
             $code = $permission['code'];
 
-            // 按 code 索引
+            // 按 code 索引（全量，用于 parent_id 查找）
             $this->dbPermissions[$code] = $permission;
 
             // 按 name 索引（用于查找 parent_id）
             if (!empty($permission['name'])) {
                 $this->dbPermissionsByName[$permission['name']] = $permission;
+            }
+
+            // source=2 的单独索引（用于比对增删改）
+            if (!isset($permission['source']) || $permission['source'] == self::SOURCE_ROUTE) {
+                $this->syncDbPermissions[$code] = $permission;
             }
         }
     }
@@ -515,38 +530,31 @@ class SyncPermissions extends Command
         // 先遍历 base_menus，标记哪些需要创建或更新
         $this->compareMenuData($this->baseMenus, '', []);
 
-        // 再遍历路由数据，标记哪些需要创建或更新
+        // 再遍历路由数据，只与 source=2 的数据比对
         foreach ($this->routeData as $code => $route) {
-            $dbPermission = $this->dbPermissions[$code] ?? null;
+            $syncPermission = $this->syncDbPermissions[$code] ?? null;
 
-            if ($dbPermission) {
-                // 手动添加的权限，跳过更新
-                if (isset($dbPermission['source']) && $dbPermission['source'] == self::SOURCE_MANUAL) {
-                    continue;
-                }
-                // 数据库中已存在，需要更新
+            if ($syncPermission) {
+                // source=2 的记录已存在，需要更新
                 $this->toUpdate[] = [
                     'code' => $code,
-                    'db_id' => $dbPermission['id'],
+                    'db_id' => $syncPermission['id'],
                     'data' => $this->buildRoutePermissionData($route, false),
                 ];
-            } else {
-                // 数据库中不存在，需要创建
+            } elseif (!isset($this->dbPermissions[$code])) {
+                // 数据库中完全不存在，需要创建
                 $this->toCreate[] = [
                     'code' => $code,
                     'data' => $this->buildRoutePermissionData($route, false),
                 ];
             }
+            // source=1 的记录已存在，跳过不动
         }
 
-        // 找出需要删除的权限（只在数据库中存在，但路由中没有的）
-        foreach ($this->dbPermissions as $code => $permission) {
-            // 只删除路由同步的接口权限（source=2 且 type=3），保留手动添加的和菜单/按钮权限
-            if ($permission['type'] === self::TYPE_API
-                && (!isset($permission['source']) || $permission['source'] == self::SOURCE_ROUTE)) {
-                if (!isset($this->routeData[$code])) {
-                    $this->toDelete[] = $code;
-                }
+        // 找出需要删除的权限（在 source=2 的数据中，但路由中没有的）
+        foreach ($this->syncDbPermissions as $code => $permission) {
+            if (!isset($this->routeData[$code]) && !$this->isBaseMenu($code)) {
+                $this->toDelete[] = $code;
             }
         }
     }
@@ -562,25 +570,26 @@ class SyncPermissions extends Command
     {
         foreach ($menus as $menu) {
             $code = $menu['code'];
-            $dbPermission = $this->dbPermissions[$code] ?? null;
+            $syncPermission = $this->syncDbPermissions[$code] ?? null;
 
             // 构建菜单父子映射
             $this->menuParentMap[$code] = $parentCode;
 
-            if ($dbPermission) {
-                // 数据库中已存在，需要更新
+            if ($syncPermission) {
+                // source=2 的记录已存在，需要更新
                 $this->toUpdate[] = [
                     'code' => $code,
-                    'db_id' => $dbPermission['id'],
+                    'db_id' => $syncPermission['id'],
                     'data' => $this->buildMenuPermissionData($menu, $parentCode, false),
                 ];
-            } else {
-                // 数据库中不存在，需要创建
+            } elseif (!isset($this->dbPermissions[$code])) {
+                // 数据库中完全不存在，需要创建
                 $this->toCreate[] = [
                     'code' => $code,
                     'data' => $this->buildMenuPermissionData($menu, $parentCode, false),
                 ];
             }
+            // source=1 的记录已存在，跳过不动
 
             // 递归处理子菜单
             if (isset($menu['children']) && !empty($menu['children'])) {
@@ -813,6 +822,8 @@ class SyncPermissions extends Command
 
                     // 添加创建时间
                     $data['create_time'] = date('Y-m-d H:i:s');
+                    // 新增时标记来源为路由同步
+                    $data['source'] = self::SOURCE_ROUTE;
 
                     $insertId = Db::name('permission')->insertGetId($data);
 
@@ -858,6 +869,9 @@ class SyncPermissions extends Command
                         $data = $item['data'];
                     }
 
+                    // 标记来源为路由同步
+                    $data['source'] = self::SOURCE_ROUTE;
+
                     Db::name('permission')
                         ->where('id', $item['db_id'])
                         ->update($data);
@@ -880,6 +894,9 @@ class SyncPermissions extends Command
                     } else {
                         $data = $item['data'];
                     }
+
+                    // 标记来源为路由同步
+                    $data['source'] = self::SOURCE_ROUTE;
 
                     Db::name('permission')
                         ->where('id', $item['db_id'])
@@ -924,6 +941,29 @@ class SyncPermissions extends Command
             $output->writeln('<error>错误位置: ' . $e->getFile() . ':' . $e->getLine() . '</error>');
             throw $e;
         }
+    }
+
+    /**
+     * 检查 code 是否属于 base_menus
+     */
+    protected function isBaseMenu(string $code, ?array $menus = null): bool
+    {
+        if ($menus === null) {
+            $menus = $this->baseMenus;
+        }
+
+        foreach ($menus as $menu) {
+            if ($menu['code'] === $code) {
+                return true;
+            }
+            if (isset($menu['children']) && !empty($menu['children'])) {
+                if ($this->isBaseMenu($code, $menu['children'])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
