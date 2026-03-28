@@ -43,6 +43,12 @@ class SyncPermissions extends Command
     const TYPE_API = 3;       // 接口
 
     /**
+     * 权限来源
+     */
+    const SOURCE_MANUAL = 1;  // 手动添加
+    const SOURCE_ROUTE = 2;   // 路由同步
+
+    /**
      * 数据库表默认值
      */
     const DB_DEFAULTS = [
@@ -56,6 +62,7 @@ class SyncPermissions extends Command
         'is_show' => 1,
         'affix_tab' => 0,
         'no_basic_layout' => 0,
+        'source' => self::SOURCE_ROUTE,
         'remark' => null,
     ];
 
@@ -513,6 +520,10 @@ class SyncPermissions extends Command
             $dbPermission = $this->dbPermissions[$code] ?? null;
 
             if ($dbPermission) {
+                // 手动添加的权限，跳过更新
+                if (isset($dbPermission['source']) && $dbPermission['source'] == self::SOURCE_MANUAL) {
+                    continue;
+                }
                 // 数据库中已存在，需要更新
                 $this->toUpdate[] = [
                     'code' => $code,
@@ -530,8 +541,9 @@ class SyncPermissions extends Command
 
         // 找出需要删除的权限（只在数据库中存在，但路由中没有的）
         foreach ($this->dbPermissions as $code => $permission) {
-            // 只删除接口权限（type=3），保留菜单和按钮权限
-            if ($permission['type'] === self::TYPE_API) {
+            // 只删除路由同步的接口权限（source=2 且 type=3），保留手动添加的和菜单/按钮权限
+            if ($permission['type'] === self::TYPE_API
+                && (!isset($permission['source']) || $permission['source'] == self::SOURCE_ROUTE)) {
                 if (!isset($this->routeData[$code])) {
                     $this->toDelete[] = $code;
                 }

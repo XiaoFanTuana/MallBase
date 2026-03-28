@@ -24,7 +24,7 @@ class PermissionController extends BaseController
      */
     public function tree()
     {
-        $where = $this->request->param(['keyword', 'type', 'status']);
+        $where = $this->request->param(['keyword', 'type', 'status', 'source']);
 
         $tree = $this->service()->getTree($where);
         return $this->success($tree, '获取成功');

@@ -9,9 +9,9 @@ use think\facade\Route;
 Route::group('auth/admin', function () {
     Route::group('', function () {
         // 登录
-        Route::post('login', 'login')->option(['_alias' => '登录', '_desc' => '管理员登录', '_auth' => false]);
+        Route::post('login', 'login')->option(['_alias' => '登录', '_desc' => '管理员登录']);
         // 刷新 Token
-        Route::post('refreshToken', 'refreshToken')->option(['_alias' => '刷新Token', '_desc' => '刷新访问令牌', '_auth' => false]);
+        Route::post('refreshToken', 'refreshToken')->option(['_alias' => '刷新Token', '_desc' => '刷新访问令牌']);
     })->option([
         '_alias' => '无需授权',
         '_auth' => false

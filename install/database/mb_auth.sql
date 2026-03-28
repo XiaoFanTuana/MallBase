@@ -78,13 +78,15 @@ CREATE TABLE `mb_permission` (
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态：0=禁用 1=启用',
   `is_show` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否显示：0=隐藏 1=显示',
+  `source` tinyint(1) NOT NULL DEFAULT 1 COMMENT '来源：1=手动添加 2=路由同步',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   KEY `idx_parent_id` (`parent_id`),
-  KEY `idx_type` (`type`)
+  KEY `idx_type` (`type`),
+  KEY `idx_source` (`source`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限表';
 
 -- -----------------------------

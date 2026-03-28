@@ -27,28 +27,22 @@ class PermissionService extends BaseService
      */
     public function getTree(array $where = []): array
     {
-        $keyword = $where['keyword'] ?? '';
-        $type = $where['type'] ?? null;
-        $status = $where['status'] ?? null;
 
-        $query = $this->model()->order('sort', 'asc')->order('id', 'asc');
+        $list = $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('name|code', "%{$where['keyword']}%");
+            })
+            ->when(($where['type'] ?? null) !== null, function ($q) use ($where) {
+                $q->where('type', $where['type']);
+            })
+            ->when(($where['status'] ?? null) !== null, function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            })
+            ->when(($where['source'] ?? null) !== null, function ($q) use ($where) {
+                $q->where('source', $where['source']);
+            })
+            ->order('sort', 'asc')->order('id', 'asc')->select()->toArray();
 
-        // 关键字搜索
-        if ($keyword) {
-            $query->whereLike('name|code', "%{$keyword}%");
-        }
-
-        // 类型筛选
-        if ($type !== null) {
-            $query->where('type', $type);
-        }
-
-        // 状态筛选
-        if ($status !== null) {
-            $query->where('status', $status);
-        }
-
-        $list = $query->select()->toArray();
         return $this->buildTree($list);
     }
 
@@ -180,6 +174,7 @@ class PermissionService extends BaseService
                 'sort' => $data['sort'] ?? 0,
                 'status' => $data['status'] ?? 1,
                 'is_show' => $data['is_show'] ?? 1,
+                'source' => PermissionModel::SOURCE_MANUAL,
                 'remark' => $data['remark'] ?? '',
             ]);
 

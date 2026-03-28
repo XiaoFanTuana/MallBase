@@ -39,6 +39,7 @@ const searchParams = ref({
   keyword: '',
   type: undefined as number | undefined,
   status: undefined as number | undefined,
+  source: undefined as number | undefined,
 });
 
 // 加载数据
@@ -48,15 +49,15 @@ const loadData = async () => {
     const result = await getPermissionTreeApi(searchParams.value);
     tableData.value = result;
     // 默认展开所有节点
-    const expandAll = (nodes: any[]) => {
-      nodes.forEach((node) => {
-        if (node.children && node.children.length > 0) {
-          treeExpandedKeys.value.push(node.id);
-          expandAll(node.children);
-        }
-      });
-    };
-    expandAll(result);
+    // const expandAll = (nodes: any[]) => {
+    //   nodes.forEach((node) => {
+    //     if (node.children && node.children.length > 0) {
+    //       treeExpandedKeys.value.push(node.id);
+    //       expandAll(node.children);
+    //     }
+    //   });
+    // };
+    // expandAll(result);
 
     // 转换为树形选择器的数据格式
     permissionTreeData.value = transformToTreeData(result);
@@ -128,6 +129,23 @@ const handleFormSubmit = async () => {
   );
 };
 
+// 复制权限编码
+const handleCopyCode = async (code: string) => {
+  try {
+    await window.navigator.clipboard.writeText(code);
+    message.success(`已复制: ${code}`);
+  } catch {
+    // fallback for non-HTTPS
+    const textarea = document.createElement('textarea');
+    textarea.value = code;
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+    message.success(`已复制: ${code}`);
+  }
+};
+
 // 删除权限
 const handleDelete = (row: any) => {
   Modal.confirm({
@@ -184,6 +202,14 @@ const columns = [
     title: '权限类型',
     dataIndex: 'type',
     width: 120,
+  },
+  {
+    title: '来源',
+    dataIndex: 'source',
+    width: 120,
+    customRender: ({ record }: any) => {
+      return record.source === 1 ? '手动添加' : '路由同步';
+    },
   },
   { title: '路由路径', dataIndex: 'path', width: 200 },
   {
@@ -415,9 +441,20 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
           <a-select-option :value="0">禁用</a-select-option>
         </a-select>
       </a-form-item>
+      <a-form-item label="来源">
+        <a-select
+          v-model:value="searchParams.source"
+          placeholder="请选择"
+          allow-clear
+          style="width: 150px"
+        >
+          <a-select-option :value="1">手动添加</a-select-option>
+          <a-select-option :value="2">路由同步</a-select-option>
+        </a-select>
+      </a-form-item>
       <a-form-item>
-        <a-button type="primary" @click="loadData"> 搜索 </a-button>
-        <a-button class="ml-2" @click="resetSearch"> 重置 </a-button>
+        <a-button type="primary" @click="loadData"> 搜索</a-button>
+        <a-button class="ml-2" @click="resetSearch"> 重置</a-button>
       </a-form-item>
     </a-form>
 
@@ -442,6 +479,21 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
           <a-tag v-else-if="record.type === 3" color="purple">
             <span class="mr-1">🔗</span>接口
           </a-tag>
+          <span v-else>-</span>
+        </template>
+        <template v-if="column.dataIndex === 'code'">
+          <span
+            class="cursor-pointer select-none"
+            style="color: #1890ff"
+            @click="handleCopyCode(record.code)"
+          >
+            {{ record.code }}
+          </span>
+        </template>
+
+        <template v-if="column.dataIndex === 'source'">
+          <a-tag v-if="record.source === 1" color="orange">手动添加</a-tag>
+          <a-tag v-else-if="record.source === 2" color="cyan">路由同步</a-tag>
           <span v-else>-</span>
         </template>
 
