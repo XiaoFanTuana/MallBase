@@ -366,12 +366,24 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemPermissionCreate'"> 新增权限 </a-button>
-      <a-button class="ml-2" @click="loadData" v-access:code="'SystemPermissionTree'"> 刷新 </a-button>
+      <a-button
+        type="primary"
+        @click="handleCreate"
+        v-access:code="'SystemPermissionCreate'"
+      >
+        新增权限
+      </a-button>
+      <a-button
+        class="ml-2"
+        @click="loadData"
+        v-access:code="'SystemPermissionTree'"
+      >
+        刷新
+      </a-button>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
+    <a-form layout="inline" class="mb-4" v-access:code="'SystemPermissionTree'">
       <a-form-item label="关键词">
         <a-input
           v-model:value="searchParams.keyword"
@@ -417,6 +429,7 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
       :scroll="{ x: 1400 }"
       :default-expanded-row-keys="treeExpandedKeys"
       row-key="id"
+      v-access:code="'SystemPermissionTree'"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'type'">
@@ -434,7 +447,12 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
 
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemPermissionUpdate'">
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+              v-access:code="'SystemPermissionUpdate'"
+            >
               编辑
             </a-button>
             <a-button

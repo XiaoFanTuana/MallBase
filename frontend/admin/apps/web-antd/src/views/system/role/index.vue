@@ -53,6 +53,12 @@ const menuNameMap = ref<Record<number, string>>({});
 // 菜单 ID 到父菜单 ID 的映射
 const menuParentMap = ref<Record<number, number>>({});
 
+// 所有菜单节点 ID（用于判断是否是叶子节点）
+const allMenuIds = ref<Set<number>>(new Set());
+
+// 有子菜单的父菜单 ID 集合
+const parentMenuIds = ref<Set<number>>(new Set());
+
 // 菜单 ID 到按钮权限 ID 列表的映射
 const menuButtonPermissionMap = ref<Record<number, number[]>>({});
 
@@ -122,12 +128,34 @@ const loadPermissionData = async () => {
  * 过滤权限树，只保留菜单节点（type: 1）
  */
 function filterMenuTree(permissions: any[]): any[] {
-  return permissions
-    .filter((item) => item.type === 1) // 只保留菜单
-    .map((item) => ({
-      ...item,
-      children: item.children ? filterMenuTree(item.children) : [],
-    }));
+  const menuIds = new Set<number>();
+  const parentIds = new Set<number>();
+
+  function filterAndCollect(nodes: any[]): any[] {
+    return nodes
+      .filter((item) => item.type === 1)
+      .map((item) => {
+        menuIds.add(item.id);
+        const childMenus = item.children ? filterAndCollect(item.children) : [];
+        if (childMenus.length > 0) {
+          parentIds.add(item.id);
+        }
+        return { ...item, children: childMenus };
+      });
+  }
+
+  const result = filterAndCollect(permissions);
+  allMenuIds.value = menuIds;
+  parentMenuIds.value = parentIds;
+  return result;
+}
+
+/**
+ * 过滤出叶子菜单节点 ID（没有子菜单的节点）
+ * 用于传给 Tree 组件的 checkedKeys，避免父子联动导致歧义
+ */
+function getLeafMenuIds(menuIds: number[]): number[] {
+  return menuIds.filter((id) => !parentMenuIds.value.has(id));
 }
 
 /**
@@ -491,16 +519,20 @@ const handleCreate = async () => {
 const handleEdit = async (row: any) => {
   await loadPermissionData();
   await openEditModal(row, getRoleInfoApi);
+  // 只传叶子节点给树，避免父子联动歧义
+  if (Array.isArray(formData.value.menu_permission_ids)) {
+    formData.value.menu_permission_ids = getLeafMenuIds(
+      formData.value.menu_permission_ids,
+    );
+  }
 };
 
 // 提交表单
 const handleFormSubmit = async () => {
   // 补全所有选中菜单的父级菜单
-  if (formData.value.menu_permission_ids) {
-    formData.value.menu_permission_ids = ensureParentMenus(
-      formData.value.menu_permission_ids,
-    );
-  }
+  const menuIds = formData.value.menu_permission_ids;
+  const checkedIds = Array.isArray(menuIds) ? menuIds : [];
+  formData.value.menu_permission_ids = ensureParentMenus(checkedIds);
 
   await handleSubmit(
     {
@@ -512,6 +544,84 @@ const handleFormSubmit = async () => {
     },
   );
 };
+
+/**
+ * 获取菜单节点及其所有子菜单的 ID 列表
+ */
+function getMenuAndChildrenIds(menuId: number): number[] {
+  const ids: number[] = [menuId];
+  function findInChildren(nodes: any[]) {
+    for (const node of nodes) {
+      if (ids.includes(node.parent_id) || node.id === menuId) {
+        if (!ids.includes(node.id)) {
+          ids.push(node.id);
+        }
+        if (node.children?.length > 0) {
+          findInChildren(node.children);
+        }
+      }
+    }
+  }
+  findInChildren(permissionTree.value);
+  return ids;
+}
+
+/**
+ * 菜单权限勾选事件 - 联动按钮和接口权限
+ * 勾选菜单 → 自动勾选该菜单及子菜单下所有按钮+接口权限
+ * 取消菜单 → 自动取消该菜单及子菜单下所有按钮+接口权限
+ * 按钮/接口单独操作不影响菜单
+ */
+function handleMenuCheck(
+  checkedKeys: number[] | { checked: number[]; halfChecked: number[] },
+  e: { checked: boolean; node: any },
+) {
+  const menuId = e.node.id;
+  const isChecked = e.checked;
+
+  // 获取该菜单及所有子菜单的 ID
+  const affectedMenuIds = getMenuAndChildrenIds(menuId);
+
+  // 收集受影响的所有按钮权限 ID
+  const affectedButtonIds: number[] = [];
+  for (const id of affectedMenuIds) {
+    const ids = menuButtonPermissionMap.value[id] || [];
+    affectedButtonIds.push(...ids);
+  }
+
+  // 收集受影响的所有接口权限 ID
+  const affectedApiIds: number[] = [];
+  for (const id of affectedMenuIds) {
+    const ids = menuApiPermissionMap.value[id] || [];
+    affectedApiIds.push(...ids);
+  }
+
+  // 更新按钮权限
+  const currentButtons = new Set(formData.value.button_permission_ids || []);
+  if (isChecked) {
+    for (const id of affectedButtonIds) {
+      currentButtons.add(id);
+    }
+  } else {
+    for (const id of affectedButtonIds) {
+      currentButtons.delete(id);
+    }
+  }
+  formData.value.button_permission_ids = [...currentButtons];
+
+  // 更新接口权限
+  const currentApis = new Set(formData.value.api_permission_ids || []);
+  if (isChecked) {
+    for (const id of affectedApiIds) {
+      currentApis.add(id);
+    }
+  } else {
+    for (const id of affectedApiIds) {
+      currentApis.delete(id);
+    }
+  }
+  formData.value.api_permission_ids = [...currentApis];
+}
 
 // 搜索参数
 const searchParams = ref({
@@ -571,12 +681,20 @@ if (hasAccessByCodes(['SystemRoleList'])) {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-button type="primary" @click="handleCreate" v-access:code="'SystemRoleCreate'"> 新增角色 </a-button>
-      <a-button class="ml-2" @click="refresh" v-access:code="'SystemRoleList'"> 刷新 </a-button>
+      <a-button
+        type="primary"
+        @click="handleCreate"
+        v-access:code="'SystemRoleCreate'"
+      >
+        新增角色
+      </a-button>
+      <a-button class="ml-2" @click="refresh" v-access:code="'SystemRoleList'">
+        刷新
+      </a-button>
     </div>
 
     <!-- 搜索表单 -->
-    <a-form layout="inline" class="mb-4">
+    <a-form layout="inline" class="mb-4" v-access:code="'SystemRoleList'">
       <a-form-item label="关键词">
         <a-input
           v-model:value="searchParams.keyword"
@@ -612,11 +730,17 @@ if (hasAccessByCodes(['SystemRoleList'])) {
       :scroll="{ x: 900 }"
       @change="loadData(searchParams)"
       row-key="id"
+      v-access:code="'SystemRoleList'"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)" v-access:code="'SystemRoleUpdate'">
+            <a-button
+              type="link"
+              size="small"
+              @click="handleEdit(record)"
+              v-access:code="'SystemRoleUpdate'"
+            >
               编辑
             </a-button>
             <a-button
@@ -693,6 +817,7 @@ if (hasAccessByCodes(['SystemRoleList'])) {
             }"
             :check-strictly="false"
             class="permission-tree w-full"
+            @check="handleMenuCheck"
           />
         </a-form-item>
 

@@ -14,10 +14,11 @@ Route::group('auth/admin', function () {
         Route::post('refreshToken', 'refreshToken')->option(['_alias' => '刷新Token', '_desc' => '刷新访问令牌', '_auth' => false]);
     })->option([
         '_alias' => '无需授权',
+        '_auth' => false
     ])->withoutMiddleware([JwtAuth::class, CheckPermission::class]);
 
     // 列表
-    Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true]);
     // 详情
     Route::get('info/:id', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
     // 当前登录管理员详情

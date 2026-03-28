@@ -13,7 +13,7 @@ Route::group('auth/permission', function () {
     // 获取权限码
     Route::get('getAccessCodes', 'getAccessCodes')->name('SystemPermissionGetAccessInCodes')->option(['_alias' => '权限信息', '_desc' => '获取权限码', '_auth' => true]);
     // 列表
-    Route::get('list', 'list')->name('SystemPermissionList')->option(['_alias' => '列表', '_desc' => '权限列表', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::get('list', 'list')->name('SystemPermissionList')->option(['_alias' => '列表', '_desc' => '权限列表', '_auth' => true]);
     // 详情
     Route::get('info/:id', 'info')->name('SystemPermissionInfo')->option(['_alias' => '详情', '_desc' => '权限详情', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 创建

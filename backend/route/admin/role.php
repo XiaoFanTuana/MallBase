@@ -9,7 +9,7 @@ use think\facade\Route;
 // ============================================
 Route::group('auth/role', function () {
     // 列表
-    Route::get('list', 'list')->name('SystemRoleList')->option(['_alias' => '列表', '_desc' => '角色列表', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::get('list', 'list')->name('SystemRoleList')->option(['_alias' => '列表', '_desc' => '角色列表', '_auth' => true]);
     // 所有角色
     Route::get('all', 'all')->name('SystemRoleAll')->option(['_alias' => '全部', '_desc' => '获取所有角色', '_auth' => true]);
     // 详情
