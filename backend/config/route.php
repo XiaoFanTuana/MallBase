@@ -8,8 +8,8 @@ return [
     'pathinfo_depr'         => '/',
     // 是否开启路由延迟解析
     'url_lazy_route'        => false,
-    // 是否强制使用路由
-    'url_route_must'        => false,
+    // 是否强制使用路由（true = 只响应显式定义的路由，未定义的返回404）
+    'url_route_must'        => true,
     // 是否区分大小写
     'url_case_sensitive'    => false,
     // 自动扫描子目录分组

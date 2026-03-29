@@ -7,6 +7,9 @@ use Firebase\JWT\Key;
 
 /**
  * JWT 服务
+ *
+ * 纯 JWT 编解码，不涉及缓存逻辑
+ * refresh_token 的 Redis 管理由 JwtCacheService 负责
  */
 class JwtService
 {
@@ -19,6 +22,11 @@ class JwtService
      * Token 过期时间（秒）
      */
     protected int $expire = 7200; // 2小时
+
+    /**
+     * 刷新 Token 过期时间（秒）
+     */
+    protected int $refreshExpire = 2592000; // 30天
 
     /**
      * 算法
@@ -37,48 +45,49 @@ class JwtService
     {
         $this->key = config('jwt.secret') ?: 'your-secret-key-change-in-production';
         $this->expire = config('jwt.expire', 7200);
+        $this->refreshExpire = config('jwt.refresh_expire', 2592000);
         $this->algorithm = config('jwt.algorithm', 'HS256');
         $this->issuer = config('jwt.issuer', 'mall-admin');
     }
 
     /**
-     * 生成 Token
+     * 生成 Token 对（access_token + refresh_token）
      *
-     * @param array $payload 载荷数据
-     * @return string
+     * @param array $payload 载荷数据（无需传 type，会自动设置）
+     * @return array ['access_token', 'refresh_token', 'expires_in', 'refresh_expires_in']
      */
-    public function encode(array $payload): string
+    public function encode(array $payload): array
     {
         $now = time();
 
-        $tokenPayload = [
-            'iss' => $this->issuer,           // 颁发者
-            'iat' => $now,                   // 签发时间
-            'nbf' => $now,                   // 生效时间
-            'exp' => $now + $this->expire,    // 过期时间
-            'data' => $payload,                // 自定义数据
-        ];
+        // 自动设置 type，覆盖调用方传入的值
+        $accessData = array_merge($payload, ['type' => 'access']);
+        $refreshData = array_merge($payload, ['type' => 'refresh']);
 
-        return FirebaseJWT::encode($tokenPayload, $this->key, $this->algorithm);
+        return [
+            'access_token' => $this->buildToken($accessData, $this->expire, $now),
+            'refresh_token' => $this->buildToken($refreshData, $this->refreshExpire, $now),
+            'expires_in' => $this->expire,
+            'refresh_expires_in' => $this->refreshExpire,
+        ];
     }
 
     /**
-     * 生成 Token（自定义过期时间）
+     * 构建单个 Token
      *
      * @param array $payload 载荷数据
      * @param int $expire 过期时间（秒）
+     * @param int $now 当前时间戳
      * @return string
      */
-    public function encodeWithExpire(array $payload, int $expire): string
+    protected function buildToken(array $payload, int $expire, int $now): string
     {
-        $now = time();
-
         $tokenPayload = [
-            'iss' => $this->issuer,           // 颁发者
-            'iat' => $now,                   // 签发时间
-            'nbf' => $now,                   // 生效时间
-            'exp' => $now + $expire,         // 过期时间
-            'data' => $payload,                // 自定义数据
+            'iss' => $this->issuer,
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + $expire,
+            'data' => $payload,
         ];
 
         return FirebaseJWT::encode($tokenPayload, $this->key, $this->algorithm);
@@ -94,8 +103,7 @@ class JwtService
     public function decode(string $token): object
     {
         try {
-            $decoded = FirebaseJWT::decode($token, new Key($this->key, $this->algorithm));
-            return $decoded;
+            return FirebaseJWT::decode($token, new Key($this->key, $this->algorithm));
         } catch (\Exception $e) {
             throw new \Exception('Token 无效或已过期', 401);
         }
@@ -163,5 +171,16 @@ class JwtService
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    /**
+     * 获取 refresh_token 过期时间（秒）
+     * 供外部缓存服务使用
+     *
+     * @return int
+     */
+    public function getRefreshExpire(): int
+    {
+        return $this->refreshExpire;
     }
 }

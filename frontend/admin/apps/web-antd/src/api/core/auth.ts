@@ -1,4 +1,4 @@
-import { baseRequestClient, requestClient } from '#/api/request';
+import { requestClient } from '#/api/request';
 
 export namespace AuthApi {
   /** 登录接口参数 */
@@ -57,23 +57,23 @@ export async function loginApi(data: AuthApi.LoginParams) {
 
 /**
  * 刷新accessToken
+ * 使用 refresh_token 换取新的 access_token
  */
-export async function refreshTokenApi() {
-  return baseRequestClient.post<AuthApi.RefreshTokenResult>(
+export async function refreshTokenApi(refreshToken?: null | string) {
+  return requestClient.post<AuthApi.RefreshTokenResult>(
     '/auth/admin/refreshToken',
     {
-      withCredentials: true,
+      refresh_token: refreshToken,
     },
   );
 }
 
 /**
  * 退出登录
+ * 仅在主动退出时调用（token 有效），使用 requestClient 自动带 token
  */
 export async function logoutApi() {
-  return baseRequestClient.post('/auth/logout', {
-    withCredentials: true,
-  });
+  return requestClient.post('/auth/admin/logout');
 }
 
 /**

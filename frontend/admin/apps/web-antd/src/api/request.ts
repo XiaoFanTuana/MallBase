@@ -7,6 +7,7 @@ import { useAppConfig } from '@vben/hooks';
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
+  defaultResponseInterceptor,
   errorMessageResponseInterceptor,
   RequestClient,
 } from '@vben/request';
@@ -27,7 +28,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   });
 
   /**
-   * 重新认证逻辑
+   * 重新认证逻辑（refresh token 也失效时调用）
+   * 不调用后端 logout API，因为 token 已经过期了
+   * 只清除本地状态并跳转到登录页
    */
   async function doReAuthenticate() {
     console.warn('Access token or refresh token is invalid or expired. ');
@@ -40,19 +43,32 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     ) {
       accessStore.setLoginExpired(true);
     } else {
-      await authStore.logout();
+      // token 已失效，不调用后端 logout API
+      await authStore.logout(true, false);
     }
   }
 
   /**
    * 刷新token逻辑
+   * 使用 refreshToken 换取新的 accessToken
    */
-  async function doRefreshToken() {
+  async function doRefreshToken(): Promise<string> {
     const accessStore = useAccessStore();
-    const resp = await refreshTokenApi();
-    const newToken = resp.access_token;
-    accessStore.setAccessToken(newToken);
-    return newToken;
+    // refreshTokenApi 使用 baseRequestClient，返回原始 Axios 响应
+    const response = (await refreshTokenApi(accessStore.refreshToken)) as any;
+    const body = response.data;
+
+    // 检查刷新接口是否成功（后端可能返回 code: 400 表示 refresh_token 也过期了）
+    if (!body || body.code !== 200 || !body.data?.access_token) {
+      throw new Error('REFRESH_TOKEN_FAILED');
+    }
+
+    const tokenData = body.data;
+    accessStore.setAccessToken(tokenData.access_token);
+    if (tokenData.refresh_token) {
+      accessStore.setRefreshToken(tokenData.refresh_token);
+    }
+    return tokenData.access_token;
   }
 
   function formatToken(token: null | string) {
@@ -63,48 +79,38 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   client.addRequestInterceptor({
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
-
       config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       return config;
     },
   });
 
-  // 处理返回的响应数据格式
-  // 后端返回格式：{ code: 200, data: {...}, message: "成功" }
-  // 自定义响应拦截器，处理 data 可能为 null 的情况
+  // 【关键】将后端 body code:401 转换为 HTTP status 401
+  // 后端返回 HTTP 200 + body {code: 401}，需要转换为 HTTP 401
+  // 这样后续的 defaultResponseInterceptor 和 authenticateResponseInterceptor 才能正确处理
   client.addResponseInterceptor({
     fulfilled: (response) => {
-      const { config, data: responseData, status } = response;
-
-      if (config.responseReturn === 'raw') {
-        return response;
-      }
-
-      // 检查 responseData 是否为 null
-      if (responseData === null || responseData === undefined) {
-        throw Object.assign({}, response, { response });
-      }
-
-      // 检查 401 未授权错误，让 authenticateResponseInterceptor 处理
+      const responseData = response.data;
       if (responseData && responseData.code === 401) {
-        // eslint-disable-next-line no-throw-literal
-        throw { response };
+        // 修改 response.status 为 401，让后续拦截器按 HTTP 401 处理
+        response.status = 401;
       }
-
-      if (status >= 200 && status < 400) {
-        if (config.responseReturn === 'body') {
-          return responseData;
-        } else if (responseData.code === 200) {
-          // 返回 data 字段，data 可能为 null
-          return responseData.data;
-        }
-      }
-      throw Object.assign({}, response, { response });
+      return response;
     },
   });
 
-  // token过期的处理
+  // 使用官方 defaultResponseInterceptor 处理响应数据格式
+  // 后端返回格式：{ code: 200, data: {...}, message: "成功" }
+  // status 不在 200-399 范围内时（如上面改成 401）会抛错
+  client.addResponseInterceptor(
+    defaultResponseInterceptor({
+      codeField: 'code',
+      dataField: 'data',
+      successCode: 200,
+    }),
+  );
+
+  // token 过期处理（authenticateResponseInterceptor 检查 HTTP status === 401）
   client.addResponseInterceptor(
     authenticateResponseInterceptor({
       client,
@@ -115,27 +121,13 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }),
   );
 
-  // 添加响应拦截器，处理后端返回的 access_token 字段
-  client.addResponseInterceptor({
-    fulfilled: (response) => {
-      // 如果返回数据中有 access_token，转换为 accessToken
-      // 注意：由于 responseReturn: 'data'，此时 response 可能已经是 data 字段的值，而不是完整的响应对象
-      if (
-        response &&
-        typeof response === 'object' &&
-        (response as any)?.access_token
-      ) {
-        (response as any).accessToken = (response as any).access_token;
-      }
-      return response;
-    },
-  });
-
-  // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
+  // 通用的错误处理
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
-      // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
-      // 当前mock接口返回的错误字段是 error 或者 message
+      // 跳过刷新 token 失败的错误（已在 doReAuthenticate 中处理跳转登录页）
+      if (error?.message === 'REFRESH_TOKEN_FAILED') {
+        return;
+      }
       const responseData = error?.response?.data;
       const errorMessage =
         responseData && typeof responseData === 'object'

@@ -12,5 +12,7 @@ export const overridesPreferences = defineOverridesPreferences({
     // accessMode: 'mixed',  // 混合模式
     // accessMode: 'frontend',  // 前端模式
     accessMode: 'backend', // 后端模式
+    enableRefreshToken: true, // 启用双 token 机制
+    loginExpiredMode: 'modal', //
   },
 });

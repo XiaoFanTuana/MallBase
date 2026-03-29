@@ -6,11 +6,9 @@ namespace app\admin\service\auth;
 
 use app\admin\model\auth\Admin as AdminModel;
 use app\admin\model\auth\AdminRole;
-use app\admin\model\auth\Role;
-use app\admin\model\auth\RolePermission;
+use app\admin\service\cache\JwtCacheService;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
-use mall_base\exception\AuthException;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtService;
 use think\facade\Request;
@@ -47,33 +45,23 @@ class AdminService extends BaseService
         $admin->last_login_ip = Request::ip();
         $admin->save();
 
-        // 生成 JWT Token
+        // 生成 JWT Token（encode 自动生成 access_token + refresh_token）
         $jwtService = new JwtService();
-
-        // 生成 access_token（短有效期）
-        $accessToken = $jwtService->encode([
+        $token = $jwtService->encode([
             'admin_id' => $admin->id,
             'username' => $admin->username,
             'nickname' => $admin->nickname,
-            'type' => 'access',
         ]);
 
-        // 生成 refresh_token（长有效期，30天）
-        $refreshToken = $jwtService->encodeWithExpire([
-            'admin_id' => $admin->id,
-            'username' => $admin->username,
-            'nickname' => $admin->nickname,
-            'type' => 'refresh',
-        ], 30 * 24 * 3600); // 30天
+        // 存储 refresh_token 到 Redis
+        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService->storeRefreshToken(
+            $token['refresh_token'],
+            $admin->id,
+            $jwtService->getRefreshExpire()
+        );
 
-        // 获取过期时间（秒）
-        $expiresIn = config('jwt.expire', 7200);
-
-        return [
-            'access_token' => $accessToken,
-            'refresh_token' => $refreshToken,
-            'expires_in' => $expiresIn,
-        ];
+        return $token;
     }
 
     /**
@@ -317,21 +305,6 @@ class AdminService extends BaseService
         $cacheService->clearUser($adminId);
     }
 
-    /**
-     * 生成 JWT Token
-     */
-    protected function generateToken(AdminModel $admin): string
-    {
-        $jwtService = new JwtService();
-
-        $payload = [
-            'admin_id' => $admin->id,
-            'username' => $admin->username,
-            'nickname' => $admin->nickname,
-        ];
-
-        return $jwtService->encode($payload);
-    }
 
     /**
      * 重置密码
@@ -384,6 +357,19 @@ class AdminService extends BaseService
 
 
     /**
+     * 登出
+     */
+    public function logout(int $adminId): void
+    {
+        // 撤销 refresh_token
+        $jwtCacheService = new JwtCacheService();
+        $jwtCacheService->revokeRefreshToken($adminId);
+
+        // 清除该用户的权限缓存
+        $this->clearUserPermissionCache($adminId);
+    }
+
+    /**
      * 刷新 Token
      */
     public function refreshToken(string $refreshToken): array
@@ -413,29 +399,29 @@ class AdminService extends BaseService
             throw new BusinessException('用户不存在或已禁用');
         }
 
-        // 生成新的 access_token
-        $newAccessToken = $jwtService->encode([
+        // 验证 refresh_token 是否在 Redis 中（防止已登出的 token 被复用）
+        $jwtCacheService = new JwtCacheService();
+        if (!$jwtCacheService->verifyRefreshToken($refreshToken, $admin->id)) {
+            throw new BusinessException('刷新令牌已失效');
+        }
+
+        // 撤销旧的 refresh_token
+        $jwtCacheService->revokeRefreshToken($admin->id);
+
+        // 生成新的 token 对
+        $token = $jwtService->encode([
             'admin_id' => $admin->id,
             'username' => $admin->username,
             'nickname' => $admin->nickname,
-            'type' => 'access',
         ]);
 
-        // 生成新的 refresh_token
-        $newRefreshToken = $jwtService->encodeWithExpire([
-            'admin_id' => $admin->id,
-            'username' => $admin->username,
-            'nickname' => $admin->nickname,
-            'type' => 'refresh',
-        ], 30 * 24 * 3600); // 30天
+        // 存储新的 refresh_token 到 Redis
+        $jwtCacheService->storeRefreshToken(
+            $token['refresh_token'],
+            $admin->id,
+            $jwtService->getRefreshExpire()
+        );
 
-        // 获取过期时间（秒）
-        $expiresIn = config('jwt.expire', 7200);
-
-        return [
-            'access_token' => $newAccessToken,
-            'refresh_token' => $newRefreshToken,
-            'expires_in' => $expiresIn,
-        ];
+        return $token;
     }
 }

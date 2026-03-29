@@ -17,6 +17,8 @@ Route::group('auth/admin', function () {
         '_auth' => false
     ])->withoutMiddleware([JwtAuth::class, CheckPermission::class]);
 
+    // 登出（需要登录，不需要权限检查）
+    Route::post('logout', 'logout')->name('SystemAdminLogout')->option(['_alias' => '登出', '_desc' => '管理员登出', '_auth' => false])->withoutMiddleware([CheckPermission::class]);
     // 列表
     Route::get('list', 'list')->name('SystemAdminList')->option(['_alias' => '列表', '_desc' => '管理员列表', '_auth' => true]);
     // 详情

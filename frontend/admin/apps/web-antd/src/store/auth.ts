@@ -40,10 +40,15 @@ export const useAuthStore = defineStore('auth', () => {
       const loginResult = await loginApi(params as AuthApi.LoginParams);
 
       const accessToken = loginResult.access_token;
+      const refreshToken = loginResult.refresh_token;
 
       // 如果成功获取到 accessToken
       if (accessToken) {
         accessStore.setAccessToken(accessToken);
+        // 存储 refreshToken 用于双 token 刷新
+        if (refreshToken) {
+          accessStore.setRefreshToken(refreshToken);
+        }
 
         // 获取用户信息
         adminInfo = await fetchUserInfo();
@@ -73,12 +78,24 @@ export const useAuthStore = defineStore('auth', () => {
     };
   }
 
-  async function logout(redirect: boolean = true) {
-    try {
-      await logoutApi();
-    } catch {
-      // 不做任何处理
+  /**
+   * 退出登录
+   * @param redirect 是否跳转到登录页并携带当前路由地址
+   * @param callLogoutApi 是否调用后端退出接口（token 过期时不应调用）
+   */
+  async function logout(
+    redirect: boolean = true,
+    callLogoutApi: boolean = true,
+  ) {
+    // 调用后端 API 使服务端 token 失效（仅在 token 有效时调用）
+    if (callLogoutApi) {
+      try {
+        await logoutApi();
+      } catch {
+        // 接口报错也继续退出
+      }
     }
+    // 清除本地状态
     resetAllStores();
     accessStore.setLoginExpired(false);
 

@@ -1,6 +1,5 @@
 <?php
 
-use app\admin\middleware\JwtAuth;
 use app\admin\model\auth\Permission;
 use think\facade\Route;
 
@@ -32,7 +31,4 @@ Route::group('auth/role', function () {
         '_icon' => 'lucide:shield',
         '_parent' => 'SystemPermissionManagement',
         '_component' => 'system/role/index',
-    ])
-    ->middleware([
-        JwtAuth::class
     ]);

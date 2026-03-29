@@ -36,6 +36,21 @@ class AdminController extends BaseController
     }
 
     /**
+     * 登出
+     */
+    public function logout()
+    {
+        $adminId = $this->request->admin_id;
+
+        if (empty($adminId)) {
+            return $this->error('未登录');
+        }
+
+        $this->service()->logout((int)$adminId);
+        return $this->success(null, '登出成功');
+    }
+
+    /**
      * 刷新 Token
      */
     public function refreshToken()

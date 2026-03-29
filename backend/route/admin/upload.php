@@ -1,7 +1,5 @@
 <?php
 
-use app\admin\middleware\CheckPermission;
-use app\admin\middleware\JwtAuth;
 use think\facade\Route;
 
 // 上传接口路由
@@ -32,5 +30,4 @@ Route::group('upload', function () {
         '_group_name' => '文件上传',
         '_path' => '',
         '_auth' => true,
-    ])
-    ->middleware([JwtAuth::class]);
+    ]);
