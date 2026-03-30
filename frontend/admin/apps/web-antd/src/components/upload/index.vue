@@ -50,7 +50,9 @@ const uploadProps = computed<UploadProps>(() => {
     name: 'file',
     maxCount: props.maxCount ?? cfg.maxCount,
     // 图片类型使用 picture-card，文件类型使用 text
-    listType: ['image', 'images'].includes(props.type) ? 'picture-card' : 'text',
+    listType: ['image', 'images'].includes(props.type)
+      ? 'picture-card'
+      : 'text',
     showUploadList: props.showUploadList,
     beforeUpload: handleBeforeUpload,
     customRequest: handleCustomRequest,
@@ -120,8 +122,8 @@ const handleCustomRequest = async ({
   onError,
 }: {
   file: File;
-  onSuccess?: (response: any, file: File) => void;
   onError?: (error: Error, file: File) => void;
+  onSuccess?: (response: any, file: File) => void;
 }) => {
   try {
     // 调用父组件传入的上传方法
@@ -160,11 +162,7 @@ const showUploadButton = computed(() => {
 </script>
 
 <template>
-  <a-upload
-    v-bind="uploadProps"
-    :file-list="fileList"
-    :disabled="disabled"
-  >
+  <a-upload v-bind="uploadProps" :file-list="fileList" :disabled="disabled">
     <!-- 图片类型上传按钮（使用原生样式） -->
     <template v-if="isImageType && showUploadButton">
       <div>

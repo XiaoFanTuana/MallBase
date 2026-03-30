@@ -24,11 +24,13 @@ Route::group('auth/admin', function () {
     // 详情
     Route::get('info/:id', 'info')->name('SystemAdminInfo')->option(['_alias' => '详情', '_desc' => '管理员详情', '_auth' => true]);
     // 当前登录管理员详情
-    Route::get('adminInfo', 'adminInfo')->name('SystemLoginAdminInfo')->option(['_alias' => '当前登录详情', '_desc' => '当前登录管理员详情', '_auth' => true]);
+    Route::get('adminInfo', 'adminInfo')->name('SystemLoginAdminInfo')->option(['_alias' => '当前登录详情', '_desc' => '当前登录管理员详情', '_auth' => false]);
     // 创建
     Route::post('create', 'create')->name('SystemAdminCreate')->option(['_alias' => '创建', '_desc' => '创建管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     // 更新
     Route::put('update/:id', 'update')->name('SystemAdminUpdate')->option(['_alias' => '更新', '_desc' => '更新管理员', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    // 当前登录管理员更新
+    Route::put('adminUpdate', 'adminUpdate')->name('SystemLoginAdminUpdate')->option(['_alias' => '更新当前登录', '_desc' => '更新当前登录管理员', '_auth' => false]);
     // 更新状态
     Route::put('changeStatus/:id', 'changeStatus')->name('SystemAdminChangeStatus')->option(['_alias' => '更新状态', '_desc' => '更新管理员状态', '_auth' => true]);
     // 删除

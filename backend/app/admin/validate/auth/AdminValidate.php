@@ -18,6 +18,7 @@ class AdminValidate extends Validate
      */
     protected $rule = [
         'username|用户名' => 'require|alphaNum|max:20|min:3',
+        'old_password|旧密码' => 'require|max:32|min:6',
         'password|密码' => 'require|max:32|min:6',
         'password_confirm|确认密码' => 'require|confirm:password',
         'nickname|昵称' => 'max:50',
@@ -38,8 +39,9 @@ class AdminValidate extends Validate
         'login' => ['username', 'password'],
         'create' => ['username', 'password', 'password_confirm', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids'],
         'update' => ['username', 'nickname', 'avatar', 'email', 'mobile', 'status', 'remark', 'role_ids'],
+        'adminUpdate' => ['nickname', 'avatar', 'email', 'mobile', 'remark'],
         'resetPassword' => ['password'],
-        'changePassword' => ['password', 'password_confirm'],
+        'changePassword' => ['old_password', 'password', 'password_confirm'],
     ];
 
     /**

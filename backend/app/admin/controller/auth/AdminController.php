@@ -93,6 +93,11 @@ class AdminController extends BaseController
         return $this->success($info, '获取成功');
     }
 
+    /**
+     * 获取当前管理员信息
+     * @return \think\Response
+     * @throws \mall_base\exception\BusinessException
+     */
     public function adminInfo()
     {
         $id = $this->request->admin_id;
@@ -103,6 +108,28 @@ class AdminController extends BaseController
 
         $info = $this->service()->getInfo((int)$id);
         return $this->success($info, '获取成功');
+    }
+
+    /**
+     * 更新当前管理员信息
+     * @return \think\Response
+     * @throws \mall_base\exception\BusinessException
+     */
+    public function adminUpdate()
+    {
+        $id = $this->request->admin_id;
+        $data = $this->request->param(['nickname', 'avatar', 'email', 'mobile', 'remark']);
+
+        if (empty($id)) {
+            return $this->error('ID不能为空');
+        }
+
+        // 验证更新参数
+        $this->validate($data, AdminValidate::class . '.adminUpdate');
+
+        $this->service()->adminUpdate((int)$id, $data);
+        return $this->success(null, '更新成功');
+
     }
 
     /**
@@ -195,7 +222,7 @@ class AdminController extends BaseController
      */
     public function changePassword()
     {
-        $data = $this->request->param(['password', 'password_confirm']);
+        $data = $this->request->param(['old_password', 'password', 'password_confirm']);
         $id = $this->request->admin_id;
 
         if (empty($id)) {
@@ -205,7 +232,7 @@ class AdminController extends BaseController
         // 验证重置密码参数
         $this->validate($data, AdminValidate::class . '.changePassword');
 
-        $this->service()->resetPassword((int)$id, $data['password']);
+        $this->service()->resetPassword((int)$id, $data);
         return $this->success(null, '密码重置成功');
     }
 }

@@ -38,7 +38,9 @@ export namespace AuthApi {
       id: number;
       name: string;
     }>;
-    home_path: string;
+    remark: string;
+    last_login_time: string;
+    last_login_ip: string;
   }
 
   /** 用户权限码返回值 */
@@ -82,6 +84,19 @@ export async function logoutApi() {
  */
 export async function getCurrentAdminInfoApi() {
   return requestClient.get<AuthApi.CurrentAdminInfo>('/auth/admin/adminInfo');
+}
+
+/**
+ * 更新个人资料（昵称、头像、邮箱、手机号、备注）
+ */
+export async function updateCurrentAdminInfoApi(data: {
+  avatar?: string;
+  email?: string;
+  mobile?: string;
+  nickname?: string;
+  remark?: string;
+}) {
+  return requestClient.put('/auth/admin/adminUpdate', data);
 }
 
 /**

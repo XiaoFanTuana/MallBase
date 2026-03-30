@@ -231,6 +231,21 @@ class AdminService extends BaseService
         });
     }
 
+    /**
+     *  修改管理员信息
+     */
+    public function adminUpdate(int $id, array $data): bool
+    {
+        $admin = $this->model()->find($id);
+        if (!$admin) {
+            throw new BusinessException('管理员不存在');
+        }
+
+        $this->model()->updateById($id, $data);
+
+        return true;
+    }
+
     public function changeStatus(int $id, int $status): bool
     {
         $role = $this->model()->find($id);
@@ -309,16 +324,18 @@ class AdminService extends BaseService
     /**
      * 重置密码
      */
-    public function resetPassword(int $id, string $newPassword): bool
+    public function resetPassword(int $id, array $data): bool
     {
         $admin = $this->model()->find($id);
 
         if (!$admin) {
             throw new BusinessException('管理员不存在');
         }
-
+        if (!$admin->checkPassword($data['old_password'])) {
+            throw new BusinessException('旧密码错误');
+        }
         // 使用模型属性赋值，会触发 setPasswordAttr 修改器
-        $admin->password = $newPassword;
+        $admin->password = $data['password'];
         return $admin->save();
     }
 

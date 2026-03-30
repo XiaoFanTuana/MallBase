@@ -59,6 +59,7 @@ export namespace AdminApi {
 
   /** 更新状态 */
   export interface ChangePassword {
+    old_password: string;
     password: string;
     password_confirm: string;
   }
@@ -125,9 +126,6 @@ export async function resetPasswordApi(id: number, password: string) {
 /**
  * 修改密码
  */
-export async function changePasswordApi(
-  id: number,
-  data: AdminApi.ChangePassword,
-) {
-  return requestClient.post(`/auth/admin/changePassword/${id}`, data);
+export async function changePasswordApi(data: AdminApi.ChangePassword) {
+  return requestClient.post('/auth/admin/changePassword', data);
 }

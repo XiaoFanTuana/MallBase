@@ -7,10 +7,13 @@ import { ProfilePasswordSetting, z } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
+import { changePasswordApi } from '#/api/system/admin';
+import { useAuthStore } from '#/store';
+
 const formSchema = computed((): VbenFormSchema[] => {
   return [
     {
-      fieldName: 'oldPassword',
+      fieldName: 'old_password',
       label: '旧密码',
       component: 'VbenInputPassword',
       componentProps: {
@@ -18,7 +21,7 @@ const formSchema = computed((): VbenFormSchema[] => {
       },
     },
     {
-      fieldName: 'newPassword',
+      fieldName: 'password',
       label: '新密码',
       component: 'VbenInputPassword',
       componentProps: {
@@ -27,7 +30,7 @@ const formSchema = computed((): VbenFormSchema[] => {
       },
     },
     {
-      fieldName: 'confirmPassword',
+      fieldName: 'password_confirm',
       label: '确认密码',
       component: 'VbenInputPassword',
       componentProps: {
@@ -36,22 +39,30 @@ const formSchema = computed((): VbenFormSchema[] => {
       },
       dependencies: {
         rules(values) {
-          const { newPassword } = values;
+          const password = values.password as string;
           return z
             .string({ required_error: '请再次输入新密码' })
             .min(1, { message: '请再次输入新密码' })
-            .refine((value) => value === newPassword, {
+            .refine((value) => value === password, {
               message: '两次输入的密码不一致',
             });
         },
-        triggerFields: ['newPassword'],
+        triggerFields: ['password'],
       },
     },
   ];
 });
 
-function handleSubmit() {
+async function handleSubmit(values: Record<string, any>) {
+  await changePasswordApi({
+    old_password: values.old_password,
+    password: values.password,
+    password_confirm: values.password_confirm,
+  });
   message.success('密码修改成功');
+  const authStore = useAuthStore();
+  // 修改成功 退出登录
+  await authStore.logout();
 }
 </script>
 <template>

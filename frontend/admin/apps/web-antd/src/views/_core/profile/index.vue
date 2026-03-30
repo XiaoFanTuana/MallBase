@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-import { Profile } from '@vben/common-ui';
-import { useUserStore } from '@vben/stores';
+import Profile from '#/components/profile/index.vue';
+import { useUserStore } from '#/modules/user';
 
 import ProfileBase from './base-setting.vue';
 import ProfileNotificationSetting from './notification-setting.vue';
@@ -18,18 +18,18 @@ const tabs = ref([
     label: '基本设置',
     value: 'basic',
   },
-  {
-    label: '安全设置',
-    value: 'security',
-  },
+  // {
+  //   label: '安全设置',
+  //   value: 'security',
+  // },
   {
     label: '修改密码',
     value: 'password',
   },
-  {
-    label: '新消息提醒',
-    value: 'notice',
-  },
+  // {
+  //   label: '新消息提醒',
+  //   value: 'notice',
+  // },
 ]);
 </script>
 <template>
