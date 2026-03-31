@@ -315,14 +315,15 @@ class PermissionService extends BaseService
             // 如果有组件路径，添加 component
             if (!empty($node['component'])) {
                 // 移除 views/ 前缀和 .vue 后缀，只保留相对路径
-                $component = $node['component'];
-                if (strpos($component, 'views/') === 0) {
-                    $component = substr($component, 6); // 移除 "views/" 前缀
-                }
+//                $component = $node['component'];
+//                if (strpos($component, 'views/') === 0) {
+//                    $component = substr($component, 6); // 移除 "views/" 前缀
+//                }
                 // 移除 .vue 后缀
-                $component = str_replace('.vue', '', $component);
-                // 添加前缀斜杠
-                $route['component'] = '/' . $component;
+//                $component = str_replace('.vue', '', $component);
+//                // 添加前缀斜杠
+//                $route['component'] = '/' . $component;
+                $route['component'] = $node['component'];
             }
 
             // 如果有 redirect，添加到路由

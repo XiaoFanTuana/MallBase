@@ -36,6 +36,11 @@ class Permission extends BaseModel
      */
     const SOURCE_ROUTE = 2;
 
+    /**
+     * 来源：设置模块同步
+     */
+    const SOURCE_SETTING = 3;
+
     protected $name = 'permission';
 
     protected $pk = 'id';

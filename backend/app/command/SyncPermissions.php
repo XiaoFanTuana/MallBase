@@ -47,6 +47,7 @@ class SyncPermissions extends Command
      */
     const SOURCE_MANUAL = 1;  // 手动添加
     const SOURCE_ROUTE = 2;   // 路由同步
+    const SOURCE_SETTING = 3; // 设置模块同步
 
     /**
      * 数据库表默认值
