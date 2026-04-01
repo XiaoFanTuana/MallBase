@@ -9,7 +9,7 @@ return [
     'expire' => env('JWT_EXPIRE', 7200),
 
     // 刷新 Token 过期时间（秒），默认 30 天
-    'refresh_expire' => env('JWT_REFRESH_EXPIRE', 30 * 24 * 3600),
+    'refresh_expire' => env('JWT_REFRESH_EXPIRE', 2592000),
 
     // 算法
     'algorithm' => env('JWT_ALGORITHM', 'HS256'),
