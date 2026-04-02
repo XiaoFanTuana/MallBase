@@ -36,7 +36,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const remoteConfig = ref<null | {
   acceptTypes: string[];
-  fileIcons: Record<string, string>;
   maxCount: number;
   maxSize: number;
 }>(null);
@@ -45,17 +44,10 @@ const loadRemoteConfig = async () => {
   try {
     const res = await getUploadConfigApi(props.type);
     if (res) {
-      const iconMap: Record<string, string> = {};
-      if (res.file_icons && Array.isArray(res.file_icons)) {
-        for (const item of res.file_icons) {
-          iconMap[item.ext] = item.icon;
-        }
-      }
       remoteConfig.value = {
         maxSize: res.max_size,
         maxCount: res.max_count,
         acceptTypes: res.accept_types,
-        fileIcons: iconMap,
       };
     }
   } catch (error) {
@@ -108,32 +100,6 @@ const extractFileName = (url: string): string => {
     return `${name.slice(0, 30)}...${ext}`;
   }
   return name || '未知文件';
-};
-
-const getFileIcon = (name: string): string => {
-  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
-  if (!ext) return '📎';
-  if (remoteConfig.value?.fileIcons?.[ext]) {
-    return remoteConfig.value.fileIcons[ext];
-  }
-  const fallback: Record<string, string> = {
-    csv: '📊',
-    doc: '📝',
-    docx: '📝',
-    json: '📋',
-    mp3: '🎵',
-    mp4: '🎬',
-    pdf: '📕',
-    ppt: '📊',
-    pptx: '📊',
-    rar: '📦',
-    sql: '🗃️',
-    txt: '📄',
-    xls: '📊',
-    xlsx: '📊',
-    zip: '📦',
-  };
-  return fallback[ext] || '📎';
 };
 
 // ==================== 上传配置 ====================
@@ -278,88 +244,10 @@ const handlePreview = (file: UploadFile) => {
         {{ type === 'file' ? '上传文件' : '添加文件' }}
       </a-button>
     </template>
-
-    <!-- 文件列表项（仅文件类型，图片用默认缩略图） -->
-    <template v-if="!isImageType" #itemRender="{ file, actions }">
-      <div class="upload-item">
-        <span class="upload-item-icon">{{ getFileIcon(file.name) }}</span>
-        <a
-          v-if="file.url"
-          :href="file.url"
-          target="_blank"
-          class="upload-item-name"
-          @click.prevent="handlePreview(file)"
-        >
-          {{ file.name }}
-        </a>
-        <span v-else class="upload-item-name">{{ file.name }}</span>
-        <span class="upload-item-actions">
-          <span
-            v-if="!disabled"
-            class="upload-item-action upload-item-remove"
-            title="删除文件"
-            @click="actions.remove"
-          >
-            🗑
-          </span>
-        </span>
-      </div>
-    </template>
   </a-upload>
 </template>
 
 <style scoped>
-.upload-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 4px 0;
-  line-height: 1.5;
-}
-
-.upload-item-icon {
-  flex-shrink: 0;
-  font-size: 16px;
-}
-
-.upload-item-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 260px;
-  font-size: 13px;
-  color: #1677ff;
-  cursor: pointer;
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.upload-item-name:hover {
-  color: #4096ff;
-  text-decoration: underline;
-}
-
-.upload-item-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.upload-item-action {
-  cursor: pointer;
-  font-size: 14px;
-  color: #999;
-  transition: color 0.2s;
-  user-select: none;
-}
-
-.upload-item-remove:hover {
-  color: #ff4d4f;
-}
-
 :deep(.ant-upload-list) {
   margin-top: 8px;
 }
