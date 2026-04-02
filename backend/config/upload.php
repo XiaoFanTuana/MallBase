@@ -87,22 +87,4 @@ return [
             ],
         ],
     ],
-
-    // - 当前用的是 __Emoji__ 字符（📕📝📊📦 等），直接在 `icon` 字段传 emoji 即可
-    //- 后端备注可以写：`icon 字段支持 Emoji 字符或 Ant Design 图标名，参考 https://www.antdv.com/components/icon`
-    // 文件图标映射（前端根据文件扩展名显示对应图标）
-    'file_icons' => [
-        ['ext' => 'pdf', 'icon' => '📕'],
-        ['ext' => 'doc', 'icon' => '📝'],
-        ['ext' => 'docx', 'icon' => '📝'],
-        ['ext' => 'xls', 'icon' => '📊'],
-        ['ext' => 'xlsx', 'icon' => '📊'],
-        ['ext' => 'ppt', 'icon' => '📊'],
-        ['ext' => 'pptx', 'icon' => '📊'],
-        ['ext' => 'zip', 'icon' => '📦'],
-        ['ext' => 'rar', 'icon' => '📦'],
-        ['ext' => 'txt', 'icon' => '📄'],
-        ['ext' => 'mp4', 'icon' => '🎬'],
-        ['ext' => 'mp3', 'icon' => '🎵'],
-    ],
 ];

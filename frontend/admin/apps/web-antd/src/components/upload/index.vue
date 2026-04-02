@@ -14,22 +14,42 @@ export interface FileInfo {
   name: string;
 }
 
+/**
+ * Upload 组件属性
+ *
+ * @example
+ * <Upload type="image" :value="fileList" :custom-upload="handleUpload" :custom-remove="handleRemove" />
+ */
 interface Props {
+  /** 上传类型：image=单图 | images=多图 | file=单文件 | files=多文件，默认 image */
   type?: 'file' | 'files' | 'image' | 'images';
+  /** 已上传的文件值，支持 FileInfo 对象、数组或 URL 字符串 */
   value?: FileInfo | FileInfo[] | string;
+  /** 是否禁用上传，默认 false */
   disabled?: boolean;
+  /** 文件大小上限（MB），不传则从后端获取，兜底 5MB */
   maxSize?: number;
+  /** 最大上传数量，不传则从后端获取，image=1 / images=9 / file=1 / files=5 */
   maxCount?: number;
+  /** 允许的 MIME 类型数组，如 ['image/png']，不传则从后端获取 */
   accept?: string[];
+  /** 是否显示已上传文件列表，默认 true */
   showUploadList?: boolean;
+  /** 自定义上传方法（必填），接收 File，需调用上传接口 */
   customUpload: (file: File) => Promise<void>;
+  /** 自定义删除方法，接收被删除文件的索引 */
   customRemove?: (index?: number) => Promise<void>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   type: 'image',
+  value: undefined,
   disabled: false,
+  maxCount: undefined,
+  accept: undefined,
+  maxSize: undefined,
   showUploadList: true,
+  customRemove: undefined,
 });
 
 // ==================== 后端配置 ====================
@@ -176,22 +196,15 @@ const handleBeforeUpload = (file: File) => {
   return true;
 };
 
-const handleCustomRequest = async ({
-  file,
-  onSuccess,
-  onError,
-}: {
-  file: File;
-  onError?: (error: Error, file: File) => void;
-  onSuccess?: (response: any, file: File) => void;
-}) => {
+const handleCustomRequest = async (options: any) => {
+  const { file, onSuccess, onError } = options;
   try {
     await props.customUpload(file as File);
-    onSuccess?.({}, file as File);
+    onSuccess?.({}, file);
   } catch (error) {
     console.error('上传失败:', error);
     message.error('上传失败');
-    onError?.(error as Error, file as File);
+    onError?.(error);
   }
 };
 

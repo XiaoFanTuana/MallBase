@@ -42,7 +42,6 @@ class UploadService extends BaseService
     {
         $config = config('upload');
         $rules  = $config['rules'] ?? [];
-        $fileIcons = $config['file_icons'] ?? [];
 
         // 合法类型列表
         $validTypes = array_keys($rules);
@@ -62,7 +61,6 @@ class UploadService extends BaseService
             'max_size'     => $rule['max_size'],
             'max_count'    => $rule['max_count'],
             'accept_types' => $rule['accept_types'],
-            'file_icons'   => $fileIcons,
         ];
     }
 
