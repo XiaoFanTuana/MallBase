@@ -415,10 +415,10 @@ class SettingService extends BaseService
                 return empty($applicable) || in_array($formType, $applicable, true);
             }));
 
-            // 仅保留前端需要的字段，并为 acceptTypes 规则注入当前类型的 accept_types
+            // 仅保留前端需要的字段，并为 accept_types 规则注入当前类型的 options
             $applicableRules = array_map(function ($rule) use ($keepKeys, $formType, $uploadRules) {
                 $item = array_intersect_key($rule, array_flip($keepKeys));
-                // 为 acceptTypes 规则添加 options（当前表单类型对应的 accept_types 列表）
+                // 为 accept_types 规则添加 options（当前表单类型对应的 accept_types 列表）
                 if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES && isset($uploadRules[$formType]['accept_types'])) {
                     $item['options'] = $uploadRules[$formType]['accept_types'];
                 }

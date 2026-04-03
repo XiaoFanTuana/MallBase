@@ -127,7 +127,7 @@ class SettingController extends BaseController
     /**
      * 获取表单配置（表单类型选项 + 按 type 索引的验证规则类型）
      * 合并返回表单类型选项和验证规则，前端一次获取全部配置
-     * GET /setting/form-config
+     * GET /setting/form/config
      */
     public function formConfig()
     {
@@ -237,7 +237,7 @@ class SettingController extends BaseController
         $errors   = $validate->validateGroupValues($config['settings'], $values);
 
         if (!empty($errors)) {
-            return $this->error('配置验证失败', 422, $errors);
+            return $this->error('配置验证失败', 400, $errors);
         }
 
         $this->service()->saveGroupValues($groupCode, $values);

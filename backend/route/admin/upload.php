@@ -11,24 +11,17 @@ Route::group('upload', function () {
         '_auth' => false,
     ]);
 
-    // 上传图片
-    Route::post('image', 'image')->name('UploadImage')->option([
-        '_alias' => '上传图片',
-        '_desc' => '上传图片文件',
+    // 单文件上传（图片/文件通用，通过 type 参数区分）
+    Route::post('single', 'single')->name('UploadSingle')->option([
+        '_alias' => '单文件上传',
+        '_desc' => '单文件上传（图片/文件通用）',
         '_auth' => true,
     ]);
 
-    // 上传文件
-    Route::post('file', 'file')->name('UploadFile')->option([
-        '_alias' => '上传文件',
-        '_desc' => '上传通用文件',
-        '_auth' => true,
-    ]);
-
-    // 批量上传图片
-    Route::post('batchImage', 'batchImage')->name('UploadBatchImage')->option([
-        '_alias' => '批量上传图片',
-        '_desc' => '批量上传图片文件',
+    // 批量文件上传（图片/文件通用，通过 type 参数区分）
+    Route::post('batch', 'batch')->name('UploadBatch')->option([
+        '_alias' => '批量上传',
+        '_desc' => '批量文件上传（图片/文件通用）',
         '_auth' => true,
     ]);
 })->prefix('UploadController/')

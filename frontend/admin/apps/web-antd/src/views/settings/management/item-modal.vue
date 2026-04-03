@@ -407,9 +407,7 @@ const handleOk = async () => {
                 class="rule-remove-btn"
                 @click="removeRule(index)"
               >
-                <template #icon>
-                  <span class="i-ant-design:delete-outlined"></span>
-                </template>
+                删除
               </a-button>
             </div>
             <div class="rule-row" style="margin-top: 6px">
@@ -439,10 +437,7 @@ const handleOk = async () => {
             添加验证规则
           </a-button>
 
-          <div
-            v-if="ruleTypes.length === 0"
-            class="rule-tip rule-tip-warning"
-          >
+          <div v-if="ruleTypes.length === 0" class="rule-tip rule-tip-warning">
             当前表单类型暂无可用的验证规则
           </div>
           <div

@@ -139,7 +139,7 @@ class SettingItem extends Validate
                 }
             }
 
-            // 如果是 minLength/maxLength，验证 value 是否为正整数
+            // 如果是 min_length/max_length，验证 value 是否为正整数
             if (in_array($rule['type'], [RuleType::TYPE_MIN_LENGTH, RuleType::TYPE_MAX_LENGTH], true)) {
                 if (isset($rule['value']) && (!is_numeric($rule['value']) || intval($rule['value']) < 1)) {
                     return "第" . ($index + 1) . "条规则的 value 必须是大于0的整数";
@@ -153,21 +153,21 @@ class SettingItem extends Validate
                 }
             }
 
-            // 如果是 maxFileSize，验证 value 是否为正数（MB）
+            // 如果是 max_size，验证 value 是否为正数（MB）
             if ($rule['type'] === RuleType::TYPE_MAX_FILE_SIZE) {
                 if (isset($rule['value']) && (!is_numeric($rule['value']) || floatval($rule['value']) <= 0)) {
                     return "第" . ($index + 1) . "条规则的 value 必须是大于0的数字（MB）";
                 }
             }
 
-            // 如果是 maxFileCount，验证 value 是否为正整数
+            // 如果是 max_count，验证 value 是否为正整数
             if ($rule['type'] === RuleType::TYPE_MAX_FILE_COUNT) {
                 if (isset($rule['value']) && (!is_numeric($rule['value']) || intval($rule['value']) < 1)) {
                     return "第" . ($index + 1) . "条规则的 value 必须是大于0的整数";
                 }
             }
 
-            // 如果是 acceptTypes，验证 value 是否为非空数组
+            // 如果是 accept_types，验证 value 是否为非空数组
             if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES) {
                 if (isset($rule['value'])) {
                     if (!is_array($rule['value']) || empty($rule['value'])) {

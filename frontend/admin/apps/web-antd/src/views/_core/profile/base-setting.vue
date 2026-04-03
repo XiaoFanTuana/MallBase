@@ -7,7 +7,6 @@ import {
   getCurrentAdminInfoApi,
   updateCurrentAdminInfoApi,
 } from '#/api/core/auth';
-import { uploadImageApi } from '#/api/core/upload';
 import Upload from '#/components/upload/index.vue';
 import { useUserStore } from '#/modules/user';
 
@@ -43,15 +42,14 @@ const formData = reactive({
 });
 
 // 头像上传
-const handleAvatarUpload = async (file: File) => {
-  const res = await uploadImageApi(file);
-  avatarPath.value = res.url;
-  avatarUrl.value = res.full_url;
-};
-
-const handleAvatarRemove = async () => {
-  avatarPath.value = '';
-  avatarUrl.value = '';
+const handleAvatarChange = (val: any) => {
+  if (val) {
+    avatarPath.value = val.url;
+    avatarUrl.value = val.full_url;
+  } else {
+    avatarPath.value = '';
+    avatarUrl.value = '';
+  }
 };
 
 // 保存个人资料
@@ -130,10 +128,10 @@ onMounted(async () => {
 
       <a-form-item label="头像">
         <Upload
-          :value="avatarUrl"
+          :value="avatarUrl ? { url: avatarPath, full_url: avatarUrl, name: 'avatar' } : undefined"
           type="image"
-          :custom-upload="handleAvatarUpload"
-          :custom-remove="handleAvatarRemove"
+          module="admin"
+          @update:value="handleAvatarChange"
         />
       </a-form-item>
 

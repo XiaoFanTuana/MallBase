@@ -7,7 +7,6 @@ import { useAccess } from '@vben/access';
 
 import { message, Modal, Switch } from 'ant-design-vue';
 
-import { uploadImageApi } from '#/api/core/upload';
 import {
   createAdminApi,
   deleteAdminApi,
@@ -119,15 +118,14 @@ const handleResetPassword = (row: AdminApi.AdminItem) => {
 
 /* ---------------- 头像上传 ---------------- */
 
-const handleAvatarUpload = async (file: File) => {
-  const res = await uploadImageApi(file);
-  formData.value.avatar = res.url;
-  formData.value.avatar_full_url = res.full_url;
-};
-
-const handleAvatarRemove = async () => {
-  formData.value.avatar = '';
-  formData.value.avatar_full_url = '';
+const handleAvatarChange = (val: any) => {
+  if (val) {
+    formData.value.avatar = val.url;
+    formData.value.avatar_full_url = val.full_url;
+  } else {
+    formData.value.avatar = '';
+    formData.value.avatar_full_url = '';
+  }
 };
 
 // 搜索参数
@@ -364,10 +362,10 @@ if (hasAccessByCodes(['SystemAdminList'])) {
 
         <a-form-item label="头像">
           <Upload
-            :value="formData.avatar_full_url"
+            :value="formData.avatar_full_url ? { url: formData.avatar, full_url: formData.avatar_full_url, name: 'avatar' } : undefined"
             type="image"
-            :custom-upload="handleAvatarUpload"
-            :custom-remove="handleAvatarRemove"
+            module="admin"
+            @update:value="handleAvatarChange"
           />
         </a-form-item>
 

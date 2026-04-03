@@ -1,14 +1,13 @@
 <script lang="ts" setup>
 import type { SettingApi } from '#/api/setting';
 
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { JsonViewer } from '@vben/common-ui';
 
 import { message, Spin } from 'ant-design-vue';
 
-import { uploadFileApi, uploadImageApi } from '#/api/core/upload';
 import { getSettingConfigApi, saveSettingConfigApi } from '#/api/setting';
 import Upload from '#/components/upload/index.vue';
 
@@ -81,13 +80,13 @@ const getJsonObject = (code: string) => {
 
 /** 常用验证正则 */
 const REGEX_MAP: Record<string, RegExp> = {
-  alphaNum: /^[a-z0-9]+$/i,
+  alpha_num: /^[a-z0-9]+$/i,
   chinese: /^[\u4E00-\u9FA5]+$/,
   digits: /^\d+$/,
   email: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
   english: /^[a-z]+$/i,
   float: /^-?\d+(\.\d+)?$/,
-  idCard: /^\d{17}[\dX]$/i,
+  id_card: /^\d{17}[\dX]$/i,
   integer: /^-?\d+$/,
   ip: /^(\d{1,3}\.){3}\d{1,3}$/,
   phone: /^1[3-9]\d{9}$/,
@@ -164,7 +163,7 @@ const applyRule = (
       }
       break;
     }
-    case 'maxLength': {
+    case 'max_length': {
       if (!isEmpty && strVal.length > Number(rule.value)) {
         return rule.message || `「${item.name}」最多输入 ${rule.value} 个字符`;
       }
@@ -176,7 +175,7 @@ const applyRule = (
       }
       break;
     }
-    case 'minLength': {
+    case 'min_length': {
       if (!isEmpty && strVal.length < Number(rule.value)) {
         return rule.message || `「${item.name}」最少输入 ${rule.value} 个字符`;
       }
@@ -395,29 +394,33 @@ const getUploadType = (type: string): 'file' | 'files' | 'image' | 'images' => {
   return type as 'file' | 'files' | 'image' | 'images';
 };
 
-/** 从 rules 中提取上传相关配置（maxFileSize / allowedExtensions） */
+/** 从 rules 中提取上传配置（maxSize / maxCount / accept），传给 Upload 组件 */
 const getUploadConfigFromRules = (
   item: SettingApi.SettingItem,
-): { accept?: string[]; maxSize?: number } => {
-  const result: { accept?: string[]; maxSize?: number } = {};
+): Record<string, any> => {
+  const result: Record<string, any> = {};
   if (!item.rules?.length) return result;
 
   for (const rule of item.rules) {
-    if (rule.type === 'maxFileSize' && rule.value != null) {
+    if (
+      rule.type === 'max_size' &&
+      rule.value !== undefined &&
+      rule.value !== null
+    ) {
       result.maxSize = Number(rule.value);
     }
-    if (rule.type === 'allowedExtensions' && rule.value) {
-      // rule.value 可能是逗号分隔的扩展名，如 "jpg,jpeg,png"
-      // 转为 MIME accept 格式
-      const exts = String(rule.value)
-        .split(',')
-        .map((e) => e.trim())
-        .filter(Boolean);
-      if (exts.length > 0) {
-        result.accept = exts.map((ext) =>
-          ext.startsWith('.') ? ext : `.${ext}`,
-        );
-      }
+    if (
+      rule.type === 'max_count' &&
+      rule.value !== undefined &&
+      rule.value !== null
+    ) {
+      result.maxCount = Number(rule.value);
+    }
+    if (rule.type === 'accept_types' && rule.value) {
+      const vals = Array.isArray(rule.value) ? rule.value : [rule.value];
+      result.accept = vals.filter(
+        (v: any): v is string => typeof v === 'string' && Boolean(v),
+      );
     }
   }
   return result;
@@ -431,62 +434,55 @@ const getEditorHtml = (code: string) => {
   return formValues.value[code] || '';
 };
 
-/** 上传处理 —— 存储完整信息 { url, full_url, name } */
-const handleUpload = (code: string, type: string) => {
-  return async (file: File) => {
-    try {
-      const isImage = ['image', 'images'].includes(type);
-      const res = isImage
-        ? await uploadImageApi(file)
-        : await uploadFileApi(file);
-
-      const fileInfo = {
-        url: res?.url || '',
-        full_url: res?.full_url || toFullUrl(res?.url || ''),
-        name: res?.name || file.name,
-      };
-
-      if (['files', 'images'].includes(type)) {
-        const current = formValues.value[code] || [];
-        formValues.value[code] = [...current, fileInfo];
-      } else {
-        formValues.value[code] = fileInfo;
-      }
-
-      // 上传成功后清除该字段的验证错误
-      delete formErrors[code];
-    } catch (error) {
-      console.error('上传失败:', error);
-      message.error('上传失败');
-    }
-  };
-};
-
-const handleUploadRemove = (code: string, type: string) => {
-  return async (index?: number) => {
-    if (['files', 'images'].includes(type)) {
-      const current = formValues.value[code] || [];
-      if (index !== undefined) {
-        current.splice(index, 1);
-        formValues.value[code] = [...current];
-      }
-    } else {
-      formValues.value[code] = '';
-    }
-  };
-};
-
 /** 字段值变更时触发验证 */
 const handleFieldChange = (item: SettingApi.SettingItem) => {
   validateField(item);
+};
+
+/** 滚动到指定 code 的表单项并高亮 */
+const scrollToField = (code: string) => {
+  nextTick(() => {
+    const el = document.querySelector(`[data-field-code="${code}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 闪烁高亮效果
+      el.classList.add('field-flash');
+      setTimeout(() => el.classList.remove('field-flash'), 2000);
+    }
+  });
+};
+
+/** 处理后端返回的验证错误 */
+const handleBackendErrors = (errors: Record<string, string>) => {
+  // 清除旧错误
+  for (const key of Object.keys(formErrors)) {
+    delete formErrors[key];
+  }
+
+  // 填入后端返回的错误
+  let firstErrorCode = '';
+  for (const [code, msg] of Object.entries(errors)) {
+    formErrors[code] = msg;
+    if (!firstErrorCode) firstErrorCode = code;
+  }
+
+  // 滚动到第一个错误字段
+  if (firstErrorCode) {
+    scrollToField(firstErrorCode);
+    // 注意：不再调用 message.warning，因为全局拦截器已展示通用错误提示，
+    // 字段级错误在表单项下方内联显示即可
+  }
 };
 
 /** 保存配置 */
 const handleSave = async () => {
   if (!groupCode.value) return;
 
-  // 使用后端 rules 进行表单验证
+  // 前端验证
   if (!validateAll()) {
+    // 滚动到第一个前端验证失败的字段
+    const firstError = Object.keys(formErrors)[0];
+    if (firstError) scrollToField(firstError);
     return;
   }
 
@@ -502,9 +498,22 @@ const handleSave = async () => {
 
     await saveSettingConfigApi(groupCode.value, submitData);
     message.success('保存成功');
-  } catch (error) {
-    console.error('保存失败:', error);
-    message.error('保存失败');
+  } catch (error: any) {
+    // 错误对象实际结构（经过拦截器处理后）：
+    // { code: 400, message: "配置验证失败", data: { field_code: "错误信息" }, timestamp: ... }
+    // - error.code: 业务状态码
+    // - error.message: 通用错误提示（全局拦截器已展示 message.error）
+    // - error.data: 字段级验证错误 { field_code: "错误信息" }
+    const fieldErrors = error?.data;
+    if (
+      fieldErrors &&
+      typeof fieldErrors === 'object' &&
+      !Array.isArray(fieldErrors)
+    ) {
+      handleBackendErrors(fieldErrors);
+    }
+    // 全局 errorMessageResponseInterceptor 已展示通用错误提示（error.message），
+    // 此处不再重复调用 message.error，避免弹出两次
   } finally {
     saving.value = false;
   }
@@ -542,6 +551,7 @@ onMounted(loadConfig);
             <div
               v-for="item in basicSettings"
               :key="item.code"
+              :data-field-code="item.code"
               class="form-item-wrapper"
               :class="{ 'has-error': getFieldError(item.code) }"
             >
@@ -644,6 +654,7 @@ onMounted(loadConfig);
             <div
               v-for="item in mediaSettings"
               :key="item.code"
+              :data-field-code="item.code"
               class="media-item-wrapper"
               :class="{ 'has-error': getFieldError(item.code) }"
             >
@@ -659,9 +670,15 @@ onMounted(loadConfig);
               <Upload
                 :type="getUploadType(item.type)"
                 :value="formValues[item.code]"
-                :custom-upload="handleUpload(item.code, item.type)"
-                :custom-remove="handleUploadRemove(item.code, item.type)"
+                module="dynamic_form"
+                :related-id="item.id"
                 v-bind="getUploadConfigFromRules(item)"
+                @update:value="
+                  (val: any) => {
+                    formValues[item.code] = val;
+                    delete formErrors[item.code];
+                  }
+                "
               />
               <!-- 验证错误提示 -->
               <div v-if="getFieldError(item.code)" class="form-error">
@@ -686,6 +703,7 @@ onMounted(loadConfig);
             <div
               v-for="item in advancedSettings"
               :key="item.code"
+              :data-field-code="item.code"
               class="advanced-item-wrapper"
               :class="{ 'has-error': getFieldError(item.code) }"
             >
@@ -991,6 +1009,22 @@ onMounted(loadConfig);
 .save-tip {
   font-size: 13px;
   color: #8c8c8c;
+}
+
+/* 闪烁高亮动画 */
+@keyframes field-flash {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgb(255 77 79 / 8%);
+  }
+}
+
+.field-flash {
+  animation: field-flash 0.5s ease-in-out 3;
+  border-radius: 8px;
 }
 
 @media (width <= 768px) {

@@ -16,10 +16,10 @@ class RuleType
     const TYPE_REQUIRED = 'required';
 
     /** 最小长度 */
-    const TYPE_MIN_LENGTH = 'minLength';
+    const TYPE_MIN_LENGTH = 'min_length';
 
     /** 最大长度 */
-    const TYPE_MAX_LENGTH = 'maxLength';
+    const TYPE_MAX_LENGTH = 'max_length';
 
     /** 最小值 */
     const TYPE_MIN = 'min';
@@ -40,7 +40,7 @@ class RuleType
     const TYPE_PHONE = 'phone';
 
     /** 身份证号 */
-    const TYPE_ID_CARD = 'idCard';
+    const TYPE_ID_CARD = 'id_card';
 
     /** 整数 */
     const TYPE_INTEGER = 'integer';
@@ -58,7 +58,7 @@ class RuleType
     const TYPE_ENGLISH = 'english';
 
     /** 字母+数字 */
-    const TYPE_ALPHA_NUM = 'alphaNum';
+    const TYPE_ALPHA_NUM = 'alpha_num';
 
     /** IP地址 */
     const TYPE_IP = 'ip';
@@ -66,14 +66,14 @@ class RuleType
     /** JSON格式 */
     const TYPE_JSON = 'json';
 
-    /** 文件大小限制 (MB) */
-    const TYPE_MAX_FILE_SIZE = 'maxFileSize';
+    /** 文件大小限制 (MB)，与 upload config key 一致 */
+    const TYPE_MAX_FILE_SIZE = 'max_size';
 
-    /** 文件数量限制 */
-    const TYPE_MAX_FILE_COUNT = 'maxFileCount';
+    /** 文件数量限制，与 upload config key 一致 */
+    const TYPE_MAX_FILE_COUNT = 'max_count';
 
-    /** 文件类型限制 */
-    const TYPE_ACCEPT_TYPES = 'acceptTypes';
+    /** 文件类型限制，与 upload config key 一致 */
+    const TYPE_ACCEPT_TYPES = 'accept_types';
 
     /**
      * 获取所有规则类型定义
@@ -93,7 +93,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_MIN_LENGTH,
-                'label'                    => '最小长度 (minLength)',
+                'label'                    => '最小长度 (min_length)',
                 'need_value'               => true,
                 'value_placeholder'        => '请输入最小字符数',
                 'need_flags'               => false,
@@ -102,7 +102,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_MAX_LENGTH,
-                'label'                    => '最大长度 (maxLength)',
+                'label'                    => '最大长度 (max_length)',
                 'need_value'               => true,
                 'value_placeholder'        => '请输入最大字符数',
                 'need_flags'               => false,
@@ -165,7 +165,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_ID_CARD,
-                'label'                    => '身份证号 (idCard)',
+                'label'                    => '身份证号 (id_card)',
                 'need_value'               => false,
                 'value_placeholder'        => '',
                 'need_flags'               => false,
@@ -219,7 +219,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_ALPHA_NUM,
-                'label'                    => '字母+数字 (alphaNum)',
+                'label'                    => '字母+数字 (alpha_num)',
                 'need_value'               => false,
                 'value_placeholder'        => '',
                 'need_flags'               => false,
@@ -246,7 +246,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_MAX_FILE_SIZE,
-                'label'                    => '文件大小限制 (maxFileSize)',
+                'label'                    => '文件大小限制 (max_size)',
                 'need_value'               => true,
                 'value_placeholder'        => '请输入最大文件大小（MB）',
                 'value_type'               => 'number',
@@ -256,7 +256,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_MAX_FILE_COUNT,
-                'label'                    => '文件数量限制 (maxFileCount)',
+                'label'                    => '文件数量限制 (max_count)',
                 'need_value'               => true,
                 'value_placeholder'        => '请输入最大文件数量',
                 'value_type'               => 'number',
@@ -266,7 +266,7 @@ class RuleType
             ],
             [
                 'type'                     => self::TYPE_ACCEPT_TYPES,
-                'label'                    => '文件类型限制 (acceptTypes)',
+                'label'                    => '文件类型限制 (accept_types)',
                 'need_value'               => true,
                 'value_placeholder'        => '',
                 'value_type'               => 'array',
