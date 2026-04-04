@@ -4,7 +4,7 @@ declare (strict_types=1);
 
 namespace app\admin\controller;
 
-use app\admin\service\UploadService;
+use app\service\UploadService;
 use mall_base\base\BaseController;
 
 /**
@@ -31,9 +31,8 @@ class UploadController extends BaseController
 
     /**
      * 单文件上传（图片/文件通用）
-     * 通过 type 参数区分验证规则，支持覆盖 max_size/max_count/accept_types
-     * POST /upload/single?type=image&max_size=5&accept_types[]=image/jpeg
-     * POST /upload/single?type=file&max_size=20&accept_types[]=application/pdf
+     * POST /upload/single?type=image
+     * POST /upload/single?type=image&module=dynamic_form&related_id=13
      */
     public function single()
     {
@@ -43,19 +42,20 @@ class UploadController extends BaseController
             return $this->error('请选择要上传的文件');
         }
 
-        $rules  = $this->service()->resolveUploadRules(
-            $this->request->param('type', 'image'),
-            $this->request->param(['max_size', 'max_count', 'accept_types']),
-        );
-        $result = $this->service()->upload($file, $rules);
+        $type      = $this->request->param('type', 'image');
+        $module    = $this->request->param('module', '');
+        $relatedId = $this->request->param('related_id', 0);
+
+        $rules  = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
+        $result = $this->service()->upload($file, $rules, 'admin');
 
         return $this->success($result, '上传成功');
     }
 
     /**
      * 批量文件上传（图片/文件通用）
-     * 通过 type 参数区分验证规则，支持覆盖 max_size/max_count/accept_types
-     * POST /upload/batch?type=images&max_count=6&max_size=3
+     * POST /upload/batch?type=images
+     * POST /upload/batch?type=images&module=dynamic_form&related_id=13
      */
     public function batch()
     {
@@ -65,11 +65,12 @@ class UploadController extends BaseController
             return $this->error('请选择要上传的文件');
         }
 
-        $rules   = $this->service()->resolveUploadRules(
-            $this->request->param('type', 'images'),
-            $this->request->param(['max_size', 'max_count', 'accept_types']),
-        );
-        $results = $this->service()->batchUpload($files, $rules);
+        $type      = $this->request->param('type', 'images');
+        $module    = $this->request->param('module', '');
+        $relatedId = $this->request->param('related_id', 0);
+
+        $rules   = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
+        $results = $this->service()->batchUpload($files, $rules, 'admin');
 
         return $this->success($results, '上传成功');
     }

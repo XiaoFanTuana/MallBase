@@ -3,6 +3,7 @@ declare (strict_types = 1);
 
 namespace app;
 
+use app\service\UploadService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\upload\LocalUploadDriver;
 use mall_base\drivers\upload\OssUploadDriver;
@@ -22,7 +23,7 @@ class AppService extends Service
         ]);
         
         // 设置默认上传驱动
-        DriverManager::setDefault('upload', config('upload.driver', 'local'));
+        DriverManager::setDefault('upload', UploadService::getDriver());
     }
 
     public function boot()

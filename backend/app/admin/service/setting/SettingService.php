@@ -9,6 +9,7 @@ use app\admin\model\setting\RuleType;
 use app\admin\model\setting\Setting;
 use app\admin\model\setting\SettingGroup;
 use app\admin\service\cache\SettingCacheService;
+use app\service\UploadService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -398,8 +399,8 @@ class SettingService extends BaseService
         // 从 Setting 模型获取表单类型选项
         $typeOptions = Setting::getTypeOptions();
 
-        // 从 upload.php 获取上传规则配置
-        $uploadRules = config('upload.rules', []);
+        // 从公共 UploadService 获取上传规则配置
+        $uploadRules = UploadService::getRules();
 
         // 前端需要的规则字段
         $keepKeys = ['type', 'label', 'need_value', 'value_placeholder', 'need_flags', 'default_message_template'];

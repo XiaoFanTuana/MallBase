@@ -2,6 +2,7 @@
 // 应用公共文件
 
 use app\admin\service\setting\SettingService;
+use app\service\UploadService;
 
 if (!function_exists('load_routes')) {
     function load_routes(string $name): void
@@ -29,21 +30,13 @@ if (!function_exists('convertToRouteName')) {
 if (!function_exists('getUploadDomain')) {
     /**
      * 获取上传域名
-     * 根据配置文件 backend/config/upload.php 中的驱动类型返回对应的上传域名
+     * 统一调用公共 UploadService 获取，方便后续维护
      *
      * @return string 返回上传域名
      */
     function getUploadDomain(): string
     {
-        $config = config('upload');
-        $driver = $config['driver'] ?? 'local';
-
-        return match ($driver) {
-            'local' => $config['local']['base_url'] ?? '',
-            'oss' => $config['oss']['urlPrefix'] ?? '',
-            'cos' => $config['cos']['urlPrefix'] ?? '',
-            default => '',
-        };
+        return UploadService::getUploadDomain();
     }
 }
 

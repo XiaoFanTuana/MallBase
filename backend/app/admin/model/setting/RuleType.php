@@ -4,6 +4,8 @@ declare (strict_types=1);
 
 namespace app\admin\model\setting;
 
+use app\service\UploadService;
+
 /**
  * 设置项验证规则类型常量
  * 后端统一管理，前端动态渲染规则选项
@@ -295,7 +297,7 @@ class RuleType
      */
     public static function getAcceptTypeOptions(): array
     {
-        $rules = config('upload.rules', []);
+        $rules = UploadService::getRules();
 
         $options = [];
         foreach ($rules as $type => $rule) {
