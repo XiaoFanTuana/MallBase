@@ -16,6 +16,7 @@ CREATE TABLE `mb_setting_group` (
   `icon` varchar(100) DEFAULT NULL COMMENT '图标',
   `description` varchar(255) DEFAULT NULL COMMENT '分组描述',
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `display_type` varchar(20) NOT NULL DEFAULT 'page' COMMENT '展示方式：category=目录 page=独立页面 tab=选项卡聚合',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态：0=禁用 1=启用',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
