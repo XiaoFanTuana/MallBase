@@ -236,7 +236,7 @@ onMounted(() => {
     <!-- 设置项弹窗 -->
     <ItemModal
       v-model:visible="itemModalVisible"
-      :group-id="searchParams.group_id || 0"
+      :group-options="groupOptions"
       :edit-data="editingItem"
       :rule-types-map="ruleTypesMap"
       :type-options="typeOptions"

@@ -13,7 +13,6 @@ import {
   createSettingGroupApi,
   getSettingGroupAllApi,
   getSettingGroupInfoApi,
-  getSettingPermissionTreeApi,
   updateSettingGroupApi,
 } from '#/api/setting';
 
@@ -37,10 +36,10 @@ const iconPrefix = ref('ant-design');
 // 表单数据
 const formData = reactive({
   parent_id: 0 as number,
-  menu_parent_permission_id: undefined as number | undefined,
   name: '',
   code: '',
   icon: '',
+  display_type: 'page' as 'category' | 'page' | 'tab',
   description: '',
   sort: 0,
   status: 1,
@@ -68,24 +67,12 @@ const formRules: Record<string, Rule[]> = {
 // 父分组树形数据
 const groupTreeData = ref<SettingApi.SettingGroup[]>([]);
 
-// 父菜单权限树形数据（type=1 的菜单权限）
-const permissionTreeData = ref<any[]>([]);
-
 /** 加载父分组数据 */
 const loadGroupTree = async () => {
   try {
     groupTreeData.value = await getSettingGroupAllApi();
   } catch {
     console.error('加载分组树失败');
-  }
-};
-
-/** 加载菜单权限树 */
-const loadPermissionTree = async () => {
-  try {
-    permissionTreeData.value = await getSettingPermissionTreeApi();
-  } catch {
-    console.error('加载权限树失败');
   }
 };
 
@@ -105,21 +92,40 @@ const groupTreeSelectData = computed(() => {
   ];
 });
 
-/** 权限树转换为 TreeSelect 格式（只在根级加一个"顶级"选项） */
-const permissionTreeSelectData = computed(() => {
-  const convert = (items: any[]): any[] =>
-    items.map((item) => ({
-      title: item.name,
-      value: item.id,
-      key: item.id,
-      children: item.children ? convert(item.children) : undefined,
-    }));
+/** 验证父级选择与展示类型的约束 */
+watch(
+  () => [formData.parent_id, formData.display_type] as const,
+  ([parentId, displayType]) => {
+    if (displayType === 'category' && parentId !== 0) {
+      message.warning('目录类型不能有父级，已自动重置');
+      formData.parent_id = 0;
+    }
 
-  return [
-    { title: '顶级（无父菜单）', value: 0, key: 0 },
-    ...convert(permissionTreeData.value),
-  ];
-});
+    if (displayType === 'tab' && parentId === 0) {
+      message.warning('选项卡必须选择父级分组');
+    }
+
+    if (displayType === 'tab' && parentId > 0) {
+      const findParent = (items: any[], id: number): any => {
+        for (const item of items) {
+          if (item.value === id) return item;
+          if (item.children) {
+            const found = findParent(item.children, id);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+
+      const parentItem = findParent(groupTreeSelectData.value, parentId);
+      if (parentItem && parentItem.title) {
+        // 这里需要检查父级的 display_type
+        // 但由于 tree 数据中没有 display_type 信息，需要在提交时由后端验证
+        // 前端只做基本提示
+      }
+    }
+  },
+);
 
 /** 打开弹窗时初始化 */
 watch(
@@ -127,7 +133,6 @@ watch(
   async (val) => {
     if (val) {
       loadGroupTree();
-      loadPermissionTree();
       formRef.value?.clearValidate();
 
       if (props.editData) {
@@ -136,10 +141,10 @@ watch(
           const detail = await getSettingGroupInfoApi(props.editData.id);
           Object.assign(formData, {
             parent_id: detail.parent_id,
-            menu_parent_permission_id: detail.permission_id,
             name: detail.name,
             code: detail.code,
             icon: detail.icon || '',
+            display_type: detail.display_type || 'page',
             description: detail.description || '',
             sort: detail.sort,
             status: detail.status,
@@ -151,10 +156,10 @@ watch(
       } else {
         Object.assign(formData, {
           parent_id: 0,
-          menu_parent_permission_id: undefined,
           name: '',
           code: '',
           icon: '',
+          display_type: 'page',
           description: '',
           sort: 0,
           status: 1,
@@ -221,17 +226,8 @@ const handleOk = async () => {
           placeholder="请选择父分组"
           tree-default-expand-all
         />
-      </a-form-item>
-
-      <a-form-item label="父菜单权限" name="menu_parent_permission_id">
-        <a-tree-select
-          v-model:value="formData.menu_parent_permission_id"
-          :tree-data="permissionTreeSelectData"
-          placeholder="请选择父菜单"
-          tree-default-expand-all
-        />
         <div class="mt-1 text-xs text-gray-400">
-          选择在菜单树中的挂载位置，决定左侧菜单中显示的位置
+          选择父分组后，菜单层级将自动跟随分组层级
         </div>
       </a-form-item>
 
@@ -270,6 +266,25 @@ const handleOk = async () => {
             placeholder="请选择图标"
             style="width: 100%"
           />
+        </div>
+      </a-form-item>
+
+      <a-form-item label="展示方式" name="display_type">
+        <a-radio-group v-model:value="formData.display_type">
+          <a-radio value="category">目录</a-radio>
+          <a-radio value="page">页面</a-radio>
+          <a-radio value="tab">选项卡</a-radio>
+        </a-radio-group>
+        <div class="mt-1 text-xs text-gray-400">
+          <template v-if="formData.display_type === 'category'">
+            目录仅用于左侧导航分组，不显示表单内容，不能有父级
+          </template>
+          <template v-else-if="formData.display_type === 'page'">
+            页面显示表单内容，可作为目录的子级或选项卡的容器
+          </template>
+          <template v-else>
+            选项卡聚合多个子页面，父级必须是页面类型
+          </template>
         </div>
       </a-form-item>
 

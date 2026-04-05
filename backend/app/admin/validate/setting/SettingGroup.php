@@ -22,6 +22,7 @@ class SettingGroup extends Validate
         'icon|图标' => 'max:100',
         'description|分组描述' => 'max:255',
         'sort|排序' => 'number|between:0,9999',
+        'display_type|展示方式' => 'in:category,page,tab',
         'status|状态' => 'in:0,1',
     ];
 
@@ -29,7 +30,7 @@ class SettingGroup extends Validate
      * 验证场景
      */
     protected $scene = [
-        'create' => ['parent_id', 'menu_parent_permission_id', 'name', 'code', 'icon', 'description', 'sort', 'status'],
-        'update' => ['parent_id', 'menu_parent_permission_id', 'name', 'code', 'icon', 'description', 'sort', 'status'],
+        'create' => ['parent_id', 'menu_parent_permission_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status'],
+        'update' => ['parent_id', 'menu_parent_permission_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status'],
     ];
 }

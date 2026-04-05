@@ -11,7 +11,8 @@ import { createSettingItemApi, updateSettingItemApi } from '#/api/setting';
 
 const props = defineProps<{
   editData?: null | SettingApi.SettingItem;
-  groupId: number;
+  /** 分组选项（扁平数组，从父组件传入） */
+  groupOptions: Array<{ label: string; value: number }>;
   /** 验证规则类型映射（从父组件传入，页面级缓存） */
   ruleTypesMap: SettingApi.RuleTypesMap;
   /** 表单类型下拉选项（从后端获取） */
@@ -24,6 +25,14 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
 }>();
 
+/** 分组下拉选项（如果没有数据则添加"无"选项） */
+const groupSelectOptions = computed(() => {
+  if (props.groupOptions.length === 0) {
+    return [{ label: '无', value: 0 }];
+  }
+  return props.groupOptions;
+});
+
 const isEdit = computed(() => !!props.editData);
 const modalTitle = computed(() => (isEdit.value ? '编辑设置项' : '新增设置项'));
 const saving = ref(false);
@@ -33,6 +42,19 @@ const formRef = ref<FormInstance>();
 
 // 表单验证规则
 const formRules: Record<string, Rule[]> = {
+  group_id: [
+    {
+      required: true,
+      message: '请选择所属分组',
+      validator: (_rule: any, value: number) => {
+        // 只有当有分组选项时，才验证不能选 0
+        if (props.groupOptions.length > 0 && (value === undefined || value === null || value === 0)) {
+          return Promise.reject('请选择所属分组');
+        }
+        return Promise.resolve();
+      },
+    },
+  ],
   name: [
     { required: true, message: '请输入设置项名称', whitespace: true },
     { max: 50, message: '名称不能超过50个字符' },
@@ -232,6 +254,7 @@ const handleRuleOptionsChange = (index: number, checkedValues: string[]) => {
 // ==================== 表单数据 ====================
 
 interface FormData {
+  group_id: number;
   code: string;
   is_required: number;
   name: string;
@@ -245,6 +268,7 @@ interface FormData {
 }
 
 const formData = ref<FormData>({
+  group_id: 0,
   name: '',
   code: '',
   value: '',
@@ -267,6 +291,7 @@ watch(
       if (props.editData) {
         const item = props.editData;
         formData.value = {
+          group_id: item.group_id,
           name: item.name,
           code: item.code,
           value: item.value || '',
@@ -280,7 +305,10 @@ watch(
         };
         parseOptionsToArray(item.options);
       } else {
+        // 新增时，默认选中第一个分组，如果没有分组则默认为 0
+        const defaultGroupId = props.groupOptions.length > 0 ? props.groupOptions[0].value : 0;
         formData.value = {
+          group_id: defaultGroupId,
           name: '',
           code: '',
           value: '',
@@ -372,7 +400,6 @@ const handleOk = async () => {
       await updateSettingItemApi(props.editData.id, submitData);
       message.success('更新成功');
     } else {
-      submitData.group_id = props.groupId;
       await createSettingItemApi(submitData);
       message.success('创建成功');
     }
@@ -404,6 +431,16 @@ const handleOk = async () => {
       :wrapper-col="{ span: 18 }"
       class="mt-4"
     >
+      <a-form-item label="所属分组" name="group_id">
+        <a-select
+          v-model:value="formData.group_id"
+          placeholder="请选择所属分组"
+          allow-clear
+          show-search
+          :options="groupSelectOptions"
+        />
+      </a-form-item>
+
       <a-form-item label="名称" name="name">
         <a-input v-model:value="formData.name" placeholder="如：AppID" />
       </a-form-item>

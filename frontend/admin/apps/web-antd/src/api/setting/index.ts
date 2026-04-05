@@ -27,6 +27,8 @@ export namespace SettingApi {
     name: string;
     code: string;
     icon?: string;
+    /** 展示方式：category=目录（纯导航），page=独立页面，tab=选项卡聚合（子分组合并为选项卡） */
+    display_type?: 'category' | 'page' | 'tab';
     description?: string;
     sort: number;
     status: number;
@@ -132,13 +134,13 @@ export namespace SettingApi {
   /** 创建分组参数 */
   export interface CreateGroupParams {
     parent_id?: number;
-    menu_parent_permission_id?: number;
     name: string;
     code: string;
     icon?: string;
     description?: string;
     sort?: number;
     status?: number;
+    display_type?: 'category' | 'page' | 'tab';
   }
 
   /** 更新分组参数 */
@@ -170,30 +172,32 @@ export namespace SettingApi {
     id: number;
   }
 
+  /** 选项卡数据项（display_type=tab 时使用） */
+  export interface TabConfigItem {
+    code: string;
+    icon?: string;
+    id: number;
+    name: string;
+    settings: SettingItem[];
+  }
+
   /** 配置响应（动态表单页面使用） */
   export interface ConfigResponse {
     group: {
       code: string;
+      display_type?: 'category' | 'page' | 'tab';
       icon?: string;
       id: number;
       name: string;
     };
+    /** display_type=tab 时，子分组以选项卡形式返回 */
+    tabs?: TabConfigItem[];
+    /** display_type=page 时，直接返回设置项 */
     settings: SettingItem[];
   }
 
   /** 保存配置参数 */
   export type SaveConfigParams = Record<string, any>;
-}
-
-// ==================== 权限菜单树 API ====================
-
-/**
- * 获取设置模块可用的权限菜单树
- */
-export async function getSettingPermissionTreeApi() {
-  return requestClient.get<SettingApi.PermissionItem[]>(
-    '/setting/group/permission/tree',
-  );
 }
 
 // ==================== 分组管理 API ====================
@@ -323,7 +327,7 @@ export async function deleteSettingItemApi(id: number) {
  */
 export async function getSettingConfigApi(groupCode: string) {
   return requestClient.get<SettingApi.ConfigResponse>(
-    `/setting/config/${groupCode}`,
+    `/setting/item/config/${groupCode}`,
   );
 }
 
@@ -334,5 +338,5 @@ export async function saveSettingConfigApi(
   groupCode: string,
   data: SettingApi.SaveConfigParams,
 ) {
-  return requestClient.post(`/setting/saveConfig/${groupCode}`, data);
+  return requestClient.post(`/setting/item/saveConfig/${groupCode}`, data);
 }

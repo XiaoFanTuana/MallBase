@@ -4,7 +4,6 @@ declare (strict_types=1);
 
 namespace app\admin\controller\setting;
 
-use app\admin\service\auth\PermissionService;
 use app\admin\service\setting\SettingService;
 use mall_base\base\BaseController;
 
@@ -18,19 +17,6 @@ class GroupController extends BaseController
      * 默认 Service 类名
      */
     protected string $serviceClass = SettingService::class;
-
-    // ==================== 权限菜单树 ====================
-
-    /**
-     * 获取菜单权限树（仅纯目录，排除有 component 的菜单）
-     * 用于设置分组选择父菜单挂载位置
-     */
-    public function menuTree()
-    {
-        $permissionService = app()->make(PermissionService::class);
-        $tree = $permissionService->getTree(['type' => 1, 'status' => 1, 'component_empty' => 1]);
-        return $this->success($tree, '获取成功');
-    }
 
     // ==================== 分组管理 ====================
 
@@ -83,7 +69,7 @@ class GroupController extends BaseController
      */
     public function create()
     {
-        $data = $this->request->param(['parent_id', 'menu_parent_permission_id', 'name', 'code', 'icon', 'description', 'sort', 'status']);
+        $data = $this->request->param(['parent_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status']);
 
         $this->validate($data, 'setting/SettingGroup.create');
 
@@ -100,7 +86,7 @@ class GroupController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['parent_id', 'menu_parent_permission_id', 'name', 'code', 'icon', 'description', 'sort', 'status']);
+        $data = $this->request->param(['parent_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status']);
 
         $this->validate($data, 'setting/SettingGroup.update');
 

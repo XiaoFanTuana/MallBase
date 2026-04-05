@@ -122,31 +122,62 @@ class SettingService extends BaseService
             throw new BusinessException('权限编码已存在');
         }
 
-        // 检查父级分组是否存在
+        // 检查父级分组是否存在并验证 display_type 约束
         $parentId = (int)($data['parent_id'] ?? 0);
+        $displayType = $data['display_type'] ?? SettingGroup::DISPLAY_TYPE_PAGE;
+
         if ($parentId > 0) {
             $parentGroup = $this->model()->find($parentId);
             if (!$parentGroup) {
                 throw new BusinessException('父级分组不存在');
             }
+
+            // 目录不能有父级
+            if ($displayType === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+                throw new BusinessException('目录类型不能有父级');
+            }
+
+            // 选项卡的父级必须是页面类型
+            if ($displayType === SettingGroup::DISPLAY_TYPE_TAB) {
+                if ($parentGroup->display_type !== SettingGroup::DISPLAY_TYPE_PAGE) {
+                    throw new BusinessException('选项卡的父级必须是页面类型');
+                }
+            }
+        } elseif ($displayType === SettingGroup::DISPLAY_TYPE_TAB) {
+            // 选项卡必须有父级
+            throw new BusinessException('选项卡必须选择父级分组');
         }
 
-        // 获取顶级分组的父菜单权限ID
-        $menuParentPermissionId = (int)($data['menu_parent_permission_id'] ?? 0);
+        $displayType = $data['display_type'] ?? SettingGroup::DISPLAY_TYPE_PAGE;
 
         $group = $this->model();
         $group->save([
-            'parent_id'   => $parentId,
-            'name'        => $data['name'],
-            'code'        => $data['code'],
-            'icon'        => $data['icon'] ?? '',
+            'parent_id' => $parentId,
+            'name' => $data['name'],
+            'code' => $data['code'],
+            'icon' => $data['icon'] ?? '',
             'description' => $data['description'] ?? '',
-            'sort'        => $data['sort'] ?? 0,
-            'status'      => $data['status'] ?? 1,
+            'sort' => $data['sort'] ?? 0,
+            'display_type' => $displayType,
+            'status' => $data['status'] ?? 1,
         ]);
 
-        // 同步创建权限
-        $this->syncCreatePermission($group, $menuParentPermissionId);
+        // 同步创建权限（权限层级自动根据分组层级决定）
+        if ($displayType === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+            // 目录类型：创建菜单权限
+            $this->syncCreatePermission($group);
+        } elseif ($parentId <= 0) {
+            // 顶级分组（page/tab）：创建权限
+            $this->syncCreatePermission($group);
+        } else {
+            // 子分组：根据父分组的 display_type 决定是否创建权限
+            $parentGroup = $this->model()->find($parentId);
+            if ($parentGroup && $parentGroup->display_type !== SettingGroup::DISPLAY_TYPE_TAB) {
+                // page/category 模式的父分组下，子分组需要独立权限（作为子菜单）
+                $this->syncCreatePermission($group);
+            }
+            // tab 模式的父分组下，子分组不创建权限
+        }
 
         $this->cacheService->clearAll();
 
@@ -179,19 +210,71 @@ class SettingService extends BaseService
             if ($parentId > 0 && $this->isChildOf($parentId, $id)) {
                 throw new BusinessException('不能将子分组设为父级分组，会形成循环引用');
             }
+
+            // 验证 display_type 与父级的关系
+            $displayType = $data['display_type'] ?? $group->display_type;
+            if ($parentId > 0) {
+                $parentGroup = $this->model()->find($parentId);
+                if (!$parentGroup) {
+                    throw new BusinessException('父级分组不存在');
+                }
+
+                // 目录不能有父级
+                if ($displayType === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+                    throw new BusinessException('目录类型不能有父级');
+                }
+
+                // 选项卡的父级必须是页面类型
+                if ($displayType === SettingGroup::DISPLAY_TYPE_TAB) {
+                    if ($parentGroup->display_type !== SettingGroup::DISPLAY_TYPE_PAGE) {
+                        throw new BusinessException('选项卡的父级必须是页面类型');
+                    }
+                }
+            } elseif ($displayType === SettingGroup::DISPLAY_TYPE_TAB) {
+                // 选项卡必须有父级
+                throw new BusinessException('选项卡必须选择父级分组');
+            }
         }
+
+        // 记录变更前的值（用于检测是否变更）
+        $oldDisplayType = $group->display_type;
+        $oldCode = $group->code;
 
         // 更新分组数据
         $updateData = array_intersect_key($data, array_flip([
-            'parent_id', 'name', 'code', 'icon', 'description', 'sort', 'status',
+            'parent_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status',
         ]));
         $group->save($updateData);
 
-        // 获取顶级分组的父菜单权限ID
-        $menuParentPermissionId = (int)($data['menu_parent_permission_id'] ?? 0);
+        // 顶级分组：display_type 变更时同步子分组权限
+        if ($group->parent_id <= 0 && isset($data['display_type']) && $data['display_type'] !== $oldDisplayType) {
+            $this->syncChildPermissionsOnDisplayTypeChange($group, $oldDisplayType, $data['display_type']);
+        }
 
-        // 同步更新权限
-        $this->syncUpdatePermission($group, $menuParentPermissionId);
+        // code 变更时同步更新子分组的权限 path（子分组的 path 包含父分组 code）
+        if (!empty($data['code']) && $data['code'] !== $oldCode) {
+            $this->syncChildPermissionPaths($group);
+        }
+
+        // 子分组：tab 类型的父分组下不生成独立权限
+        if ($group->parent_id > 0) {
+            $parentGroup = $this->model()->find($group->parent_id);
+            if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                // tab 模式下子分组不需要独立权限，清除已有权限
+                if ($group->permission_id > 0) {
+                    $permission = $this->model(Permission::class)->find($group->permission_id);
+                    if ($permission) {
+                        $permission->delete();
+                    }
+                    $group->save(['permission_id' => 0]);
+                }
+                $this->cacheService->clearAll();
+                return true;
+            }
+        }
+
+        // 同步更新权限（权限层级自动根据分组层级决定）
+        $this->syncUpdatePermission($group);
 
         $this->cacheService->clearAll();
 
@@ -337,13 +420,12 @@ class SettingService extends BaseService
     // ==================== 权限同步 ====================
 
     /**
-     * 解析权限的 parent_id
+     * 解析权限的 parent_id（自动根据分组层级决定）
      *
      * @param SettingGroup $group 分组模型
-     * @param int $menuParentPermissionId 顶级分组的父菜单权限ID
-     * @return int
+     * @return int 权限的父级ID
      */
-    protected function resolvePermissionParentId(SettingGroup $group, int $menuParentPermissionId = 0): int
+    protected function resolvePermissionParentId(SettingGroup $group): int
     {
         if ($group->parent_id > 0) {
             // 子分组：使用父分组对应的权限ID
@@ -354,19 +436,39 @@ class SettingService extends BaseService
             return 0;
         }
 
-        // 顶级分组：使用传入的菜单父权限ID
-        return $menuParentPermissionId;
+        // 顶级分组：作为根级菜单
+        return 0;
     }
 
     /**
      * 根据分组生成菜单 path
-     * 规则：顶级 /settings/{code}  子级 /settings/{parent_code}/{code}
+     * 规则：
+     * - category（目录）：不生成路由，返回空字符串
+     * - page（页面）：顶级 /settings/{code}，子级 /settings/{parent_code}/{code}
+     * - tab（选项卡）：/settings/{code}
+     * - tab 的子页面：共享父级路由 /settings/{parent_code}
      */
     protected function makePermissionPath(SettingGroup $group): string
     {
+        // 目录类型不生成路由
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+            return '';
+        }
+
+        // 选项卡类型生成路由
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+            return '/settings/' . $group->code;
+        }
+
+        // 页面类型
         if ($group->parent_id > 0) {
             $parent = $this->model()->find($group->parent_id);
             if ($parent) {
+                // 如果父级是选项卡，共享父级路由
+                if ($parent->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                    return '/settings/' . $parent->code;
+                }
+                // 其他情况生成子级路由
                 return '/settings/' . $parent->code . '/' . $group->code;
             }
         }
@@ -374,31 +476,33 @@ class SettingService extends BaseService
     }
 
     /**
-     * 同步创建权限
+     * 同步创建权限（权限层级自动根据分组层级决定）
      *
      * @param SettingGroup $group 分组模型
-     * @param int $menuParentPermissionId 顶级分组的父菜单权限ID
      * @return int 创建的权限ID
      */
-    protected function syncCreatePermission(SettingGroup $group, int $menuParentPermissionId = 0): int
+    protected function syncCreatePermission(SettingGroup $group): int
     {
-        $permissionParentId = $this->resolvePermissionParentId($group, $menuParentPermissionId);
+        $permissionParentId = $this->resolvePermissionParentId($group);
 
         $permission = $this->model(Permission::class);
-        $permission->save([
+
+        $permissionData = [
             'parent_id' => $permissionParentId,
-            'name'      => $group->name,
-            'code'      => self::PERMISSION_CODE_PREFIX . $group->code,
-            'type'      => Permission::TYPE_MENU,
-            'path'      => $this->makePermissionPath($group),
-            'icon'      => $group->icon ?: null,
+            'name' => $group->name,
+            'code' => self::PERMISSION_CODE_PREFIX . $group->code,
+            'type' => Permission::TYPE_MENU,
+            'path' => $this->makePermissionPath($group),
             'component' => self::SETTING_COMPONENT,
-            'sort'      => $group->sort ?? 0,
-            'status'    => $group->status ?? 1,
-            'is_show'   => 1,
-            'source'    => Permission::SOURCE_SETTING,
-            'remark'    => $group->description ?: null,
-        ]);
+            'icon' => $group->icon ?: null,
+            'sort' => $group->sort ?? 0,
+            'status' => $group->status ?? 1,
+            'is_show' => 1,
+            'source' => Permission::SOURCE_SETTING,
+            'remark' => $group->description ?: null,
+        ];
+
+        $permission->save($permissionData);
 
         // 回写 permission_id 到分组
         $group->save(['permission_id' => $permission->id]);
@@ -407,51 +511,94 @@ class SettingService extends BaseService
     }
 
     /**
-     * 同步更新权限
+     * 同步更新权限（权限层级自动根据分组层级决定）
      *
      * @param SettingGroup $group 分组模型
-     * @param int $menuParentPermissionId 顶级分组的父菜单权限ID
      */
-    protected function syncUpdatePermission(SettingGroup $group, int $menuParentPermissionId = 0): void
+    protected function syncUpdatePermission(SettingGroup $group): void
     {
-        // 顶级分组且 menu_parent_permission_id 为 0：清除权限关联
-        if ($group->parent_id <= 0 && $menuParentPermissionId <= 0) {
-            if ($group->permission_id > 0) {
-                // 删除对应的权限记录
-                $permission = $this->model(Permission::class)->find($group->permission_id);
-                if ($permission) {
-                    $permission->delete();
-                }
-                // 清除分组的 permission_id
-                $group->save(['permission_id' => 0]);
-            }
-            return;
-        }
-
         // permission_id 不存在时，创建权限并回写
         if ($group->permission_id <= 0) {
-            $this->syncCreatePermission($group, $menuParentPermissionId);
+            $this->syncCreatePermission($group);
             return;
         }
 
         $permission = $this->model(Permission::class)->find($group->permission_id);
         if (!$permission) {
             // 权限记录被删了，重新创建
-            $this->syncCreatePermission($group, $menuParentPermissionId);
+            $this->syncCreatePermission($group);
             return;
         }
 
-        $permissionParentId = $this->resolvePermissionParentId($group, $menuParentPermissionId);
+        $permissionParentId = $this->resolvePermissionParentId($group);
 
         $permission->save([
             'parent_id' => $permissionParentId,
-            'name'      => $group->name,
-            'path'      => $this->makePermissionPath($group),
-            'icon'      => $group->icon ?: null,
-            'sort'      => $group->sort ?? 0,
-            'status'    => $group->status ?? 1,
-            'remark'    => $group->description ?: null,
+            'name' => $group->name,
+            'code' => self::PERMISSION_CODE_PREFIX . $group->code,
+            'path' => $this->makePermissionPath($group),
+            'icon' => $group->icon ?: null,
+            'sort' => $group->sort ?? 0,
+            'status' => $group->status ?? 1,
+            'remark' => $group->description ?: null,
         ]);
+    }
+
+    /**
+     * 顶级分组 display_type 变更时，同步子分组的权限
+     * - page → tab：删除所有子分组的权限（tab 模式下子分组不生成独立权限）
+     * - tab → page：为所有子分组创建权限（page 模式下子分组作为子菜单需要独立权限）
+     *
+     * @param SettingGroup $group 当前分组（已更新后的数据）
+     * @param string $oldDisplayType 变更前的 display_type
+     * @param string $newDisplayType 变更后的 display_type
+     */
+    protected function syncChildPermissionsOnDisplayTypeChange(SettingGroup $group, string $oldDisplayType, string $newDisplayType): void
+    {
+        $children = $this->model()->where('parent_id', $group->id)->select();
+
+        if ($oldDisplayType === SettingGroup::DISPLAY_TYPE_PAGE && $newDisplayType === SettingGroup::DISPLAY_TYPE_TAB) {
+            // page → tab：删除所有子分组的权限
+            foreach ($children as $child) {
+                if ($child->permission_id > 0) {
+                    $permission = $this->model(Permission::class)->find($child->permission_id);
+                    if ($permission) {
+                        $permission->delete();
+                    }
+                    $child->save(['permission_id' => 0]);
+                }
+            }
+        } elseif ($oldDisplayType === SettingGroup::DISPLAY_TYPE_TAB && $newDisplayType === SettingGroup::DISPLAY_TYPE_PAGE) {
+            // tab → page：为所有子分组创建权限
+            foreach ($children as $child) {
+                if ($child->permission_id <= 0) {
+                    $this->syncCreatePermission($child);
+                }
+            }
+        }
+    }
+
+    /**
+     * 父分组 code 变更时，同步更新子分组的权限 path
+     * 子分组的 path 格式为 /settings/{parent_code}/{child_code}，包含父分组 code
+     *
+     * @param SettingGroup $group 父分组（已更新后的数据）
+     */
+    protected function syncChildPermissionPaths(SettingGroup $group): void
+    {
+        $children = $this->model()->where('parent_id', $group->id)->select();
+
+        foreach ($children as $child) {
+            if ($child->permission_id > 0) {
+                $permission = $this->model(Permission::class)->find($child->permission_id);
+                if ($permission) {
+                    $permission->save([
+                        'path' => $this->makePermissionPath($child),
+                        'code' => self::PERMISSION_CODE_PREFIX . $child->code,
+                    ]);
+                }
+            }
+        }
     }
 
     // ==================== 表单配置 ====================
@@ -500,8 +647,8 @@ class SettingService extends BaseService
         }
 
         return [
-            'type_options'  => $typeOptions,
-            'rule_types'    => $ruleTypes,
+            'type_options' => $typeOptions,
+            'rule_types' => $ruleTypes,
         ];
     }
 
@@ -565,19 +712,28 @@ class SettingService extends BaseService
 
         $setting = $this->model(Setting::class);
         $setting->save([
-            'group_id'    => $data['group_id'],
-            'name'        => $data['name'],
-            'code'        => $data['code'],
-            'value'       => $data['value'] ?? '',
-            'type'        => $data['type'] ?? Setting::TYPE_INPUT,
-            'options'     => $data['options'] ?? null,
-            'rules'       => $data['rules'] ?? null,
+            'group_id' => $data['group_id'],
+            'name' => $data['name'],
+            'code' => $data['code'],
+            'value' => $data['value'] ?? '',
+            'type' => $data['type'] ?? Setting::TYPE_INPUT,
+            'options' => $data['options'] ?? null,
+            'rules' => $data['rules'] ?? null,
             'placeholder' => $data['placeholder'] ?? '',
-            'remark'      => $data['remark'] ?? '',
-            'sort'        => $data['sort'] ?? 0,
+            'remark' => $data['remark'] ?? '',
+            'sort' => $data['sort'] ?? 0,
         ]);
 
+        // 清除当前分组缓存
         $this->cacheService->clearGroup($group->code);
+
+        // 如果当前分组是 tab 模式的子分组，同时清除父分组的缓存
+        if ($group->parent_id > 0) {
+            $parentGroup = $this->model()->find($group->parent_id);
+            if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                $this->cacheService->clearGroup($parentGroup->code);
+            }
+        }
 
         return $setting->id;
     }
@@ -604,11 +760,21 @@ class SettingService extends BaseService
 
         $setting->save($data);
 
-        // 清除单项缓存和分组缓存
+        // 清除单项缓存
         $this->cacheService->clearSettingValue($setting->code);
+
+        // 清除当前分组缓存
         $group = $this->model()->find($setting->group_id);
         if ($group) {
             $this->cacheService->clearGroup($group->code);
+
+            // 如果当前分组是 tab 模式的子分组，同时清除父分组的缓存
+            if ($group->parent_id > 0) {
+                $parentGroup = $this->model()->find($group->parent_id);
+                if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                    $this->cacheService->clearGroup($parentGroup->code);
+                }
+            }
         }
 
         return true;
@@ -628,11 +794,21 @@ class SettingService extends BaseService
         $groupId = $setting->group_id;
         $setting->delete();
 
-        // 清除单项缓存和分组缓存
+        // 清除单项缓存
         $this->cacheService->clearSettingValue($code);
+
+        // 清除当前分组缓存
         $group = $this->model()->find($groupId);
         if ($group) {
             $this->cacheService->clearGroup($group->code);
+
+            // 如果当前分组是 tab 模式的子分组，同时清除父分组的缓存
+            if ($group->parent_id > 0) {
+                $parentGroup = $this->model()->find($group->parent_id);
+                if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                    $this->cacheService->clearGroup($parentGroup->code);
+                }
+            }
         }
 
         return true;
@@ -666,6 +842,10 @@ class SettingService extends BaseService
 
     /**
      * 获取分组配置（用于前端表单渲染，走缓存）
+     *
+     * - display_type=tab：返回子分组列表及其设置项，前端渲染为选项卡
+     * - display_type=page：返回当前分组的设置项 + 如果有 tab 子分组则同时返回
+     * - display_type=category：返回空设置项（纯导航）
      */
     public function getGroupConfig(string $groupCode): array
     {
@@ -678,6 +858,51 @@ class SettingService extends BaseService
             throw new BusinessException('分组已禁用');
         }
 
+        // tab 模式：返回子分组列表及其设置项
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+            $children = $this->model()
+                ->where('parent_id', $group->id)
+                ->where('status', 1)
+                ->order('sort', 'asc')
+                ->select()
+                ->toArray();
+
+            $tabs = [];
+            foreach ($children as $child) {
+                $settings = $this->cacheService->getGroupSettings($child['code'], function () use ($child) {
+                    return $this->model(Setting::class)
+                        ->where('group_id', $child['id'])
+                        ->order('sort', 'asc')
+                        ->select()
+                        ->toArray();
+                });
+                // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
+                $tabs[] = [
+                    'code' => $child['code'],
+                    'icon' => $child['icon'] ?? null,
+                    'id' => $child['id'],
+                    'name' => $child['name'],
+                    'settings' => $settings,
+                ];
+            }
+
+            return [
+                'group' => $group->toArray(),
+                'display_type' => SettingGroup::DISPLAY_TYPE_TAB,
+                'tabs' => $tabs,
+            ];
+        }
+
+        // category 模式：返回空设置项（纯导航，不显示表单）
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+            return [
+                'group' => $group->toArray(),
+                'display_type' => SettingGroup::DISPLAY_TYPE_CATEGORY,
+                'settings' => [],
+            ];
+        }
+
+        // page 模式：返回当前分组的设置项
         $settings = $this->cacheService->getGroupSettings($groupCode, function () use ($group) {
             return $this->model(Setting::class)
                 ->where('group_id', $group->id)
@@ -686,27 +911,80 @@ class SettingService extends BaseService
                 ->toArray();
         });
 
+        // 检查是否有 tab 类型的子分组
+        $tabChildren = $this->model()
+            ->where('parent_id', $group->id)
+            ->where('display_type', SettingGroup::DISPLAY_TYPE_TAB)
+            ->where('status', 1)
+            ->order('sort', 'asc')
+            ->select()
+            ->toArray();
+
+        // 如果有 tab 子分组，同时返回
+        if (!empty($tabChildren)) {
+            $tabs = [];
+            foreach ($tabChildren as $child) {
+                $childSettings = $this->cacheService->getGroupSettings($child['code'], function () use ($child) {
+                    return $this->model(Setting::class)
+                        ->where('group_id', $child['id'])
+                        ->order('sort', 'asc')
+                        ->select()
+                        ->toArray();
+                });
+                $tabs[] = [
+                    'code' => $child['code'],
+                    'icon' => $child['icon'] ?? null,
+                    'id' => $child['id'],
+                    'name' => $child['name'],
+                    'settings' => $childSettings,
+                ];
+            }
+
+            return [
+                'group' => $group->toArray(),
+                'display_type' => SettingGroup::DISPLAY_TYPE_PAGE,
+                'settings' => $settings,
+                'tabs' => $tabs, // 额外返回 tab 子分组
+            ];
+        }
+
+        // 普通 page 模式：只返回当前分组的设置项
         return [
             'group' => $group->toArray(),
+            'display_type' => SettingGroup::DISPLAY_TYPE_PAGE,
             'settings' => $settings,
         ];
     }
 
     /**
      * 获取分组配置值（key-value 对，供其他服务调用）
+     * 支持 page 和 tab 两种模式
      */
     public function getGroupValues(string $groupCode): array
     {
         $config = $this->getGroupConfig($groupCode);
         $values = [];
-        foreach ($config['settings'] as $setting) {
-            $values[$setting['code']] = $setting['value'];
+
+        if ($config['display_type'] === SettingGroup::DISPLAY_TYPE_TAB) {
+            // tab 模式：从所有子分组的设置项中收集值
+            foreach ($config['tabs'] as $tab) {
+                foreach ($tab['settings'] as $setting) {
+                    $values[$setting['code']] = $setting['value'];
+                }
+            }
+        } else {
+            // page 模式：直接从当前分组设置项中收集值
+            foreach ($config['settings'] as $setting) {
+                $values[$setting['code']] = $setting['value'];
+            }
         }
+
         return $values;
     }
 
     /**
      * 保存分组配置（批量更新值）
+     * 支持 page 和 tab 两种模式
      */
     public function saveGroupValues(string $groupCode, array $values): bool
     {
@@ -715,14 +993,39 @@ class SettingService extends BaseService
             throw new BusinessException('分组不存在');
         }
 
-        $settings = $this->model(Setting::class)
-            ->where('group_id', $group->id)
-            ->select();
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+            // tab 模式：遍历所有启用的子分组，逐个更新设置项
+            $childGroups = $this->model()
+                ->where('parent_id', $group->id)
+                ->where('status', 1)
+                ->select();
 
-        foreach ($settings as $setting) {
-            if (array_key_exists($setting->code, $values)) {
-                $setting->value = $values[$setting->code];
-                $setting->save();
+            foreach ($childGroups as $childGroup) {
+                $settings = $this->model(Setting::class)
+                    ->where('group_id', $childGroup->id)
+                    ->select();
+
+                foreach ($settings as $setting) {
+                    if (array_key_exists($setting->code, $values)) {
+                        $setting->value = $values[$setting->code];
+                        $setting->save();
+                    }
+                }
+
+                // 清除子分组缓存
+                $this->cacheService->clearGroup($childGroup->code);
+            }
+        } else {
+            // page 模式：只更新当前分组的设置项
+            $settings = $this->model(Setting::class)
+                ->where('group_id', $group->id)
+                ->select();
+
+            foreach ($settings as $setting) {
+                if (array_key_exists($setting->code, $values)) {
+                    $setting->value = $values[$setting->code];
+                    $setting->save();
+                }
             }
         }
 

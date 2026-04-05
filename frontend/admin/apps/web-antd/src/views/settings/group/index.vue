@@ -90,6 +90,11 @@ const columns = [
   { title: '分组名称', dataIndex: 'name', width: 200 },
   { title: '分组编码', dataIndex: 'code', width: 180 },
   { title: '图标', dataIndex: 'icon', width: 60 },
+  {
+    title: '展示方式',
+    dataIndex: 'display_type',
+    width: 100,
+  },
   { title: '排序', dataIndex: 'sort', width: 80 },
   {
     title: '状态',
@@ -174,6 +179,26 @@ onMounted(() => {
             />
             <span>{{ record.name }}</span>
           </div>
+        </template>
+
+        <template v-if="column.dataIndex === 'display_type'">
+          <a-tag
+            :color="
+              record.display_type === 'category'
+                ? 'orange'
+                : record.display_type === 'tab'
+                  ? 'blue'
+                  : 'green'
+            "
+          >
+            {{
+              record.display_type === 'category'
+                ? '目录'
+                : record.display_type === 'tab'
+                  ? '选项卡'
+                  : '页面'
+            }}
+          </a-tag>
         </template>
 
         <template v-if="column.dataIndex === 'icon'">

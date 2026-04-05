@@ -6,9 +6,6 @@ use think\facade\Route;
 // ==================== 设置分组管理 ====================
 Route::group('setting/group', function () {
 
-    // 菜单权限树（仅纯目录，排除有 component 的菜单，设置模块专用）
-    Route::get('permission/tree', 'menuTree')->name('SettingPermissionTree')->option(['_alias' => '菜单权限树', '_desc' => '菜单权限树（仅纯目录，设置模块用）', '_auth' => false]);
-
     // 分组列表（分页）
     Route::get('list', 'list')->name('SettingGroupList')->option(['_alias' => '分组列表', '_desc' => '设置分组列表', '_auth' => true]);
     // 分组树形列表（不分页）

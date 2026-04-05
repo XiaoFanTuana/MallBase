@@ -108,6 +108,7 @@ class SettingItemController extends BaseController
     /**
      * 保存分组配置（前端提交表单）
      * 先根据设置项的 rules 验证，通过后再保存
+     * 支持 page 和 tab 两种模式
      * POST /setting/item/saveConfig/:groupCode
      */
     public function saveConfig($groupCode)
@@ -126,9 +127,23 @@ class SettingItemController extends BaseController
         // 获取分组配置（含 settings 和 rules）
         $config = $this->service()->getGroupConfig($groupCode);
 
+        // 根据 display_type 提取设置项列表用于验证
+        $allSettings = [];
+        if ($config['display_type'] === 'tab') {
+            // tab 模式：收集所有子分组的设置项
+            foreach ($config['tabs'] as $tab) {
+                foreach ($tab['settings'] as $setting) {
+                    $allSettings[] = $setting;
+                }
+            }
+        } else {
+            // page 模式：直接使用当前分组的设置项
+            $allSettings = $config['settings'];
+        }
+
         // 使用 SettingValueValidate 根据 rules 验证提交值
         $validate = new SettingValueValidate();
-        $errors   = $validate->validateGroupValues($config['settings'], $values);
+        $errors   = $validate->validateGroupValues($allSettings, $values);
 
         if (!empty($errors)) {
             return $this->error('配置验证失败', 400, $errors);
