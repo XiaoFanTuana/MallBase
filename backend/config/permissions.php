@@ -156,7 +156,7 @@ return [
                     'code' => 'SystemManagement',
                     'type' => 1,
                     'path' => null,
-                    'icon' => 'lucide:setting',
+                    'icon' => 'lucide:settings',
                     'component' => null,
                     'redirect' => null,
                     'sort' => 0,
