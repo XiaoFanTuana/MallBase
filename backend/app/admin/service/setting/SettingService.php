@@ -748,10 +748,22 @@ class SettingService extends BaseService
             throw new BusinessException('设置项不存在');
         }
 
-        // 如果修改了 code，检查同一分组下是否重复
+        // 记录原始 group_id，用于判断是否跨分组移动
+        $originalGroupId = $setting->group_id;
+
+        // 如果修改了 group_id，验证新分组是否存在
+        if (isset($data['group_id']) && $data['group_id'] != $originalGroupId) {
+            $newGroup = $this->model()->find($data['group_id']);
+            if (!$newGroup) {
+                throw new BusinessException('目标分组不存在');
+            }
+        }
+
+        // 如果修改了 code，检查目标分组下是否重复
+        $targetGroupId = $data['group_id'] ?? $setting->group_id;
         if (!empty($data['code']) && $data['code'] !== $setting->code) {
             if ($this->model(Setting::class)
-                ->where('group_id', $setting->group_id)
+                ->where('group_id', $targetGroupId)
                 ->where('code', $data['code'])
                 ->find()) {
                 throw new BusinessException('该分组下设置项编码已存在');
@@ -763,16 +775,48 @@ class SettingService extends BaseService
         // 清除单项缓存
         $this->cacheService->clearSettingValue($setting->code);
 
-        // 清除当前分组缓存
-        $group = $this->model()->find($setting->group_id);
-        if ($group) {
-            $this->cacheService->clearGroup($group->code);
+        // 如果修改了分组，需要清除原分组和新分组的缓存
+        $newGroupId = $setting->group_id;
+        if ($newGroupId !== $originalGroupId) {
+            // 清除原分组缓存
+            $oldGroup = $this->model()->find($originalGroupId);
+            if ($oldGroup) {
+                $this->cacheService->clearGroup($oldGroup->code);
 
-            // 如果当前分组是 tab 模式的子分组，同时清除父分组的缓存
-            if ($group->parent_id > 0) {
-                $parentGroup = $this->model()->find($group->parent_id);
-                if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
-                    $this->cacheService->clearGroup($parentGroup->code);
+                // 如果原分组是 tab 模式的子分组，同时清除父分组的缓存
+                if ($oldGroup->parent_id > 0) {
+                    $oldParentGroup = $this->model()->find($oldGroup->parent_id);
+                    if ($oldParentGroup && $oldParentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                        $this->cacheService->clearGroup($oldParentGroup->code);
+                    }
+                }
+            }
+
+            // 清除新分组缓存
+            $newGroup = $this->model()->find($newGroupId);
+            if ($newGroup) {
+                $this->cacheService->clearGroup($newGroup->code);
+
+                // 如果新分组是 tab 模式的子分组，同时清除父分组的缓存
+                if ($newGroup->parent_id > 0) {
+                    $newParentGroup = $this->model()->find($newGroup->parent_id);
+                    if ($newParentGroup && $newParentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                        $this->cacheService->clearGroup($newParentGroup->code);
+                    }
+                }
+            }
+        } else {
+            // 没有修改分组，只清除当前分组缓存
+            $group = $this->model()->find($setting->group_id);
+            if ($group) {
+                $this->cacheService->clearGroup($group->code);
+
+                // 如果当前分组是 tab 模式的子分组，同时清除父分组的缓存
+                if ($group->parent_id > 0) {
+                    $parentGroup = $this->model()->find($group->parent_id);
+                    if ($parentGroup && $parentGroup->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+                        $this->cacheService->clearGroup($parentGroup->code);
+                    }
                 }
             }
         }

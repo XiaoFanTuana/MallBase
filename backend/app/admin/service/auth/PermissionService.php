@@ -7,6 +7,7 @@ namespace app\admin\service\auth;
 use app\admin\model\auth\Admin;
 use app\admin\model\auth\AdminRole;
 use app\admin\model\auth\Permission as PermissionModel;
+use app\admin\model\auth\RolePermission;
 use app\admin\service\cache\PermissionCacheService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -221,7 +222,7 @@ class PermissionService extends BaseService
     }
 
     /**
-     * 删除权限
+     * 删除权限（级联删除子权限）
      */
     public function delete(int $id): bool
     {
@@ -230,18 +231,25 @@ class PermissionService extends BaseService
             throw new BusinessException('权限不存在');
         }
 
-        // 检查是否有子级
-        if ($this->model()->where('parent_id', $id)->count() > 0) {
-            throw new BusinessException('请先删除子权限');
-        }
+        // 获取所有子权限ID（递归）
+        $childIds = $this->getAllChildIds($id);
 
-        // 删除权限
-        $permission->delete();
+        // 合并要删除的ID：当前权限 + 所有子权限
+        $deleteIds = array_merge([$id], $childIds);
 
-        // 清除所有用户权限缓存
-        $this->clearAllUserPermissionCache();
+        // 开启事务
+        return $this->transaction(function () use ($deleteIds) {
+            // 1. 批量软删除权限
+            $this->model()->whereIn('id', $deleteIds)->delete();
 
-        return true;
+            // 2. 删除角色权限关联数据
+            $this->model(RolePermission::class)->whereIn('permission_id', $deleteIds)->delete();
+
+            // 3. 清除所有用户权限缓存
+            $this->clearAllUserPermissionCache();
+
+            return true;
+        });
     }
 
     /**

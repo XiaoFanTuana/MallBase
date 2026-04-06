@@ -122,6 +122,21 @@ return [
             ]
         ],
         [
+            'name' => '用户管理',
+            'code' => 'ClientUserManagement',
+            'type' => 1,
+            'path' => null,
+            'icon' => 'lucide:users',
+            'component' => null,
+            'redirect' => null,
+            'sort' => 0,
+            'status' => 1,
+            'is_show' => 1,
+            'affix_tab' => 0,
+            'no_basic_layout' => 0,
+            'remark' => null,
+        ],
+        [
             'name' => '系统管理',
             'code' => 'System',
             'type' => 1,

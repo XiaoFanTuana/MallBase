@@ -68,7 +68,7 @@ class SettingItemController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
+        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
 
         $this->validate($data, 'setting/SettingItem.update');
 
