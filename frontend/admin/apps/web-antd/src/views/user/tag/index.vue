@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { UserTagApi } from '#/api/client';
+import type { UserTagApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
@@ -11,7 +11,7 @@ import {
   getUserTagInfoApi,
   getUserTagListApi,
   updateUserTagStatusApi,
-} from '#/api/client';
+} from '#/api/user';
 import { useTableCrud } from '#/composables/useTableCrud';
 import { useColorMap } from '#/composables/useColorOptions';
 

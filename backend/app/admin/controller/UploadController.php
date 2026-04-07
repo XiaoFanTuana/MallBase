@@ -6,6 +6,7 @@ namespace app\admin\controller;
 
 use app\service\UploadService;
 use mall_base\base\BaseController;
+use mall_base\log\Logger;
 
 /**
  * 上传控制器
@@ -16,18 +17,6 @@ class UploadController extends BaseController
      * 默认 Service 类名
      */
     protected string $serviceClass = UploadService::class;
-
-    /**
-     * 获取上传配置（前端 Upload 组件使用）
-     * GET /upload/config?type=image
-     */
-    public function config()
-    {
-        $type = $this->request->param('type', 'image');
-
-        $config = $this->service()->getUploadConfig($type);
-        return $this->success($config, '获取成功');
-    }
 
     /**
      * 单文件上传（图片/文件通用）
@@ -45,6 +34,14 @@ class UploadController extends BaseController
         $type      = $this->request->param('type', 'image');
         $module    = $this->request->param('module', '');
         $relatedId = $this->request->param('related_id', 0);
+
+        Logger::instance()->info('单文件上传', [
+            'type'       => $type,
+            'module'     => $module,
+            'related_id' => $relatedId,
+            'file_name'  => $file->getOriginalName(),
+            'file_size'  => $file->getSize(),
+        ]);
 
         $rules  = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
         $result = $this->service()->upload($file, $rules, 'admin');
@@ -68,6 +65,14 @@ class UploadController extends BaseController
         $type      = $this->request->param('type', 'images');
         $module    = $this->request->param('module', '');
         $relatedId = $this->request->param('related_id', 0);
+
+        $fileCount = is_array($files) ? count($files) : 0;
+        Logger::instance()->info('批量文件上传', [
+            'type'       => $type,
+            'module'     => $module,
+            'related_id' => $relatedId,
+            'file_count' => $fileCount,
+        ]);
 
         $rules   = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
         $results = $this->service()->batchUpload($files, $rules, 'admin');

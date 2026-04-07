@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { UserGroupApi } from '#/api/client';
+import type { UserGroupApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
@@ -15,7 +15,7 @@ import {
   removeUserGroupApi,
   updateUserGroupApi,
   updateUserGroupStatusApi,
-} from '#/api/client';
+} from '#/api/user';
 import { useTableCrud } from '#/composables/useTableCrud';
 import { useColorMap } from '#/composables/useColorOptions';
 

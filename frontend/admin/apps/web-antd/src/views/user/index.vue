@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { ClientUserApi } from '#/api/client';
+import type { ClientUserApi } from '#/api/user';
 
 import { h, onMounted, ref } from 'vue';
 
@@ -11,7 +11,7 @@ import {
   getClientUserListApi,
   resetClientUserPasswordApi,
   updateClientUserStatusApi,
-} from '#/api/client';
+} from '#/api/user';
 import { useTableCrud } from '#/composables/useTableCrud';
 
 import UserModal from './user-modal.vue';

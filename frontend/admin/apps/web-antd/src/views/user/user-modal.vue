@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import type { ClientUserApi } from '#/api/client';
+import type { ClientUserApi } from '#/api/user';
 import type { FileInfo } from '#/components/upload';
 
 import { computed, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { createClientUserApi, updateClientUserApi } from '#/api/client';
+import { createClientUserApi, updateClientUserApi } from '#/api/user';
 import Upload from '#/components/upload/index.vue';
 
 defineOptions({ name: 'UserModal' });

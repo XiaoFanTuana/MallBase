@@ -3,13 +3,20 @@ declare(strict_types=1);
 
 namespace app\admin\controller;
 
+use app\service\UploadService;
 use mall_base\base\BaseController;
+use mall_base\log\Logger;
 
 /**
  * 系统配置控制器
  */
 class ConfigController extends BaseController
 {
+    /**
+     * 默认 Service 类名
+     */
+    protected string $serviceClass = UploadService::class;
+
     /**
      * 获取颜色选项
      */
@@ -29,5 +36,20 @@ class ConfigController extends BaseController
         ];
 
         return $this->success(['options' => $options], '获取成功');
+    }
+
+    /**
+     * 获取上传配置（前端 Upload 组件使用）
+     * GET /config/uploadConfig?type=image
+     */
+    public function uploadConfig()
+    {
+        $type = $this->request->param('type', 'image');
+
+        Logger::instance()->info('获取上传配置', ['type' => $type]);
+
+        // Service 层会验证 type 参数的有效性
+        $config = $this->service()->getUploadConfig($type);
+        return $this->success($config, '获取成功');
     }
 }

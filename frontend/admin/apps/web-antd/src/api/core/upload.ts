@@ -1,18 +1,11 @@
 import { requestClient } from '#/api/request';
 
 export namespace UploadApi {
-  /** 文件类型图标映射项（后端返回） */
-  export interface FileIconItem {
-    ext: string;
-    icon: string;
-  }
-
   /** 上传验证配置（后端返回，按类型） */
   export interface UploadRuleConfig {
     max_size: number;
     max_count: number;
     accept_types: string[];
-    file_icons: FileIconItem[];
   }
 
   /** 上传响应 */
@@ -44,10 +37,10 @@ export interface UploadParams {
 }
 
 /**
- * 获取上传验证配置（按类型，含图标映射）
+ * 获取上传验证配置（按类型）
  */
 export async function getUploadConfigApi(type: string) {
-  return requestClient.get<UploadApi.UploadRuleConfig>('/upload/config', {
+  return requestClient.get<UploadApi.UploadRuleConfig>('/config/uploadConfig', {
     params: { type },
   });
 }

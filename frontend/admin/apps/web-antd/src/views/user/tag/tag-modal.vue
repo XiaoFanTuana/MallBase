@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { UserTagApi } from '#/api/client';
+import type { UserTagApi } from '#/api/user';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
@@ -8,7 +8,7 @@ import { message } from 'ant-design-vue';
 import {
   createUserTagApi,
   updateUserTagApi,
-} from '#/api/client';
+} from '#/api/user';
 
 import { useColorOptions } from '#/composables/useColorOptions';
 
