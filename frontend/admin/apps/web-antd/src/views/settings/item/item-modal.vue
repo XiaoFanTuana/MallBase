@@ -48,7 +48,10 @@ const formRules: Record<string, Rule[]> = {
       message: '请选择所属分组',
       validator: (_rule: any, value: number) => {
         // 只有当有分组选项时，才验证不能选 0
-        if (props.groupOptions.length > 0 && (value === undefined || value === null || value === 0)) {
+        if (
+          props.groupOptions.length > 0 &&
+          (value === undefined || value === null || value === 0)
+        ) {
           return Promise.reject('请选择所属分组');
         }
         return Promise.resolve();
@@ -306,7 +309,8 @@ watch(
         parseOptionsToArray(item.options);
       } else {
         // 新增时，默认选中第一个分组，如果没有分组则默认为 0
-        const defaultGroupId = props.groupOptions.length > 0 ? props.groupOptions[0].value : 0;
+        const defaultGroupId =
+          props.groupOptions.length > 0 ? props.groupOptions[0].value : 0;
         formData.value = {
           group_id: defaultGroupId,
           name: '',
@@ -423,192 +427,204 @@ const handleOk = async () => {
     @ok="handleOk"
     @cancel="handleCancel"
   >
-    <a-form
-      ref="formRef"
-      :model="formData"
-      :rules="formRules"
-      :label-col="{ span: 5 }"
-      :wrapper-col="{ span: 18 }"
-      class="mt-4"
-    >
-      <a-form-item label="所属分组" name="group_id">
-        <a-select
-          v-model:value="formData.group_id"
-          placeholder="请选择所属分组"
-          allow-clear
-          show-search
-          :options="groupSelectOptions"
-        />
-      </a-form-item>
+    <div class="form-scroll-wrapper">
+      <a-form
+        ref="formRef"
+        :model="formData"
+        :rules="formRules"
+        :label-col="{ span: 5 }"
+        :wrapper-col="{ span: 18 }"
+        class="mt-4"
+      >
+        <a-form-item label="所属分组" name="group_id">
+          <a-select
+            v-model:value="formData.group_id"
+            placeholder="请选择所属分组"
+            allow-clear
+            show-search
+            :options="groupSelectOptions"
+          />
+        </a-form-item>
 
-      <a-form-item label="名称" name="name">
-        <a-input v-model:value="formData.name" placeholder="如：AppID" />
-      </a-form-item>
+        <a-form-item label="名称" name="name">
+          <a-input v-model:value="formData.name" placeholder="如：AppID" />
+        </a-form-item>
 
-      <a-form-item label="编码" name="code">
-        <a-input v-model:value="formData.code" placeholder="如：wechat_appid" />
-      </a-form-item>
+        <a-form-item label="编码" name="code">
+          <a-input
+            v-model:value="formData.code"
+            placeholder="如：wechat_appid"
+          />
+        </a-form-item>
 
-      <a-form-item label="表单类型" name="type">
-        <a-select
-          v-model:value="formData.type"
-          :options="typeOptions"
-          placeholder="请选择表单类型"
-        />
-      </a-form-item>
+        <a-form-item label="表单类型" name="type">
+          <a-select
+            v-model:value="formData.type"
+            :options="typeOptions"
+            placeholder="请选择表单类型"
+          />
+        </a-form-item>
 
-      <a-form-item label="默认值" name="value">
-        <a-input v-model:value="formData.value" placeholder="默认值" />
-      </a-form-item>
+        <a-form-item label="默认值" name="value">
+          <a-input v-model:value="formData.value" placeholder="默认值" />
+        </a-form-item>
 
-      <a-form-item v-if="needOptions" label="选项" name="options">
-        <div class="options-config">
-          <div
-            v-for="(item, index) in optionItems"
-            :key="index"
-            class="option-row"
-          >
-            <a-input
-              v-model:value="item.label"
-              placeholder="标签（如：启用）"
-              class="option-label-input"
-            />
-            <a-input
-              v-model:value="item.value"
-              placeholder="值（如：1）"
-              class="option-value-input"
-            />
-            <a-button
-              type="text"
-              danger
-              size="small"
-              @click="removeOptionItem(index)"
+        <a-form-item v-if="needOptions" label="选项" name="options">
+          <div class="options-config">
+            <div
+              v-for="(item, index) in optionItems"
+              :key="index"
+              class="option-row"
             >
-              删除
-            </a-button>
-          </div>
-          <a-button type="dashed" block @click="addOptionItem">
-            <template #icon>
-              <span class="i-ant-design:plus-outlined mr-1"></span>
-            </template>
-            添加选项
-          </a-button>
-        </div>
-      </a-form-item>
-
-      <a-form-item label="占位提示" name="placeholder">
-        <a-input
-          v-model:value="formData.placeholder"
-          placeholder="输入框提示文字"
-        />
-      </a-form-item>
-
-      <a-form-item label="备注" name="remark">
-        <a-textarea
-          v-model:value="formData.remark"
-          placeholder="设置项说明"
-          :rows="2"
-        />
-      </a-form-item>
-
-      <a-form-item label="排序" name="sort">
-        <a-input-number v-model:value="formData.sort" :min="0" class="w-full" />
-      </a-form-item>
-
-      <!-- 验证规则配置 -->
-      <a-form-item label="验证规则">
-        <div class="rules-config">
-          <div
-            v-for="(rule, index) in formData.rules"
-            :key="index"
-            class="rule-item"
-          >
-            <div class="rule-row">
-              <a-select
-                v-model:value="rule.type"
-                :options="ruleTypeSelectOptions"
-                placeholder="请选择规则类型"
-                class="rule-type-select"
-                @change="handleRuleTypeChange(index)"
+              <a-input
+                v-model:value="item.label"
+                placeholder="标签（如：启用）"
+                class="option-label-input"
               />
-              <!-- 有 options 时显示复选框 -->
-              <template v-if="getRuleOptions(rule.type).length > 0">
-                <a-checkbox-group
-                  :value="Array.isArray(rule.value) ? rule.value : []"
-                  class="rule-options-group"
-                  @change="
-                    (vals: any[]) => handleRuleOptionsChange(index, vals)
-                  "
-                >
-                  <a-checkbox
-                    v-for="opt in getRuleOptions(rule.type)"
-                    :key="opt"
-                    :value="opt"
-                  >
-                    {{ opt }}
-                  </a-checkbox>
-                </a-checkbox-group>
-              </template>
-              <!-- 无 options 但 need_value 时显示输入框 -->
-              <template v-else-if="getRuleTypeDef(rule.type)?.need_value">
-                <a-input
-                  v-model:value="rule.value"
-                  :placeholder="
-                    getRuleTypeDef(rule.type)?.value_placeholder || '参数值'
-                  "
-                  class="rule-value-input"
-                  @change="handleRuleValueChange(index)"
-                />
-              </template>
+              <a-input
+                v-model:value="item.value"
+                placeholder="值（如：1）"
+                class="option-value-input"
+              />
               <a-button
                 type="text"
                 danger
                 size="small"
-                class="rule-remove-btn"
-                @click="removeRule(index)"
+                @click="removeOptionItem(index)"
               >
                 删除
               </a-button>
             </div>
-            <div class="rule-row" style="margin-top: 6px">
-              <a-input
-                v-model:value="rule.message"
-                :placeholder="`验证失败提示（为空则后端自动生成，默认：${getRuleTypeDef(rule.type)?.default_message_template || ''}）`"
-                class="rule-message-input"
-              />
-              <a-input
-                v-if="getRuleTypeDef(rule.type)?.need_flags"
-                v-model:value="rule.flags"
-                placeholder="标志如 i"
-                class="rule-flags-input"
-              />
+            <a-button type="dashed" block @click="addOptionItem">
+              <template #icon>
+                <span class="i-ant-design:plus-outlined mr-1"></span>
+              </template>
+              添加选项
+            </a-button>
+          </div>
+        </a-form-item>
+
+        <a-form-item label="占位提示" name="placeholder">
+          <a-input
+            v-model:value="formData.placeholder"
+            placeholder="输入框提示文字"
+          />
+        </a-form-item>
+
+        <a-form-item label="备注" name="remark">
+          <a-textarea
+            v-model:value="formData.remark"
+            placeholder="设置项说明"
+            :rows="2"
+          />
+        </a-form-item>
+
+        <a-form-item label="排序" name="sort">
+          <a-input-number
+            v-model:value="formData.sort"
+            :min="0"
+            class="w-full"
+          />
+        </a-form-item>
+
+        <!-- 验证规则配置 -->
+        <a-form-item label="验证规则">
+          <div class="rules-config">
+            <div
+              v-for="(rule, index) in formData.rules"
+              :key="index"
+              class="rule-item"
+            >
+              <div class="rule-row">
+                <a-select
+                  v-model:value="rule.type"
+                  :options="ruleTypeSelectOptions"
+                  placeholder="请选择规则类型"
+                  class="rule-type-select"
+                  @change="handleRuleTypeChange(index)"
+                />
+                <!-- 有 options 时显示复选框 -->
+                <template v-if="getRuleOptions(rule.type).length > 0">
+                  <a-checkbox-group
+                    :value="Array.isArray(rule.value) ? rule.value : []"
+                    class="rule-options-group"
+                    @change="
+                      (vals: any[]) => handleRuleOptionsChange(index, vals)
+                    "
+                  >
+                    <a-checkbox
+                      v-for="opt in getRuleOptions(rule.type)"
+                      :key="opt"
+                      :value="opt"
+                    >
+                      {{ opt }}
+                    </a-checkbox>
+                  </a-checkbox-group>
+                </template>
+                <!-- 无 options 但 need_value 时显示输入框 -->
+                <template v-else-if="getRuleTypeDef(rule.type)?.need_value">
+                  <a-input
+                    v-model:value="rule.value"
+                    :placeholder="
+                      getRuleTypeDef(rule.type)?.value_placeholder || '参数值'
+                    "
+                    class="rule-value-input"
+                    @change="handleRuleValueChange(index)"
+                  />
+                </template>
+                <a-button
+                  type="text"
+                  danger
+                  size="small"
+                  class="rule-remove-btn"
+                  @click="removeRule(index)"
+                >
+                  删除
+                </a-button>
+              </div>
+              <div class="rule-row" style="margin-top: 6px">
+                <a-input
+                  v-model:value="rule.message"
+                  :placeholder="`验证失败提示（为空则后端自动生成，默认：${getRuleTypeDef(rule.type)?.default_message_template || ''}）`"
+                  class="rule-message-input"
+                />
+                <a-input
+                  v-if="getRuleTypeDef(rule.type)?.need_flags"
+                  v-model:value="rule.flags"
+                  placeholder="标志如 i"
+                  class="rule-flags-input"
+                />
+              </div>
+            </div>
+
+            <a-button
+              type="dashed"
+              block
+              :disabled="ruleTypes.length === 0"
+              @click="addRule"
+            >
+              <template #icon>
+                <span class="i-ant-design:plus-outlined mr-1"></span>
+              </template>
+              添加验证规则
+            </a-button>
+
+            <div
+              v-if="ruleTypes.length === 0"
+              class="rule-tip rule-tip-warning"
+            >
+              当前表单类型暂无可用的验证规则
+            </div>
+            <div
+              v-if="formData.rules.length === 0 && ruleTypes.length > 0"
+              class="rule-tip"
+            >
+              不添加规则时，将使用「必填」字段进行简单验证
             </div>
           </div>
-
-          <a-button
-            type="dashed"
-            block
-            :disabled="ruleTypes.length === 0"
-            @click="addRule"
-          >
-            <template #icon>
-              <span class="i-ant-design:plus-outlined mr-1"></span>
-            </template>
-            添加验证规则
-          </a-button>
-
-          <div v-if="ruleTypes.length === 0" class="rule-tip rule-tip-warning">
-            当前表单类型暂无可用的验证规则
-          </div>
-          <div
-            v-if="formData.rules.length === 0 && ruleTypes.length > 0"
-            class="rule-tip"
-          >
-            不添加规则时，将使用「必填」字段进行简单验证
-          </div>
-        </div>
-      </a-form-item>
-    </a-form>
+        </a-form-item>
+      </a-form>
+    </div>
   </a-modal>
 </template>
 

@@ -197,6 +197,7 @@ onMounted(() => {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
+      :scroll="{ x: 1000 }"
       row-key="id"
       @change="(newPagination) => {
         pagination.current = newPagination.current;
