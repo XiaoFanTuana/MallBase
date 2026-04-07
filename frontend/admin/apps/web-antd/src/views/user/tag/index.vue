@@ -116,7 +116,7 @@ const columns = [
         label: record.color,
         color: record.color,
       };
-      return h(Tag, { color: config.color }, config.label);
+      return h(Tag, { color: config.color }, () => config.label);
     },
   },
   { title: '排序', dataIndex: 'sort', width: 80 },
