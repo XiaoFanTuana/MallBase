@@ -7,7 +7,6 @@ use app\admin\model\user\UserTag;
 use app\admin\model\user\UserTagRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use support\Log;
 
 /**
  * 用户标签服务
@@ -21,6 +20,11 @@ class UserTagService extends BaseService
 
     /**
      * 获取标签列表
+     *
+     * @param array $where 搜索条件（支持 name、status）
+     * @param int $page 页码
+     * @param int $limit 每页数量
+     * @return array{list: array, total: int} 返回标签列表和总数
      */
     public function getList(array $where, int $page, int $limit): array
     {
@@ -43,6 +47,10 @@ class UserTagService extends BaseService
 
     /**
      * 获取标签详情
+     *
+     * @param int $id 标签 ID
+     * @return array 标签详情
+     * @throws BusinessException 标签不存在时抛出
      */
     public function getInfo(int $id): array
     {
@@ -57,21 +65,24 @@ class UserTagService extends BaseService
 
     /**
      * 创建标签
+     *
+     * @param array{name: string, color: string, sort?: int, status?: int} $data 标签数据
+     * @return int 新创建的标签 ID
      */
     public function create(array $data): int
     {
         $tag = $this->model()->save($data);
-
-        Log::info('创建用户标签', [
-            'tag_id' => $tag->id,
-            'name' => $data['name'],
-        ]);
 
         return $tag->id;
     }
 
     /**
      * 更新标签
+     *
+     * @param int $id 标签 ID
+     * @param array $data 要更新的数据
+     * @return bool 更新成功返回 true
+     * @throws BusinessException 标签不存在时抛出
      */
     public function update(int $id, array $data): bool
     {
@@ -83,16 +94,15 @@ class UserTagService extends BaseService
 
         $tag->save($data);
 
-        Log::info('更新用户标签', [
-            'tag_id' => $id,
-            'data' => $data,
-        ]);
-
         return true;
     }
 
     /**
      * 删除标签
+     *
+     * @param int $id 标签 ID
+     * @return bool 删除成功返回 true
+     * @throws BusinessException 标签不存在或该标签下还有用户时抛出
      */
     public function delete(int $id): bool
     {
@@ -111,15 +121,14 @@ class UserTagService extends BaseService
 
         $tag->delete();
 
-        Log::info('删除用户标签', [
-            'tag_id' => $id,
-        ]);
-
         return true;
     }
 
     /**
      * 获取标签下的用户数
+     *
+     * @param int $tagId 标签 ID
+     * @return int 用户数量
      */
     public function getUserCount(int $tagId): int
     {
@@ -128,6 +137,11 @@ class UserTagService extends BaseService
 
     /**
      * 批量给用户打标签
+     *
+     * @param int $tagId 标签 ID
+     * @param array<int> $userIds 用户 ID 数组
+     * @return bool 设置成功返回 true
+     * @throws BusinessException 标签不存在时抛出
      */
     public function batchSetUsers(int $tagId, array $userIds): bool
     {
@@ -152,16 +166,16 @@ class UserTagService extends BaseService
             }
         }
 
-        Log::info('批量给用户打标签', [
-            'tag_id' => $tagId,
-            'user_count' => $count,
-        ]);
-
         return true;
     }
 
     /**
      * 移除用户标签
+     *
+     * @param int $tagId 标签 ID
+     * @param int $userId 用户 ID
+     * @return bool 移除成功返回 true
+     * @throws BusinessException 用户没有该标签时抛出
      */
     public function removeUser(int $tagId, int $userId): bool
     {
@@ -175,16 +189,14 @@ class UserTagService extends BaseService
 
         $relation->delete();
 
-        Log::info('移除用户标签', [
-            'tag_id' => $tagId,
-            'user_id' => $userId,
-        ]);
-
         return true;
     }
 
     /**
      * 获取用户的所有标签
+     *
+     * @param int $userId 用户 ID
+     * @return array<int, array> 用户拥有的标签列表（仅返回启用状态的标签）
      */
     public function getUserTags(int $userId): array
     {
@@ -207,6 +219,11 @@ class UserTagService extends BaseService
 
     /**
      * 更新标签状态
+     *
+     * @param int $id 标签 ID
+     * @param int $status 状态（1=启用，0=禁用）
+     * @return bool 更新成功返回 true
+     * @throws BusinessException 标签不存在时抛出
      */
     public function updateStatus(int $id, int $status): bool
     {
@@ -217,11 +234,6 @@ class UserTagService extends BaseService
         }
 
         $tag->save(['status' => $status]);
-
-        Log::info('更新标签状态', [
-            'tag_id' => $id,
-            'status' => $status,
-        ]);
 
         return true;
     }

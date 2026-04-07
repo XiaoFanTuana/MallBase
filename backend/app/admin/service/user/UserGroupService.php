@@ -7,7 +7,6 @@ use app\admin\model\user\UserGroup;
 use app\admin\model\user\UserGroupRelation;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use support\Log;
 
 /**
  * 用户分组服务
@@ -21,6 +20,11 @@ class UserGroupService extends BaseService
 
     /**
      * 获取分组列表
+     *
+     * @param array $where 搜索条件（支持 name、code、status）
+     * @param int $page 页码
+     * @param int $limit 每页数量
+     * @return array{list: array, total: int} 返回分组列表和总数
      */
     public function getList(array $where, int $page, int $limit): array
     {
@@ -43,6 +47,10 @@ class UserGroupService extends BaseService
 
     /**
      * 获取分组详情
+     *
+     * @param int $id 分组 ID
+     * @return array 分组详情
+     * @throws BusinessException 分组不存在时抛出
      */
     public function getInfo(int $id): array
     {
@@ -57,6 +65,10 @@ class UserGroupService extends BaseService
 
     /**
      * 创建分组
+     *
+     * @param array{code: string, name: string, description?: string, color?: string, sort?: int, status?: int} $data 分组数据
+     * @return int 新创建的分组 ID
+     * @throws BusinessException 分组编码已存在时抛出
      */
     public function create(array $data): int
     {
@@ -71,17 +83,16 @@ class UserGroupService extends BaseService
 
         $group = $this->model()->save($data);
 
-        Log::info('创建用户分组', [
-            'group_id' => $group->id,
-            'name' => $data['name'],
-            'code' => $data['code'],
-        ]);
-
         return $group->id;
     }
 
     /**
      * 更新分组
+     *
+     * @param int $id 分组 ID
+     * @param array $data 要更新的数据
+     * @return bool 更新成功返回 true
+     * @throws BusinessException 分组不存在或编码已存在时抛出
      */
     public function update(int $id, array $data): bool
     {
@@ -105,16 +116,15 @@ class UserGroupService extends BaseService
 
         $group->save($data);
 
-        Log::info('更新用户分组', [
-            'group_id' => $id,
-            'data' => $data,
-        ]);
-
         return true;
     }
 
     /**
      * 删除分组
+     *
+     * @param int $id 分组 ID
+     * @return bool 删除成功返回 true
+     * @throws BusinessException 分组不存在或该分组下还有用户时抛出
      */
     public function delete(int $id): bool
     {
@@ -133,15 +143,14 @@ class UserGroupService extends BaseService
 
         $group->delete();
 
-        Log::info('删除用户分组', [
-            'group_id' => $id,
-        ]);
-
         return true;
     }
 
     /**
      * 获取分组下的用户数
+     *
+     * @param int $groupId 分组 ID
+     * @return int 用户数量
      */
     public function getUserCount(int $groupId): int
     {
@@ -150,6 +159,11 @@ class UserGroupService extends BaseService
 
     /**
      * 批量设置用户分组
+     *
+     * @param int $groupId 分组 ID
+     * @param array<int> $userIds 用户 ID 数组
+     * @return bool 设置成功返回 true
+     * @throws BusinessException 分组不存在时抛出
      */
     public function batchSetUsers(int $groupId, array $userIds): bool
     {
@@ -174,16 +188,16 @@ class UserGroupService extends BaseService
             }
         }
 
-        Log::info('批量设置用户分组', [
-            'group_id' => $groupId,
-            'user_count' => $count,
-        ]);
-
         return true;
     }
 
     /**
      * 移除用户分组
+     *
+     * @param int $groupId 分组 ID
+     * @param int $userId 用户 ID
+     * @return bool 移除成功返回 true
+     * @throws BusinessException 用户不在该分组中时抛出
      */
     public function removeUser(int $groupId, int $userId): bool
     {
@@ -197,16 +211,14 @@ class UserGroupService extends BaseService
 
         $relation->delete();
 
-        Log::info('移除用户分组', [
-            'group_id' => $groupId,
-            'user_id' => $userId,
-        ]);
-
         return true;
     }
 
     /**
      * 获取用户的所有分组
+     *
+     * @param int $userId 用户 ID
+     * @return array<int, array> 用户所属的分组列表（仅返回启用状态的分组）
      */
     public function getUserGroups(int $userId): array
     {
@@ -229,6 +241,11 @@ class UserGroupService extends BaseService
 
     /**
      * 更新分组状态
+     *
+     * @param int $id 分组 ID
+     * @param int $status 状态（1=启用，0=禁用）
+     * @return bool 更新成功返回 true
+     * @throws BusinessException 分组不存在时抛出
      */
     public function updateStatus(int $id, int $status): bool
     {
@@ -239,11 +256,6 @@ class UserGroupService extends BaseService
         }
 
         $group->save(['status' => $status]);
-
-        Log::info('更新分组状态', [
-            'group_id' => $id,
-            'status' => $status,
-        ]);
 
         return true;
     }
