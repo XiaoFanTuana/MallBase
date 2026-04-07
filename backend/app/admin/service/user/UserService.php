@@ -66,7 +66,33 @@ class UserService extends BaseService
             throw new BusinessException('用户不存在');
         }
 
-        return $user->toArray();
+        $result = $user->toArray();
+
+        // 获取用户分组
+        $result['groups'] = $this->getUserGroups($id);
+
+        // 获取用户标签
+        $result['tags'] = $this->getUserTags($id);
+
+        return $result;
+    }
+
+    /**
+     * 获取用户的所有分组
+     */
+    public function getUserGroups(int $userId): array
+    {
+        $groupService = new UserGroupService();
+        return $groupService->getUserGroups($userId);
+    }
+
+    /**
+     * 获取用户的所有标签
+     */
+    public function getUserTags(int $userId): array
+    {
+        $tagService = new UserTagService();
+        return $tagService->getUserTags($userId);
     }
 
     /**

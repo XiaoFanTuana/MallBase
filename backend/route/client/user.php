@@ -7,6 +7,9 @@ use think\facade\Route;
 Route::group('client/user/auth', function () {
     Route::post('register', 'register');
     Route::post('login', 'login');
+    Route::post('wechat', 'wechatLogin'); // 微信小程序登录
+    Route::post('bindMobile', 'bindMobile'); // 绑定手机号
+    Route::post('decryptPhone', 'decryptPhoneNumber'); // 解密手机号
 })->prefix('user/UserController/');
 
 // 当前用户操作

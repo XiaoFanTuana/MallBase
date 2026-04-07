@@ -149,6 +149,12 @@ class UserService extends BaseService
         $info = $user->toArray();
         unset($info['password']);
 
+        // 获取用户分组
+        $info['groups'] = $this->getUserGroups($id);
+
+        // 获取用户标签
+        $info['tags'] = $this->getUserTags($id);
+
         return $info;
     }
 
@@ -314,7 +320,55 @@ class UserService extends BaseService
         $info = $user->toArray();
         unset($info['password']);
 
+        // 获取用户分组
+        $info['groups'] = $this->getUserGroups($userId);
+
+        // 获取用户标签
+        $info['tags'] = $this->getUserTags($userId);
+
         return $info;
+    }
+
+    /**
+     * 获取用户的所有分组
+     */
+    public function getUserGroups(int $userId): array
+    {
+        $relations = \app\admin\model\user\UserGroupRelation::where('user_id', $userId)
+            ->select();
+
+        $groupIds = array_column($relations->toArray(), 'group_id');
+
+        if (empty($groupIds)) {
+            return [];
+        }
+
+        $groups = \app\admin\model\user\UserGroup::where('status', 1)
+            ->whereIn('id', $groupIds)
+            ->select();
+
+        return $groups->toArray();
+    }
+
+    /**
+     * 获取用户的所有标签
+     */
+    public function getUserTags(int $userId): array
+    {
+        $relations = \app\admin\model\user\UserTagRelation::where('user_id', $userId)
+            ->select();
+
+        $tagIds = array_column($relations->toArray(), 'tag_id');
+
+        if (empty($tagIds)) {
+            return [];
+        }
+
+        $tags = \app\admin\model\user\UserTag::where('status', 1)
+            ->whereIn('id', $tagIds)
+            ->select();
+
+        return $tags->toArray();
     }
 
     /**

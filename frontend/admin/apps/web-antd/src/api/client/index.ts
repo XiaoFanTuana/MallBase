@@ -187,3 +187,7 @@ export async function updateClientMyUserInfoApi(data: Partial<ClientUserApi.Upda
 export async function changeClientMyPasswordApi(data: ClientUserApi.ChangePasswordParams) {
   return requestClient.put('/client/user/my/password', data);
 }
+
+// 导出分组和标签 API
+export * from './group';
+export * from './tag';

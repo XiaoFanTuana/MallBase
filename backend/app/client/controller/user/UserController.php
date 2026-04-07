@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\client\controller\user;
 
 use app\client\service\UserService;
+use app\client\service\WechatService;
 use app\client\validate\user\UserValidate;
 use mall_base\base\BaseController;
 
@@ -252,5 +253,74 @@ class UserController extends BaseController
 
         $this->service()->updatePassword((int) $userId, $data['old_password'], $data['password']);
         return $this->success(null, '修改成功');
+    }
+
+    /**
+     * 微信小程序登录
+     */
+    public function wechatLogin()
+    {
+        $code = $this->request->param('code');
+
+        if (empty($code)) {
+            return $this->error('code 不能为空');
+        }
+
+        /** @var WechatService $wechatService */
+        $wechatService = app(WechatService::class);
+        $result = $wechatService->login($code);
+
+        return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 微信小程序绑定手机号
+     */
+    public function bindMobile()
+    {
+        $openid = $this->request->param('openid');
+        $mobile = $this->request->param('mobile');
+        $nickname = $this->request->param('nickname', '');
+        $avatar = $this->request->param('avatar', '');
+
+        if (empty($openid)) {
+            return $this->error('openid 不能为空');
+        }
+
+        if (empty($mobile)) {
+            return $this->error('手机号不能为空');
+        }
+
+        // 验证手机号格式
+        if (!preg_match('/^1[3-9]\d{9}$/', $mobile)) {
+            return $this->error('手机号格式不正确');
+        }
+
+        /** @var WechatService $wechatService */
+        $wechatService = app(WechatService::class);
+        $result = $wechatService->bindMobile($openid, $mobile, $nickname, $avatar);
+
+        return $this->success($result, '绑定成功');
+    }
+
+    /**
+     * 解密手机号（微信小程序）
+     */
+    public function decryptPhoneNumber()
+    {
+        $openid = $this->request->param('openid');
+        $sessionKey = $this->request->param('session_key');
+        $encryptedData = $this->request->param('encryptedData');
+        $iv = $this->request->param('iv');
+
+        if (empty($openid) || empty($sessionKey) || empty($encryptedData) || empty($iv)) {
+            return $this->error('参数不完整');
+        }
+
+        /** @var WechatService $wechatService */
+        $wechatService = app(WechatService::class);
+        $phoneNumber = $wechatService->decryptPhoneNumber($sessionKey, $encryptedData, $iv);
+
+        return $this->success(['phoneNumber' => $phoneNumber], '解密成功');
     }
 }
