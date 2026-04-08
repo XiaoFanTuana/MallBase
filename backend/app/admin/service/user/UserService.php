@@ -228,36 +228,34 @@ class UserService extends BaseService
     }
 
     /**
-     * 创建用户（事务保护）
+     * 创建用户
      */
     public function create(array $data): int
     {
+        // 业务校验（事务外）
+        if (!empty($data['mobile'])) {
+            $exists = $this->model()->where('mobile', $data['mobile'])->find();
+            if ($exists) {
+                throw new BusinessException('该手机号已被注册');
+            }
+        }
+
+        if (!empty($data['email'])) {
+            $exists = $this->model()->where('email', $data['email'])->find();
+            if ($exists) {
+                throw new BusinessException('该邮箱已被注册');
+            }
+        }
+
+        // 事务内只做写入操作
         return $this->transaction(function () use ($data) {
-            // 检查手机号是否已存在
-            if (!empty($data['mobile'])) {
-                $exists = $this->model()->where('mobile', $data['mobile'])->find();
-                if ($exists) {
-                    throw new BusinessException('该手机号已被注册');
-                }
-            }
-
-            // 检查邮箱是否已存在
-            if (!empty($data['email'])) {
-                $exists = $this->model()->where('email', $data['email'])->find();
-                if ($exists) {
-                    throw new BusinessException('该邮箱已被注册');
-                }
-            }
-
             $user = $this->model();
             $user->save($data);
 
-            // 处理分组关联
             if (!empty($data['group_ids']) && is_array($data['group_ids'])) {
                 $this->syncUserGroups($user->id, $data['group_ids']);
             }
 
-            // 处理标签关联
             if (!empty($data['tag_ids']) && is_array($data['tag_ids'])) {
                 $this->syncUserTags($user->id, $data['tag_ids']);
             }
@@ -267,47 +265,45 @@ class UserService extends BaseService
     }
 
     /**
-     * 更新用户（事务保护）
+     * 更新用户
      */
     public function update(int $id, array $data): bool
     {
-        return $this->transaction(function () use ($id, $data) {
-            $user = $this->model()->find($id);
+        // 业务校验（事务外）
+        $user = $this->model()->find($id);
 
-            if (!$user) {
-                throw new BusinessException('用户不存在');
+        if (!$user) {
+            throw new BusinessException('用户不存在');
+        }
+
+        if (!empty($data['mobile'])) {
+            $exists = $this->model()
+                ->where('mobile', $data['mobile'])
+                ->where('id', '<>', $id)
+                ->find();
+            if ($exists) {
+                throw new BusinessException('该手机号已被使用');
             }
+        }
 
-            // 检查手机号是否已被其他人使用
-            if (!empty($data['mobile'])) {
-                $exists = $this->model()
-                    ->where('mobile', $data['mobile'])
-                    ->where('id', '<>', $id)
-                    ->find();
-                if ($exists) {
-                    throw new BusinessException('该手机号已被使用');
-                }
+        if (!empty($data['email'])) {
+            $exists = $this->model()
+                ->where('email', $data['email'])
+                ->where('id', '<>', $id)
+                ->find();
+            if ($exists) {
+                throw new BusinessException('该邮箱已被使用');
             }
+        }
 
-            // 检查邮箱是否已被其他人使用
-            if (!empty($data['email'])) {
-                $exists = $this->model()
-                    ->where('email', $data['email'])
-                    ->where('id', '<>', $id)
-                    ->find();
-                if ($exists) {
-                    throw new BusinessException('该邮箱已被使用');
-                }
-            }
-
+        // 事务内只做写入操作
+        return $this->transaction(function () use ($id, $user, $data) {
             $user->save($data);
 
-            // 处理分组关联（传入字段则同步，空数组则清空）
             if (array_key_exists('group_ids', $data) && is_array($data['group_ids'])) {
                 $this->syncUserGroups($id, $data['group_ids']);
             }
 
-            // 处理标签关联
             if (array_key_exists('tag_ids', $data) && is_array($data['tag_ids'])) {
                 $this->syncUserTags($id, $data['tag_ids']);
             }
@@ -317,21 +313,20 @@ class UserService extends BaseService
     }
 
     /**
-     * 删除用户（事务保护，清理关联数据）
+     * 删除用户（清理关联数据）
      */
     public function delete(int $id): bool
     {
-        return $this->transaction(function () use ($id) {
-            $user = $this->model()->find($id);
+        // 业务校验（事务外）
+        $user = $this->model()->find($id);
 
-            if (!$user) {
-                throw new BusinessException('用户不存在');
-            }
+        if (!$user) {
+            throw new BusinessException('用户不存在');
+        }
 
-            // 清理分组关联
+        // 事务内只做写入操作
+        return $this->transaction(function () use ($id, $user) {
             $this->model(UserGroupRelation::class)->where('user_id', $id)->delete();
-
-            // 清理标签关联
             $this->model(UserTagRelation::class)->where('user_id', $id)->delete();
 
             return $user->delete();
