@@ -11,6 +11,8 @@ export namespace GoodsSpecApi {
     create_time: string;
     update_time: string;
     spec_values?: SpecValueItem[];
+    /** ThinkPHP with() 关联键名（camelCase） */
+    specValues?: SpecValueItem[];
   }
 
   /** 规格值信息 */
@@ -109,7 +111,7 @@ export async function createSpecValueApi(
   value: string,
   sort?: number,
 ) {
-  return requestClient.post<{ id: number }>('/goods/spec/createValue', {
+  return requestClient.post<{ id: number }>('/goods/spec/createSpecValue', {
     spec_id: specId,
     value,
     sort,
@@ -124,7 +126,7 @@ export async function batchCreateSpecValuesApi(
   values: string[],
 ) {
   return requestClient.post<{ ids: number[] }>(
-    '/goods/spec/batchCreateValues',
+    '/goods/spec/batchCreateSpecValues',
     { spec_id: specId, values },
   );
 }

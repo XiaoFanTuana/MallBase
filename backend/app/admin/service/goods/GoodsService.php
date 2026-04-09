@@ -149,7 +149,7 @@ class GoodsService extends BaseService
         $this->validateCategoryAndBrand($data);
 
         // 事务内只做写入
-        return $this->transaction(function () use ($data) {
+        $goodsId = $this->transaction(function () use ($data) {
             $goods = $this->model();
             $goods->save($data);
 
@@ -197,7 +197,7 @@ class GoodsService extends BaseService
         $this->validateCategoryAndBrand($data);
 
         // 事务内只做写入
-        return $this->transaction(function () use ($id, $goods, $data) {
+        $this->transaction(function () use ($id, $goods, $data) {
             $goods->save($data);
 
             // 同步图片
@@ -239,7 +239,7 @@ class GoodsService extends BaseService
         }
 
         // 事务内删除关联数据
-        return $this->transaction(function () use ($id, $goods) {
+        $result = $this->transaction(function () use ($id, $goods) {
             $this->model(GoodsImage::class)->where('goods_id', $id)->delete();
             $this->model(GoodsSku::class)->where('goods_id', $id)->delete();
             $this->model(GoodsTagRelation::class)->where('goods_id', $id)->delete();
@@ -326,12 +326,12 @@ class GoodsService extends BaseService
             $data = array_map(function ($sku) use ($goodsId) {
                 return [
                     'goods_id' => $goodsId,
-                    'sku_name' => $sku['sku_name'] ?? '',
+                    'spec_values' => $sku['spec_values'] ?? '',
                     'sku_code' => $sku['sku_code'] ?? '',
                     'price' => $sku['price'] ?? 0,
+                    'market_price' => $sku['market_price'] ?? 0,
                     'stock' => $sku['stock'] ?? 0,
                     'image' => $sku['image'] ?? '',
-                    'specs' => $sku['specs'] ?? '',
                 ];
             }, $skus);
             $this->model(GoodsSku::class)->saveAll($data);

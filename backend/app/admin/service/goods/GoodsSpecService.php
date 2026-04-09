@@ -7,7 +7,6 @@ use app\admin\model\goods\GoodsSpec;
 use app\admin\model\goods\GoodsSpecValue;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use mall_base\utils\Logger;
 
 /**
  * 商品规格服务
@@ -106,7 +105,6 @@ class GoodsSpecService extends BaseService
 
         $spec = $this->model()->create($data);
 
-        Logger::instance()->info('创建规格组', ['id' => $spec->id, 'name' => $data['name']]);
 
         return $spec->id;
     }
@@ -135,7 +133,6 @@ class GoodsSpecService extends BaseService
 
         $spec->save($data);
 
-        Logger::instance()->info('更新规格组', ['id' => $id]);
 
         return true;
     }
@@ -163,7 +160,6 @@ class GoodsSpecService extends BaseService
 
             $spec->delete();
 
-            Logger::instance()->info('删除规格组', ['id' => $id]);
 
             return true;
         });
@@ -187,7 +183,6 @@ class GoodsSpecService extends BaseService
 
         $spec->save(['status' => $status]);
 
-        Logger::instance()->info('更新规格状态', ['id' => $id, 'status' => $status]);
 
         return true;
     }
@@ -224,11 +219,6 @@ class GoodsSpecService extends BaseService
             'value' => $value,
         ]);
 
-        Logger::instance()->info('添加规格值', [
-            'spec_id' => $specId,
-            'value_id' => $specValue->id,
-            'value' => $value,
-        ]);
 
         return $specValue->id;
     }
@@ -250,7 +240,6 @@ class GoodsSpecService extends BaseService
 
         $specValue->delete();
 
-        Logger::instance()->info('删除规格值', ['value_id' => $valueId]);
 
         return true;
     }
@@ -305,11 +294,6 @@ class GoodsSpecService extends BaseService
                 ]);
                 $ids[] = $specValue->id;
             }
-
-            Logger::instance()->info('批量添加规格值', [
-                'spec_id' => $specId,
-                'count' => count($ids),
-            ]);
 
             return $ids;
         });

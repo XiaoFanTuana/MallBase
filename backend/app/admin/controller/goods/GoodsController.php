@@ -52,8 +52,11 @@ class GoodsController extends BaseController
     public function create()
     {
         $data = $this->request->param([
-            'name', 'subtitle', 'category_id', 'brand_id', 'price',
-            'description', 'status', 'is_on_sale', 'images', 'skus', 'tag_ids',
+            'name', 'subtitle', 'category_id', 'brand_id',
+            'price', 'market_price', 'stock', 'main_image',
+            'unit', 'sort', 'description',
+            'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
+            'images', 'skus', 'tag_ids',
         ]);
 
         $this->validate($data, GoodsValidate::class . '.create');
@@ -74,8 +77,11 @@ class GoodsController extends BaseController
         }
 
         $data = $this->request->param([
-            'name', 'subtitle', 'category_id', 'brand_id', 'price',
-            'description', 'status', 'is_on_sale', 'images', 'skus', 'tag_ids',
+            'name', 'subtitle', 'category_id', 'brand_id',
+            'price', 'market_price', 'stock', 'main_image',
+            'unit', 'sort', 'description',
+            'status', 'is_on_sale', 'is_recommend', 'is_new', 'is_hot',
+            'images', 'skus', 'tag_ids',
         ]);
 
         $this->validate($data, GoodsValidate::class . '.update');
