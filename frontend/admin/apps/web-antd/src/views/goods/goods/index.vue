@@ -3,6 +3,8 @@ import type { GoodsApi } from '#/api/goods';
 
 import { h, onMounted, ref } from 'vue';
 
+import { useRouter } from 'vue-router';
+
 import { Avatar, message, Switch } from 'ant-design-vue';
 
 import {
@@ -15,9 +17,9 @@ import {
 } from '#/api/goods';
 import { useTableCrud } from '#/composables/useTableCrud';
 
-import GoodsModal from './goods-modal.vue';
-
 defineOptions({ name: 'GoodsManagement' });
+
+const router = useRouter();
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData, handleDelete } = useTableCrud<
@@ -90,23 +92,9 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
-/* ---------------- 弹窗 ---------------- */
-const goodsModalVisible = ref(false);
-const editingItem = ref<GoodsApi.GoodsItem | null>(null);
-
-const handleCreate = () => {
-  editingItem.value = null;
-  goodsModalVisible.value = true;
-};
-
-const handleEdit = (record: GoodsApi.GoodsItem) => {
-  editingItem.value = record;
-  goodsModalVisible.value = true;
-};
-
-const onModalSuccess = () => {
-  loadData(searchParams.value);
-};
+/* ---------------- 路由跳转 ---------------- */
+const handleCreate = () => { router.push('/goods/edit'); };
+const handleEdit = (record: GoodsApi.GoodsItem) => { router.push(`/goods/edit?id=${record.id}`); };
 
 /* ---------------- 状态切换 ---------------- */
 const handleStatusChange = async (
@@ -307,11 +295,5 @@ onMounted(() => {
       </template>
     </a-table>
 
-    <!-- 商品表单弹窗 -->
-    <GoodsModal
-      v-model:visible="goodsModalVisible"
-      :edit-data="editingItem"
-      @success="onModalSuccess"
-    />
   </div>
 </template>

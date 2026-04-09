@@ -141,7 +141,7 @@ return [
             'code' => 'SystemGoodsManagement',
             'type' => 1,
             'path' => null,
-            'icon' => 'lucide:users',
+            'icon' => 'lucide:package',
             'component' => null,
             'redirect' => null,
             'sort' => 0,
@@ -197,6 +197,22 @@ return [
                     'remark' => null,
                 ]
             ]
+        ],
+        [
+            'name' => '商品编辑',
+            'code' => 'SystemGoodsEdit',
+            'type' => 1,
+            'path' => '/goods/edit',
+            'icon' => null,
+            'component' => '/goods/goods/goods-edit',
+            'redirect' => null,
+            'sort' => 0,
+            'status' => 1,
+            'is_show' => 0,
+            'affix_tab' => 0,
+            'no_basic_layout' => 0,
+            'remark' => '商品新增/编辑页面',
+            'parent' => 'SystemGoodsList',
         ],
         [
             'name' => '关于',

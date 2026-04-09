@@ -74,6 +74,28 @@ Route::group('goods/spec', function () {
         '_component' => '/goods/spec/index',
     ]);
 
+// 商品规格模板管理
+Route::group('goods/spec-template', function () {
+    Route::get('list', 'list')->name('SystemGoodsSpecTemplateList')->option(['_alias' => '模板列表', '_desc' => '获取规格模板列表', '_auth' => true]);
+    Route::get('info/:id', 'info')->name('SystemGoodsSpecTemplateInfo')->option(['_alias' => '模板详情', '_desc' => '获取规格模板详情', '_auth' => true]);
+    Route::get('all', 'all')->name('SystemGoodsSpecTemplateAll')->option(['_alias' => '全部模板', '_desc' => '获取所有启用规格模板', '_auth' => true]);
+    Route::post('create', 'create')->name('SystemGoodsSpecTemplateCreate')->option(['_alias' => '创建模板', '_desc' => '创建规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('update/:id', 'update')->name('SystemGoodsSpecTemplateUpdate')->option(['_alias' => '更新模板', '_desc' => '更新规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::delete('delete/:id', 'delete')->name('SystemGoodsSpecTemplateDelete')->option(['_alias' => '删除模板', '_desc' => '删除规格模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemGoodsSpecTemplateUpdateStatus')->option(['_alias' => '模板状态', '_desc' => '更新规格模板状态', '_auth' => true]);
+})->prefix('goods.GoodsSpecTemplateController/')
+    ->middleware([JwtAuth::class, CheckPermission::class])
+    ->option([
+        '_group_name' => '规格模板',
+        '_group_code' => 'SystemGoodsSpecTemplate',
+        '_group_name_desc' => '商品规格模板管理模块',
+        '_parent' => 'SystemGoodsManagement',
+        '_icon' => 'lucide:layout-template',
+        '_path' => '/goods/spec-template',
+        '_auth' => true,
+        '_component' => '/goods/spec-template/index',
+    ]);
+
 // 商品管理
 Route::group('goods/list', function () {
     Route::get('list', 'list')->name('SystemGoodsList')->option(['_alias' => '商品列表', '_desc' => '获取商品列表', '_auth' => true]);
