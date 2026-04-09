@@ -3,6 +3,7 @@ import type { GoodsApi } from '#/api/goods';
 import type { GoodsCategoryApi } from '#/api/goods';
 import type { GoodsBrandApi } from '#/api/goods';
 import type { GoodsTagApi } from '#/api/goods';
+import type { GoodsSpecApi } from '#/api/goods';
 
 import type { FileInfo } from '#/components/upload';
 
@@ -19,6 +20,7 @@ import {
   createGoodsSpecApi,
   getAllGoodsBrandsApi,
   getAllGoodsCategoriesApi,
+  getAllGoodsSpecsApi,
   getAllGoodsTagsApi,
   getGoodsInfoApi,
   updateGoodsApi,
@@ -37,6 +39,10 @@ const props = withDefaults(defineProps<Props>(), { visible: false, editData: nul
 const emit = defineEmits<Emits>();
 
 const isEdit = computed(() => !!props.editData);
+
+/* ---------- 全屏 ---------- */
+const isFullscreen = ref(false);
+const toggleFullscreen = () => { isFullscreen.value = !isFullscreen.value; };
 
 /* ---------- 基本表单 ---------- */
 const formData = reactive({
@@ -79,13 +85,27 @@ const brandOptions = ref<GoodsBrandApi.BrandItem[]>([]);
 const tagOptions = ref<GoodsTagApi.TagItem[]>([]);
 
 /* ---------- 规格 attrs 模型 ---------- */
-interface AttrDetail { value: string; pic: string }
+interface AttrDetail { value: string; pic: FileInfo | string }
 interface Attr { value: string; add_pic: 0 | 1; detail: AttrDetail[] }
 
 const specType = ref<'single' | 'multi'>('single');
 const attrs = ref<Attr[]>([]);
-/** 只能同时有一个规格启用"添加规格图" */
 const canAddPic = computed(() => !attrs.value.some((a) => a.add_pic === 1));
+
+/** 获取图片预览 URL（兼容 FileInfo 和字符串） */
+const getPicPreviewUrl = (pic: FileInfo | string): string => {
+  if (!pic) return '';
+  if (typeof pic === 'object') return pic.full_url || pic.url || '';
+  if (pic.startsWith('http')) return pic;
+  return `${import.meta.env.VITE_GLOB_API_URL || ''}${pic}`;
+};
+
+/** 获取图片提交 URL */
+const getPicUrl = (pic: FileInfo | string): string => {
+  if (!pic) return '';
+  if (typeof pic === 'object') return pic.url || '';
+  return pic;
+};
 
 const handleAddSpec = () => {
   attrs.value.push({ value: '', add_pic: 0, detail: [{ value: '', pic: '' }] });
@@ -98,16 +118,16 @@ const handleRemoveSpec = (idx: number) => {
 };
 
 const addSpecValue = (attrIdx: number) => {
-  attrs.value[attrIdx].detail.push({ value: '', pic: '' });
+  attrs.value[attrIdx]!.detail.push({ value: '', pic: '' });
   nextTick(() => initValueDragAt(attrIdx));
 };
 
 const removeSpecValue = (attrIdx: number, detIdx: number) => {
-  if (attrs.value[attrIdx].detail.length <= 1) {
+  if (attrs.value[attrIdx]!.detail.length <= 1) {
     message.warning('至少保留一个规格值');
     return;
   }
-  attrs.value[attrIdx].detail.splice(detIdx, 1);
+  attrs.value[attrIdx]!.detail.splice(detIdx, 1);
   generateSkuCombinations();
 };
 
@@ -132,7 +152,7 @@ const initSpecDrag = () => {
     animation: 150,
     onEnd({ oldIndex, newIndex }) {
       if (oldIndex === newIndex) return;
-      const moved = attrs.value.splice(oldIndex!, 1)[0];
+      const moved = attrs.value.splice(oldIndex!, 1)[0]!;
       attrs.value.splice(newIndex!, 0, moved);
       generateSkuCombinations();
     },
@@ -148,8 +168,8 @@ const initValueDragAt = (attrIdx: number) => {
     animation: 150,
     onEnd({ oldIndex, newIndex }) {
       if (oldIndex === newIndex) return;
-      const moved = attrs.value[attrIdx].detail.splice(oldIndex!, 1)[0];
-      attrs.value[attrIdx].detail.splice(newIndex!, 0, moved);
+      const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
+      attrs.value[attrIdx]!.detail.splice(newIndex!, 0, moved);
       generateSkuCombinations();
     },
   });
@@ -198,7 +218,6 @@ const skuColumns = computed(() => {
       _isSpecCol: true,
       _attrIdx: idx,
     };
-    // Only first spec column gets cell merging
     if (idx === 0) {
       col.customCell = (_record: SkuRow, rowIdx: number) => {
         if (_record._isBatch) return {};
@@ -222,7 +241,6 @@ const skuColumns = computed(() => {
   ];
 });
 
-/** 计算第一列 spec 的 rowspan（仅合并第一个规格列） */
 const spanMap = computed<Map<string, number>>(() => {
   const map = new Map<string, number>();
   if (attrs.value.length === 0) return map;
@@ -242,7 +260,6 @@ const spanMap = computed<Map<string, number>>(() => {
   return map;
 });
 
-/** 笛卡尔积生成 SKU 组合 */
 const generateSkuCombinations = () => {
   const validAttrs = attrs.value.filter((a) => a.value && a.detail.some((d) => d.value));
   if (validAttrs.length === 0) { skuRows.value = []; return; }
@@ -279,24 +296,11 @@ const generateSkuCombinations = () => {
   });
 };
 
-/** 批量应用 */
 const applyBatch = () => {
   for (const row of skuRows.value) {
-    for (const attr of attrs.value) {
-      const batchVal = batchData[attr.value];
-      if (batchVal) {
-        // filter rows that match this spec value
-        if (row.detail[attr.value] === batchVal || !batchVal) {
-          // apply other batch fields to matched rows
-        }
-      }
-    }
-    const bp = Number(batchData['__price__']);
-    const bmp = Number(batchData['__market_price__']);
-    const bst = Number(batchData['__stock__']);
-    if (batchData['__price__']) row.price = bp;
-    if (batchData['__market_price__']) row.market_price = bmp;
-    if (batchData['__stock__']) row.stock = bst;
+    if (batchData['__price__']) row.price = Number(batchData['__price__']);
+    if (batchData['__market_price__']) row.market_price = Number(batchData['__market_price__']);
+    if (batchData['__stock__']) row.stock = Number(batchData['__stock__']);
     if (batchData['__sku_code__']) row.sku_code = batchData['__sku_code__'] as string;
   }
   message.success('批量设置成功');
@@ -304,6 +308,92 @@ const applyBatch = () => {
 
 const clearBatch = () => {
   Object.keys(batchData).forEach((k) => { batchData[k] = ''; });
+};
+
+/* ---------- 从规格库导入 ---------- */
+const specLibVisible = ref(false);
+const specLibLoading = ref(false);
+const specLibList = ref<GoodsSpecApi.SpecItem[]>([]);
+const selectedSpecIds = ref<number[]>([]);
+
+const openSpecLib = async () => {
+  specLibVisible.value = true;
+  specLibLoading.value = true;
+  selectedSpecIds.value = [];
+  try {
+    specLibList.value = await getAllGoodsSpecsApi();
+  } catch {
+    message.error('加载规格库失败');
+  } finally {
+    specLibLoading.value = false;
+  }
+};
+
+const confirmSelectSpecs = () => {
+  const selected = specLibList.value.filter((s) => selectedSpecIds.value.includes(s.id));
+  let added = 0;
+  for (const spec of selected) {
+    if (attrs.value.some((a) => a.value === spec.name)) continue;
+    const values = (spec.spec_values || spec.specValues || []).map((v) => ({ value: v.value, pic: '' }));
+    if (values.length === 0) values.push({ value: '', pic: '' });
+    attrs.value.push({ value: spec.name, add_pic: 0, detail: values });
+    added++;
+  }
+  if (added === 0 && selected.length > 0) {
+    message.info('所选规格已存在，未重复添加');
+  } else if (added > 0) {
+    generateSkuCombinations();
+    nextTick(() => { initSpecDrag(); initValueDrag(); });
+    message.success(`已导入 ${added} 个规格`);
+  }
+  specLibVisible.value = false;
+};
+
+/* ---------- 另存为模板（保存到规格库） ---------- */
+interface SaveTemplateItem { selected: boolean; name: string; values: string[] }
+const saveTemplateVisible = ref(false);
+const saveTemplateList = ref<SaveTemplateItem[]>([]);
+const saveTemplateLoading = ref(false);
+
+const openSaveTemplate = () => {
+  const list: SaveTemplateItem[] = attrs.value
+    .filter((a) => a.value.trim())
+    .map((a) => ({
+      selected: true,
+      name: a.value,
+      values: a.detail.filter((d) => d.value.trim()).map((d) => d.value),
+    }));
+  if (list.length === 0) {
+    message.warning('请先添加并填写规格名称');
+    return;
+  }
+  saveTemplateList.value = list;
+  saveTemplateVisible.value = true;
+};
+
+const handleSaveTemplate = async () => {
+  const toSave = saveTemplateList.value.filter((a) => a.selected && a.values.length > 0);
+  if (toSave.length === 0) {
+    message.warning('请至少选择一个有规格值的规格');
+    return;
+  }
+  saveTemplateLoading.value = true;
+  const errors: string[] = [];
+  for (const item of toSave) {
+    try {
+      const res = await createGoodsSpecApi({ name: item.name });
+      await batchCreateSpecValuesApi(res.id, item.values);
+    } catch (e: any) {
+      errors.push(`${item.name}：${e.message || '保存失败'}`);
+    }
+  }
+  saveTemplateLoading.value = false;
+  if (errors.length > 0) {
+    message.warning(`部分保存失败 — ${errors.join('；')}`);
+  } else {
+    message.success(`已将 ${toSave.length} 个规格保存到规格库`);
+    saveTemplateVisible.value = false;
+  }
 };
 
 /* ---------- 加载选项 ---------- */
@@ -320,7 +410,7 @@ const loadOptions = async () => {
   } catch { /* silent */ }
 };
 
-/* ---------- 重置表单 ---------- */
+/* ---------- 重置 ---------- */
 const resetForm = () => {
   formRef.value?.resetFields();
   Object.assign(formData, {
@@ -331,6 +421,7 @@ const resetForm = () => {
   specType.value = 'single';
   attrs.value = [];
   skuRows.value = [];
+  isFullscreen.value = false;
 };
 
 /* ---------- 监听 visible ---------- */
@@ -374,21 +465,16 @@ const loadEditData = async (id: number) => {
 
     if (detail.skus && detail.skus.length > 0) {
       specType.value = 'multi';
-      // Reconstruct attrs from SKU data
-      // spec_values like "红色,L" — need to know spec names from header if available
-      // fallback: use positional attr names like "规格1","规格2"
       const firstSku = detail.skus[0]!;
       const specValues = (firstSku.spec_values || '').split(',');
       const colCount = specValues.length;
 
-      // Try to find spec names from sku detail (if available), otherwise use positional
       const newAttrs: Attr[] = Array.from({ length: colCount }, (_, i) => ({
         value: `规格${i + 1}`,
         add_pic: 0,
         detail: [],
       }));
 
-      // Collect unique values per position
       const valueSetsByPos: Set<string>[] = Array.from({ length: colCount }, () => new Set());
       for (const sku of detail.skus) {
         const parts = (sku.spec_values || '').split(',');
@@ -399,7 +485,6 @@ const loadEditData = async (id: number) => {
       }
       attrs.value = newAttrs;
 
-      // Generate SKU rows then backfill
       generateSkuCombinations();
       const skuMap = new Map(detail.skus.map((s) => [s.spec_values, s]));
       for (const row of skuRows.value) {
@@ -472,34 +557,6 @@ const handleSpecTypeChange = (val: 'single' | 'multi') => {
   if (val === 'single') { attrs.value = []; skuRows.value = []; }
 };
 
-/* ---------- 新建规格弹窗 ---------- */
-const newSpecVisible = ref(false);
-const newSpecForm = reactive({ name: '', values: '' });
-const newSpecCreating = ref(false);
-
-const handleCreateSpec = async () => {
-  if (!newSpecForm.name.trim()) { message.warning('请输入规格名称'); return; }
-  const values = newSpecForm.values.split(/[,，、\n]/).map((v) => v.trim()).filter(Boolean);
-  if (values.length === 0) { message.warning('请输入至少一个规格值'); return; }
-  try {
-    newSpecCreating.value = true;
-    const res = await createGoodsSpecApi({ name: newSpecForm.name.trim() });
-    await batchCreateSpecValuesApi(res.id, values);
-    message.success('规格创建成功');
-    newSpecVisible.value = false;
-    // Add to attrs directly
-    attrs.value.push({ value: newSpecForm.name.trim(), add_pic: 0, detail: values.map((v) => ({ value: v, pic: '' })) });
-    generateSkuCombinations();
-    await nextTick();
-    initSpecDrag();
-    initValueDrag();
-  } catch (e: any) {
-    message.error(e.message || '创建失败');
-  } finally {
-    newSpecCreating.value = false;
-  }
-};
-
 onMounted(() => loadOptions());
 </script>
 
@@ -507,21 +564,40 @@ onMounted(() => loadOptions());
   <a-modal
     :title="isEdit ? '编辑商品' : '新增商品'"
     :open="visible"
-    :width="1100"
+    :width="isFullscreen ? '100vw' : 1200"
+    :wrap-class-name="isFullscreen ? 'goods-modal-fullscreen' : ''"
     :footer="null"
-    :body-style="{ padding: '0', maxHeight: '78vh', overflowY: 'auto' }"
+    :body-style="{ padding: 0, height: isFullscreen ? 'calc(100vh - 55px)' : '82vh', overflowY: 'hidden', display: 'flex', flexDirection: 'column' }"
     @cancel="handleCancel"
   >
-    <a-spin :spinning="loading">
+    <!-- 标题右侧全屏按钮 -->
+    <template #title>
+      <div class="modal-title-bar">
+        <span>{{ isEdit ? '编辑商品' : '新增商品' }}</span>
+        <a-tooltip :title="isFullscreen ? '退出全屏' : '全屏编辑'">
+          <a-button type="text" size="small" class="fullscreen-btn" @click="toggleFullscreen">
+            <template #icon>
+              <svg v-if="!isFullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
+            </template>
+          </a-button>
+        </a-tooltip>
+      </div>
+    </template>
+
+    <a-spin :spinning="loading" class="modal-spin">
       <a-form
         ref="formRef"
         :model="formData"
         :rules="rules"
         :label-col="{ style: { width: '88px' } }"
+        class="modal-form"
       >
+        <!-- Tab 区域（可滚动） -->
         <a-tabs
           v-model:activeKey="activeTab"
-          :tab-bar-style="{ padding: '0 24px', margin: 0, borderBottom: '1px solid #f0f0f0', background: '#fafafa' }"
+          :tab-bar-style="{ padding: '0 24px', margin: 0, borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }"
+          class="modal-tabs"
         >
           <!-- ===== 基本信息 ===== -->
           <a-tab-pane key="basic" tab="基本信息">
@@ -558,7 +634,6 @@ onMounted(() => loadOptions());
                 <div class="form-tip">最多10张，首图用于列表展示</div>
                 <Upload v-model:value="formData.images" type="images" module="goods" :max-count="10" />
               </a-form-item>
-              <!-- 商品标签 -->
               <a-form-item label="商品标签">
                 <div v-if="tagOptions.length === 0" class="form-tip">暂无标签，请先在「商品标签」模块创建</div>
                 <div v-else class="tag-list">
@@ -577,7 +652,6 @@ onMounted(() => loadOptions());
                   </span>
                 </div>
               </a-form-item>
-              <!-- 发布设置 -->
               <a-form-item label="商品状态">
                 <a-radio-group v-model:value="formData.status" button-style="solid">
                   <a-radio-button :value="1">启用</a-radio-button>
@@ -671,7 +745,7 @@ onMounted(() => loadOptions());
                           >
                             添加规格图
                           </a-checkbox>
-                          <a-tooltip content="只能同时为一个规格开启规格图（建议尺寸 800×800）" placement="right">
+                          <a-tooltip title="只能同时为一个规格开启规格图，建议尺寸 800×800" placement="right">
                             <span class="icon-info">?</span>
                           </a-tooltip>
                           <a-button type="text" danger size="small" class="ml8" @click="handleRemoveSpec(attrIdx)">删除</a-button>
@@ -686,6 +760,7 @@ onMounted(() => loadOptions());
                             v-for="(det, detIdx) in attr.detail"
                             :key="detIdx"
                             class="spec-val-item"
+                            :class="{ 'has-pic': attr.add_pic === 1 }"
                           >
                             <span class="val-drag-handle" title="拖拽排序">
                               <svg width="10" height="10" viewBox="0 0 12 12" fill="#ccc"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg>
@@ -697,27 +772,34 @@ onMounted(() => loadOptions());
                               class="val-input"
                               @change="generateSkuCombinations"
                             />
-                            <div v-if="attr.add_pic" class="val-pic">
-                              <Upload
-                                v-model:value="det.pic"
-                                type="image"
-                                module="goods"
-                                :show-upload-list="false"
-                                class="val-upload"
-                              />
-                            </div>
+                            <!-- 规格图：有图显示缩略图，无图显示上传按钮 -->
+                            <template v-if="attr.add_pic">
+                              <div v-if="det.pic" class="val-pic-thumb">
+                                <img :src="getPicPreviewUrl(det.pic)" width="46" height="46" />
+                                <span class="val-pic-del" @click.stop="det.pic = ''">×</span>
+                              </div>
+                              <div v-else class="val-pic-upload-wrap">
+                                <Upload
+                                  type="image"
+                                  module="goods"
+                                  :show-upload-list="false"
+                                  class="val-pic-upload"
+                                  @update:value="(v: FileInfo | undefined) => { det.pic = v ?? ''; }"
+                                />
+                              </div>
+                            </template>
                             <span class="val-del" @click="removeSpecValue(attrIdx, detIdx)">×</span>
                           </div>
-                          <!-- 添加规格值 -->
                           <span class="add-val-btn" @click="addSpecValue(attrIdx)">+ 添加规格值</span>
                         </div>
                       </div>
                     </div>
 
-                    <!-- 底部按钮 -->
+                    <!-- 底部操作按钮 -->
                     <div class="spec-actions">
                       <a-button v-if="attrs.length < 4" @click="handleAddSpec">添加新规格</a-button>
-                      <a-button type="text" @click="newSpecVisible = true">另存为模板</a-button>
+                      <a-button @click="openSpecLib">从规格库导入</a-button>
+                      <a-button type="text" :disabled="attrs.length === 0" @click="openSaveTemplate">另存为模板</a-button>
                     </div>
                   </div>
                 </a-form-item>
@@ -728,7 +810,7 @@ onMounted(() => loadOptions());
                     :columns="(skuColumns as any[])"
                     :data-source="tableData"
                     :pagination="false"
-                    :scroll="{ x: 900, y: 400 }"
+                    :scroll="{ x: 900, y: 360 }"
                     size="small"
                     bordered
                     row-key="spec_values"
@@ -753,7 +835,7 @@ onMounted(() => loadOptions());
                           </a-select>
                         </template>
                         <template v-else-if="column.dataIndex === 'image'">
-                          <Upload v-model:value="batchData['__image__']" type="image" module="goods" :show-upload-list="false" />
+                          <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
                         </template>
                         <template v-else-if="column.dataIndex === 'price'">
                           <a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" style="width:100%" />
@@ -768,7 +850,9 @@ onMounted(() => loadOptions());
                           <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" />
                         </template>
                         <template v-else-if="column.dataIndex === '_action'">
-                          <a @click="applyBatch">批量修改</a><a-divider type="vertical" /><a @click="clearBatch">清空</a>
+                          <a @click="applyBatch">批量修改</a>
+                          <a-divider type="vertical" />
+                          <a @click="clearBatch">清空</a>
                         </template>
                       </template>
 
@@ -804,7 +888,6 @@ onMounted(() => loadOptions());
                         </template>
                       </template>
                     </template>
-
                   </a-table>
                 </a-form-item>
               </template>
@@ -827,35 +910,103 @@ onMounted(() => loadOptions());
             </div>
           </a-tab-pane>
         </a-tabs>
-      </a-form>
 
-      <!-- 底部操作栏 -->
-      <div class="modal-footer">
-        <a-space>
-          <a-button @click="handleCancel">取 消</a-button>
-          <a-button type="primary" :loading="loading" @click="handleSubmit">
-            {{ isEdit ? '保存修改' : '立即创建' }}
-          </a-button>
-        </a-space>
-      </div>
+        <!-- 底部操作栏（sticky） -->
+        <div class="modal-footer">
+          <a-space>
+            <a-button @click="handleCancel">取 消</a-button>
+            <a-button type="primary" :loading="loading" @click="handleSubmit">
+              {{ isEdit ? '保存修改' : '立即创建' }}
+            </a-button>
+          </a-space>
+        </div>
+      </a-form>
     </a-spin>
 
-    <!-- 新建规格模板弹窗 -->
-    <a-modal v-model:open="newSpecVisible" title="另存规格模板" :confirm-loading="newSpecCreating" :width="460" @ok="handleCreateSpec">
-      <a-form :label-col="{ style: { width: '80px' } }" class="pt-4">
-        <a-form-item label="规格名称" required>
-          <a-input v-model:value="newSpecForm.name" placeholder="如：颜色、尺码" allow-clear />
-        </a-form-item>
-        <a-form-item label="规格值" required>
-          <a-textarea v-model:value="newSpecForm.values" placeholder="多个值用逗号分隔&#10;如：红色,蓝色,黑色" :rows="4" allow-clear />
-          <div class="form-tip mt4">支持中文逗号、英文逗号和换行</div>
-        </a-form-item>
-      </a-form>
+    <!-- ===== 从规格库导入弹窗 ===== -->
+    <a-modal
+      v-model:open="specLibVisible"
+      title="从规格库导入"
+      :width="520"
+      ok-text="确认导入"
+      cancel-text="取消"
+      @ok="confirmSelectSpecs"
+    >
+      <a-spin :spinning="specLibLoading">
+        <div v-if="specLibList.length === 0 && !specLibLoading" class="empty-tip">
+          规格库暂无数据，请先在「商品规格」模块创建规格
+        </div>
+        <a-checkbox-group v-else v-model:value="selectedSpecIds" class="spec-lib-list">
+          <div v-for="spec in specLibList" :key="spec.id" class="spec-lib-item">
+            <a-checkbox :value="spec.id">
+              <span class="spec-lib-name">{{ spec.name }}</span>
+            </a-checkbox>
+            <div class="spec-lib-values">
+              <span
+                v-for="val in (spec.spec_values || spec.specValues || [])"
+                :key="val.id"
+                class="spec-lib-val-tag"
+              >{{ val.value }}</span>
+            </div>
+          </div>
+        </a-checkbox-group>
+      </a-spin>
+    </a-modal>
+
+    <!-- ===== 另存为模板弹窗 ===== -->
+    <a-modal
+      v-model:open="saveTemplateVisible"
+      title="另存为模板（保存到规格库）"
+      :width="480"
+      ok-text="保存"
+      cancel-text="取消"
+      :confirm-loading="saveTemplateLoading"
+      @ok="handleSaveTemplate"
+    >
+      <div class="form-tip mb8">勾选需要保存的规格，保存后可在「从规格库导入」中复用</div>
+      <div class="save-template-list">
+        <div
+          v-for="(item, idx) in saveTemplateList"
+          :key="idx"
+          class="save-template-item"
+        >
+          <a-checkbox v-model:checked="item.selected">
+            <span class="spec-lib-name">{{ item.name }}</span>
+          </a-checkbox>
+          <div class="spec-lib-values">
+            <span v-for="v in item.values" :key="v" class="spec-lib-val-tag">{{ v }}</span>
+            <span v-if="item.values.length === 0" class="form-tip">（无规格值，不可保存）</span>
+          </div>
+        </div>
+      </div>
     </a-modal>
   </a-modal>
 </template>
 
 <style scoped>
+/* ===== 全屏按钮 ===== */
+.modal-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+.fullscreen-btn {
+  color: #8c8c8c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fullscreen-btn:hover { color: #1677ff; }
+
+/* ===== 整体布局（flex 撑满） ===== */
+.modal-spin { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.modal-form { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.modal-tabs { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.modal-tabs :deep(.ant-tabs-content-holder) { flex: 1; overflow-y: auto; min-height: 0; }
+.modal-tabs :deep(.ant-tabs-content) { height: 100%; }
+.modal-tabs :deep(.ant-tabs-tabpane) { height: 100%; }
+
 /* ===== Tab 内容区域 ===== */
 .tab-body {
   padding: 20px 24px 8px;
@@ -864,36 +1015,25 @@ onMounted(() => loadOptions());
 }
 
 /* ===== 辅助文字 ===== */
-.form-tip {
-  font-size: 12px;
-  color: #8c8c8c;
-  line-height: 1.4;
-}
+.form-tip { font-size: 12px; color: #8c8c8c; line-height: 1.4; }
 .mt4 { margin-top: 4px; }
 .ml8 { margin-left: 8px; }
+.mb8 { margin-bottom: 8px; }
 
 /* ===== 标签选择 ===== */
 .tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  cursor: pointer;
-  border: 1px solid #d9d9d9;
-  color: #595959;
-  background: #fff;
-  user-select: none;
-  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px; border-radius: 20px; font-size: 13px;
+  cursor: pointer; border: 1px solid #d9d9d9; color: #595959;
+  background: #fff; user-select: none; transition: all 0.15s;
 }
 .tag-chip:hover { border-color: #1677ff; color: #1677ff; }
 .tag-chip.active { border-color: #1677ff; background: #e6f4ff; color: #1677ff; }
 .tag-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* ===== 标签设置行 ===== */
-.flag-row { display: flex; gap: 0; border: 1px solid #e8edf2; border-radius: 6px; overflow: hidden; max-width: 520px; }
+.flag-row { display: flex; border: 1px solid #e8edf2; border-radius: 6px; overflow: hidden; max-width: 520px; }
 .flag-cell { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-right: 1px solid #e8edf2; background: #fafafa; }
 .flag-cell:last-child { border-right: none; }
 .flag-name { font-size: 13px; color: #595959; }
@@ -904,77 +1044,71 @@ onMounted(() => loadOptions());
 .spec-item { border: 1px solid #e8edf2; border-radius: 6px; overflow: hidden; background: #fff; }
 
 .spec-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: #f7f9fc;
-  border-bottom: 1px solid #e8edf2;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; background: #f7f9fc; border-bottom: 1px solid #e8edf2;
 }
 
 .spec-drag-handle, .val-drag-handle {
-  cursor: grab;
-  padding: 0 4px;
-  color: #bbb;
-  flex-shrink: 0;
+  cursor: grab; padding: 0 4px; color: #bbb; flex-shrink: 0;
 }
 .spec-drag-handle:active, .val-drag-handle:active { cursor: grabbing; }
 
 .spec-name-input { width: 180px; }
 
 .icon-info {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 1px solid #d9d9d9;
-  font-size: 11px;
-  color: #8c8c8c;
-  cursor: help;
-  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid #d9d9d9;
+  font-size: 11px; color: #8c8c8c; cursor: help; flex-shrink: 0;
 }
 
 /* 规格值列表 */
 .spec-values-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px;
 }
 
 .spec-val-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #fafafa;
-  border: 1px solid #e8edf2;
-  border-radius: 4px;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fafafa; border: 1px solid #e8edf2; border-radius: 4px;
   padding: 2px 6px 2px 4px;
 }
 
+.spec-val-item.has-pic { padding: 4px 6px 4px 4px; align-items: flex-start; flex-direction: column; }
+.spec-val-item.has-pic .val-drag-handle { align-self: center; }
+
 .val-input { width: 100px; }
 
-.val-pic { display: inline-block; }
-.val-upload { display: inline-block; }
+/* 规格图 */
+.val-pic-thumb {
+  position: relative; display: inline-block; margin: 2px 0;
+}
+.val-pic-thumb img {
+  width: 46px; height: 46px; object-fit: cover; border-radius: 4px;
+  border: 1px solid #e8edf2; display: block;
+}
+.val-pic-del {
+  position: absolute; top: -6px; right: -6px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: rgba(0,0,0,.45); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; cursor: pointer; line-height: 1;
+}
+.val-pic-del:hover { background: #ff4d4f; }
+
+.val-pic-upload-wrap :deep(.ant-upload) {
+  width: 46px !important; height: 46px !important;
+  font-size: 18px; border-radius: 4px;
+}
+.val-pic-upload-wrap :deep(.ant-upload-list) { display: none !important; }
 
 .val-del {
-  font-size: 16px;
-  color: #bfbfbf;
-  cursor: pointer;
-  line-height: 1;
-  transition: color 0.15s;
-  margin-left: 2px;
+  font-size: 16px; color: #bfbfbf; cursor: pointer;
+  line-height: 1; transition: color 0.15s; margin-left: 2px;
+  align-self: center;
 }
 .val-del:hover { color: #ff4d4f; }
 
 .add-val-btn {
-  color: #1677ff;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 2px 4px;
+  color: #1677ff; font-size: 13px; cursor: pointer; padding: 2px 4px;
 }
 .add-val-btn:hover { opacity: 0.8; }
 
@@ -983,18 +1117,46 @@ onMounted(() => loadOptions());
 
 /* ===== SKU 表格 ===== */
 .sku-table :deep(.ant-table-cell) {
-  padding: 5px 8px !important;
-  vertical-align: middle;
+  padding: 5px 8px !important; vertical-align: middle;
 }
-
 .sku-spec-val { font-weight: 500; color: #262626; }
 
-/* ===== 底部操作栏 ===== */
+/* ===== 底部操作栏（sticky） ===== */
 .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 14px 24px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafafa;
+  display: flex; justify-content: flex-end;
+  padding: 14px 24px; border-top: 1px solid #f0f0f0; background: #fafafa;
+  flex-shrink: 0;
+}
+
+/* ===== 规格库弹窗 ===== */
+.spec-lib-list { display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; }
+.spec-lib-item { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: #fafafa; border: 1px solid #f0f0f0; border-radius: 6px; }
+.spec-lib-name { font-weight: 500; color: #262626; }
+.spec-lib-values { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 24px; }
+.spec-lib-val-tag {
+  display: inline-block; padding: 1px 8px; border-radius: 4px;
+  font-size: 12px; color: #595959; background: #f0f0f0; border: 1px solid #e8edf2;
+}
+.empty-tip { color: #8c8c8c; text-align: center; padding: 24px 0; }
+
+/* ===== 另存为模板弹窗 ===== */
+.save-template-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.save-template-item { padding: 10px 12px; background: #fafafa; border: 1px solid #f0f0f0; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+</style>
+
+<!-- 全屏模式全局样式 -->
+<style>
+.goods-modal-fullscreen .ant-modal {
+  top: 0 !important;
+  margin: 0 auto !important;
+  max-width: 100vw !important;
+  padding-bottom: 0 !important;
+}
+.goods-modal-fullscreen .ant-modal-content {
+  border-radius: 0 !important;
+  height: 100vh;
+}
+.goods-modal-fullscreen .ant-modal-header {
+  border-radius: 0 !important;
 }
 </style>
