@@ -175,6 +175,8 @@ class GoodsService extends BaseService
 
             return $goodsId;
         });
+
+        return (int) $goodsId;
     }
 
     /**
@@ -220,6 +222,8 @@ class GoodsService extends BaseService
 
             return true;
         });
+
+        return true;
     }
 
     /**
@@ -239,7 +243,7 @@ class GoodsService extends BaseService
         }
 
         // 事务内删除关联数据
-        $result = $this->transaction(function () use ($id, $goods) {
+        return (bool) $this->transaction(function () use ($id, $goods) {
             $this->model(GoodsImage::class)->where('goods_id', $id)->delete();
             $this->model(GoodsSku::class)->where('goods_id', $id)->delete();
             $this->model(GoodsTagRelation::class)->where('goods_id', $id)->delete();
