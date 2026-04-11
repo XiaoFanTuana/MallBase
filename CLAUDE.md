@@ -131,7 +131,6 @@ public function create(array $data): int
 ### Service 必须包含：
 
 - 完整业务逻辑
-- 使用 Logger
 - 抛 BusinessException
 
 ### Validate 必须：
