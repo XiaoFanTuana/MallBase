@@ -480,6 +480,16 @@ const isVideoFile = (file: UploadFile) => {
   return /\.(mp4|mov|avi|mkv|flv|wmv|webm|ts)$/i.test(name);
 };
 
+const inlineVideoList = computed(() =>
+  fileList.value
+    .filter((file) => isVideoFile(file) && !!file.url)
+    .map((file) => ({
+      uid: file.uid,
+      name: file.name || '视频文件',
+      url: file.url as string,
+    })),
+);
+
 const handlePreview = (file: UploadFile) => {
   if (isVideoFile(file) && file.url) {
     videoPreviewUrl.value = file.url;
@@ -528,6 +538,22 @@ const handlePreview = (file: UploadFile) => {
       </a-button>
     </template>
   </a-upload>
+
+  <div v-if="isVideoType && inlineVideoList.length > 0" class="video-inline-preview">
+    <div
+      v-for="item in inlineVideoList"
+      :key="item.uid"
+      class="video-inline-preview__item"
+    >
+      <video
+        :src="item.url"
+        controls
+        preload="metadata"
+        class="video-inline-preview__player"
+      />
+      <div class="video-inline-preview__name" :title="item.name">{{ item.name }}</div>
+    </div>
+  </div>
 
   <a-modal
     v-model:open="videoPreviewOpen"
@@ -581,5 +607,36 @@ const handlePreview = (file: UploadFile) => {
 :deep(.ant-upload-select-picture-card) {
   background: hsl(var(--card));
   border: 1px dashed hsl(var(--border));
+}
+
+.video-inline-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.video-inline-preview__item {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  padding: 8px;
+}
+
+.video-inline-preview__player {
+  display: block;
+  width: 100%;
+  height: 140px;
+  border-radius: 6px;
+  background: #000;
+}
+
+.video-inline-preview__name {
+  margin-top: 8px;
+  font-size: 12px;
+  color: hsl(var(--foreground) / 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
