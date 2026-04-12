@@ -12,6 +12,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import Sortable from 'sortablejs';
 import { message } from 'ant-design-vue';
 
+import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
 import {
@@ -898,13 +899,12 @@ onMounted(() => loadOptions());
           <a-tab-pane key="detail" tab="商品详情">
             <div class="tab-body">
               <a-form-item label="商品描述" name="description" :wrapper-col="{ span: 22 }">
-                <a-textarea
-                  v-model:value="formData.description"
+                <RichTextEditor
+                  :height="420"
+                  module="goods"
+                  :model-value="formData.description"
                   placeholder="请输入商品描述..."
-                  :rows="18"
-                  :maxlength="10000"
-                  show-count
-                  allow-clear
+                  @update:model-value="(val: string) => { formData.description = val; }"
                 />
               </a-form-item>
             </div>

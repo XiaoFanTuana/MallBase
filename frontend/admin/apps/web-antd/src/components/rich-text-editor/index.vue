@@ -114,7 +114,7 @@ const validateImageFile = (file: File) => {
 };
 
 const toolbarConfig: Partial<IToolbarConfig> = {
-  excludeKeys: ['group-video'],
+  excludeKeys: ['fullScreen', 'group-video'],
 };
 
 const editorConfig: Partial<IEditorConfig> = {
@@ -190,18 +190,29 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid #d9d9d9;
   border-radius: 8px;
-  background: #fff;
+  background: inherit;
 }
 
 .rich-text-editor__toolbar {
   border-bottom: 1px solid #f0f0f0;
+  background: inherit;
 }
 
 .rich-text-editor__body {
   overflow-y: auto;
+  background: inherit;
 }
 
 .rich-text-editor :deep(.w-e-text-container [data-slate-editor]) {
   padding: 12px 14px;
+  background: transparent;
+}
+
+.rich-text-editor :deep(.w-e-text-container) {
+  background: transparent;
+}
+
+.rich-text-editor :deep(.w-e-bar) {
+  background: transparent;
 }
 </style>
