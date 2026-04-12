@@ -12,7 +12,6 @@ import { useAuthStore } from '#/store';
 defineOptions({ name: 'Login' });
 
 const authStore = useAuthStore();
-const isE2E = import.meta.env.VITE_E2E === 'true';
 
 const MOCK_USER_OPTIONS: BasicOption[] = [
   {
@@ -30,7 +29,7 @@ const MOCK_USER_OPTIONS: BasicOption[] = [
 ];
 
 const formSchema = computed((): VbenFormSchema[] => {
-  const schema: VbenFormSchema[] = [
+  return [
     {
       component: 'VbenSelect',
       // componentProps(_values, form) {
@@ -60,7 +59,7 @@ const formSchema = computed((): VbenFormSchema[] => {
         .string()
         .min(1, { message: $t('authentication.selectAccount') })
         .optional()
-        .default('admin'),
+        .default('vben'),
     },
     {
       component: 'VbenInput',
@@ -75,7 +74,7 @@ const formSchema = computed((): VbenFormSchema[] => {
             );
             if (findUser) {
               form.setValues({
-                password: findUser.value === 'admin' ? '123123' : '123456',
+                password: '123456',
                 username: findUser.value,
               });
             }
@@ -104,12 +103,6 @@ const formSchema = computed((): VbenFormSchema[] => {
       }),
     },
   ];
-
-  if (isE2E) {
-    return schema.filter((item) => item.fieldName !== 'captcha');
-  }
-
-  return schema;
 });
 
 const loginRef =
@@ -117,7 +110,6 @@ const loginRef =
 
 async function onSubmit(params: Recordable<any>) {
   authStore.authLogin(params).catch(() => {
-    if (isE2E) return;
     // 登陆失败，刷新验证码的演示
     const formApi = loginRef.value?.getFormApi();
     // 重置验证码组件的值
