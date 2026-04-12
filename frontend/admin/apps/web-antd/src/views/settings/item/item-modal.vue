@@ -655,8 +655,8 @@ const handleOk = async () => {
 .rule-item {
   margin-bottom: 12px;
   padding: 12px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
 }
 
@@ -699,10 +699,14 @@ const handleOk = async () => {
 .rule-tip {
   margin-top: 8px;
   font-size: 12px;
-  color: #8c8c8c;
+  color: hsl(var(--muted-foreground));
 }
 
 .rule-tip-warning {
-  color: #fa8c16;
+  color: hsl(var(--warning));
+}
+
+.rule-options-group :deep(.ant-checkbox-wrapper) {
+  color: hsl(var(--foreground));
 }
 </style>

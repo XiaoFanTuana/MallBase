@@ -2,6 +2,54 @@
 
 declare (strict_types=1);
 
+// 图片 MIME（常见 jpg/jpeg/png/gif/webp）
+$imageAcceptTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+];
+
+// 文档与压缩包 MIME（常见办公与归档格式）
+$documentAcceptTypes = [
+    // Office / WPS 常见
+    'application/pdf',
+    'application/msword', // .doc
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+    'application/vnd.ms-excel', // .xls
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-powerpoint', // .ppt
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+    // 压缩包
+    'application/zip', // .zip
+    'application/x-zip-compressed', // .zip（兼容）
+    'application/vnd.rar', // .rar
+    'application/x-rar', // .rar（兼容）
+    'application/x-rar-compressed', // .rar（兼容）
+    'application/x-7z-compressed', // .7z
+    'application/x-tar', // .tar
+    'application/gzip', // .gz
+    // 文本 / 音频
+    'text/plain', // .txt
+    'text/csv', // .csv
+    'application/csv', // .csv（兼容）
+    'audio/mpeg', // .mp3
+    'audio/mp3', // .mp3（兼容）
+];
+
+// 视频 MIME（国内常见格式）
+$videoAcceptTypes = [
+    'video/mp4', // .mp4
+    'video/quicktime', // .mov
+    'video/x-msvideo', // .avi
+    'video/x-matroska', // .mkv
+    'video/x-flv', // .flv
+    'video/x-ms-wmv', // .wmv
+    'video/webm', // .webm
+    'video/mp2t', // .ts
+];
+
 // 文件上传配置
 return [
     // 默认上传驱动：local（本地）、oss（阿里云OSS）、cos（腾讯云COS）
@@ -40,97 +88,37 @@ return [
         'image' => [
             'max_size'     => 2,    // MB
             'max_count'    => 1,
-            'accept_types' => ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+            'accept_types' => $imageAcceptTypes,
         ],
         // 多张图片
         'images' => [
             'max_size'     => 5,    // MB（单张）
             'max_count'    => 9,
-            'accept_types' => ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+            'accept_types' => $imageAcceptTypes,
         ],
         // 单个文件
         'file' => [
             'max_size'     => 10,   // MB
             'max_count'    => 1,
-            'accept_types' => [
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-powerpoint',
-                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                'application/zip',
-                'application/x-zip-compressed',
-                'application/vnd.rar',
-                'application/x-rar',
-                'application/x-rar-compressed',
-                'application/x-7z-compressed',
-                'application/x-tar',
-                'application/gzip',
-                'text/plain',
-                'text/csv',
-                'application/csv',
-                'audio/mpeg',
-                'audio/mp3',
-            ],
+            'accept_types' => $documentAcceptTypes,
         ],
         // 多个文件
         'files' => [
             'max_size'     => 10,   // MB（单个）
             'max_count'    => 5,
-            'accept_types' => [
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-powerpoint',
-                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                'application/zip',
-                'application/x-zip-compressed',
-                'application/vnd.rar',
-                'application/x-rar',
-                'application/x-rar-compressed',
-                'application/x-7z-compressed',
-                'application/x-tar',
-                'application/gzip',
-                'text/plain',
-                'text/csv',
-                'application/csv',
-                'audio/mpeg',
-                'audio/mp3',
-            ],
+            'accept_types' => $documentAcceptTypes,
         ],
         // 单个视频
         'video' => [
             'max_size'     => 200,  // MB
             'max_count'    => 1,
-            'accept_types' => [
-                'video/mp4',
-                'video/quicktime',
-                'video/x-msvideo',
-                'video/x-matroska',
-                'video/x-flv',
-                'video/x-ms-wmv',
-                'video/webm',
-                'video/mp2t',
-            ],
+            'accept_types' => $videoAcceptTypes,
         ],
         // 多个视频
         'videos' => [
             'max_size'     => 200,  // MB（单个）
             'max_count'    => 5,
-            'accept_types' => [
-                'video/mp4',
-                'video/quicktime',
-                'video/x-msvideo',
-                'video/x-matroska',
-                'video/x-flv',
-                'video/x-ms-wmv',
-                'video/webm',
-                'video/mp2t',
-            ],
+            'accept_types' => $videoAcceptTypes,
         ],
     ],
 ];

@@ -167,6 +167,7 @@ const effectiveAcceptTypes = computed(() => {
 const effectiveAccept = computed(() => effectiveAcceptTypes.value.join(','));
 
 const isImageType = computed(() => ['image', 'images'].includes(props.type));
+const isVideoType = computed(() => ['video', 'videos'].includes(props.type));
 
 /** 多选：files/images 自动开启，传了 multiple 以传的为准 */
 const effectiveMultiple = computed(() => {
@@ -208,7 +209,7 @@ const uploadProps = computed<UploadProps>(() => ({
   name: 'file',
   maxCount: effectiveMaxCount.value,
   accept: effectiveAccept.value || undefined,
-  listType: isImageType.value ? 'picture-card' : 'text',
+  listType: isImageType.value || isVideoType.value ? 'picture-card' : 'text',
   showUploadList: props.showUploadList
     ? { showDownloadIcon: false, showPreviewIcon: true, showRemoveIcon: true }
     : false,
@@ -468,7 +469,24 @@ const uploadButtonText = computed(() => {
   return props.type === 'file' ? '上传文件' : '添加文件';
 });
 
+const videoPreviewOpen = ref(false);
+const videoPreviewUrl = ref('');
+const videoPreviewTitle = ref('');
+
+const isVideoFile = (file: UploadFile) => {
+  const fileType = (file.type || '').toLowerCase();
+  if (fileType.startsWith('video/')) return true;
+  const name = (file.name || file.url || '').toLowerCase();
+  return /\.(mp4|mov|avi|mkv|flv|wmv|webm|ts)$/i.test(name);
+};
+
 const handlePreview = (file: UploadFile) => {
+  if (isVideoFile(file) && file.url) {
+    videoPreviewUrl.value = file.url;
+    videoPreviewTitle.value = file.name || '视频预览';
+    videoPreviewOpen.value = true;
+    return;
+  }
   if (file.url) {
     window.open(file.url, '_blank');
   }
@@ -482,12 +500,20 @@ const handlePreview = (file: UploadFile) => {
     :disabled="disabled"
     @preview="handlePreview"
   >
-    <!-- 图片类型：缩略图卡片 -->
-    <template v-if="isImageType && showUploadButton">
+    <!-- 图片/视频类型：缩略图卡片 -->
+    <template v-if="(isImageType || isVideoType) && showUploadButton">
       <div>
-        <span>+</span>
+        <span>{{ isVideoType ? '▶' : '+' }}</span>
         <div style="margin-top: 8px">
-          {{ type === 'image' ? '上传图片' : '添加图片' }}
+          {{
+            isVideoType
+              ? type === 'video'
+                ? '上传视频'
+                : '添加视频'
+              : type === 'image'
+                ? '上传图片'
+                : '添加图片'
+          }}
         </div>
       </div>
     </template>
@@ -496,12 +522,27 @@ const handlePreview = (file: UploadFile) => {
     <template v-else-if="showUploadButton">
       <a-button>
         <template #icon>
-          <span>📤</span>
+          <span>↑</span>
         </template>
         {{ uploadButtonText }}
       </a-button>
     </template>
   </a-upload>
+
+  <a-modal
+    v-model:open="videoPreviewOpen"
+    :title="videoPreviewTitle"
+    :footer="null"
+    width="760px"
+    destroy-on-close
+  >
+    <video
+      v-if="videoPreviewUrl"
+      :src="videoPreviewUrl"
+      controls
+      style="display: block; width: 100%; max-height: 70vh; border-radius: 8px; background: #000"
+    />
+  </a-modal>
 </template>
 
 <style scoped>
@@ -525,5 +566,20 @@ const handlePreview = (file: UploadFile) => {
 
 :deep(.ant-upload-list-text .ant-upload-list-item:hover) {
   background-color: #f5f5f5;
+}
+
+:deep(.ant-upload-list-picture-card-container) {
+  width: 108px;
+  height: 108px;
+}
+
+:deep(.ant-upload-list-picture-card .ant-upload-list-item) {
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+}
+
+:deep(.ant-upload-select-picture-card) {
+  background: hsl(var(--card));
+  border: 1px dashed hsl(var(--border));
 }
 </style>
