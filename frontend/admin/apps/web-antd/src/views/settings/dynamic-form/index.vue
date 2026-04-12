@@ -9,6 +9,7 @@ import { JsonViewer } from '@vben/common-ui';
 import { message, Spin } from 'ant-design-vue';
 
 import { getSettingConfigApi, saveSettingConfigApi } from '#/api/setting';
+import RichTextEditor from '#/components/rich-text-editor/index.vue';
 import Upload from '#/components/upload/index.vue';
 
 defineOptions({ name: 'SettingDynamicForm' });
@@ -754,12 +755,17 @@ onMounted(loadConfig);
             <template v-else-if="item.type === 'editor'">
               <a-tabs type="card" size="small" class="editor-tabs">
                 <a-tab-pane key="edit" tab="编辑">
-                  <a-textarea
-                    v-model:value="formValues[item.code]"
+                  <RichTextEditor
+                    :model-value="formValues[item.code]"
+                    module="dynamic_form"
                     :placeholder="item.placeholder || '请输入内容'"
-                    :rows="8"
-                    :status="getFieldError(item.code) ? 'error' : undefined"
-                    class="font-mono text-sm"
+                    :related-id="item.id"
+                    @update:model-value="
+                      (val: string) => {
+                        formValues[item.code] = val;
+                        delete formErrors[item.code];
+                      }
+                    "
                     @blur="handleFieldChange(item)"
                   />
                 </a-tab-pane>
@@ -984,12 +990,17 @@ onMounted(loadConfig);
             <template v-else-if="item.type === 'editor'">
               <a-tabs type="card" size="small" class="editor-tabs">
                 <a-tab-pane key="edit" tab="编辑">
-                  <a-textarea
-                    v-model:value="formValues[item.code]"
+                  <RichTextEditor
+                    :model-value="formValues[item.code]"
+                    module="dynamic_form"
                     :placeholder="item.placeholder || '请输入内容'"
-                    :rows="8"
-                    :status="getFieldError(item.code) ? 'error' : undefined"
-                    class="font-mono text-sm"
+                    :related-id="item.id"
+                    @update:model-value="
+                      (val: string) => {
+                        formValues[item.code] = val;
+                        delete formErrors[item.code];
+                      }
+                    "
                     @blur="handleFieldChange(item)"
                   />
                 </a-tab-pane>
@@ -1212,12 +1223,17 @@ onMounted(loadConfig);
             <template v-else-if="item.type === 'editor'">
               <a-tabs type="card" size="small" class="editor-tabs">
                 <a-tab-pane key="edit" tab="编辑">
-                  <a-textarea
-                    v-model:value="formValues[item.code]"
+                  <RichTextEditor
+                    :model-value="formValues[item.code]"
+                    module="dynamic_form"
                     :placeholder="item.placeholder || '请输入内容'"
-                    :rows="8"
-                    :status="getFieldError(item.code) ? 'error' : undefined"
-                    class="font-mono text-sm"
+                    :related-id="item.id"
+                    @update:model-value="
+                      (val: string) => {
+                        formValues[item.code] = val;
+                        delete formErrors[item.code];
+                      }
+                    "
                     @blur="handleFieldChange(item)"
                   />
                 </a-tab-pane>

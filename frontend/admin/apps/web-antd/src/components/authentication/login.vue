@@ -78,6 +78,8 @@ defineExpose({
   getFormApi: () => formApi,
 });
 
+</script>
+
 <template>
   <div @keydown.enter.prevent="handleSubmit">
     <!-- 标题区域 -->
