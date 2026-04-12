@@ -236,10 +236,29 @@ const handleRuleValueChange = (index: number) => {
   }
 };
 
-/** 获取规则的 options 复选框配置 */
-const getRuleOptions = (ruleType: string): string[] => {
+/** 获取规则 options（统一归一化为 {label,value} 结构） */
+const getRuleOptions = (
+  ruleType: string,
+): Array<{ label: string; value: string }> => {
   const def = getRuleTypeDef(ruleType);
-  return def?.options || [];
+  const rawOptions = def?.options || [];
+
+  return rawOptions
+    .map((opt) => {
+      if (typeof opt === 'string') {
+        return { label: opt, value: opt };
+      }
+      if (
+        opt &&
+        typeof opt === 'object' &&
+        typeof (opt as any).label === 'string' &&
+        typeof (opt as any).value === 'string'
+      ) {
+        return { label: (opt as any).label, value: (opt as any).value };
+      }
+      return null;
+    })
+    .filter((opt): opt is { label: string; value: string } => Boolean(opt));
 };
 
 /** 处理 options 复选框变更 */
@@ -554,10 +573,10 @@ const handleOk = async () => {
                   >
                     <a-checkbox
                       v-for="opt in getRuleOptions(rule.type)"
-                      :key="opt"
-                      :value="opt"
+                      :key="opt.value"
+                      :value="opt.value"
                     >
-                      {{ opt }}
+                      {{ opt.label }}
                     </a-checkbox>
                   </a-checkbox-group>
                 </template>

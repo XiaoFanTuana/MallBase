@@ -35,7 +35,7 @@ const config: PlaywrightTestConfig = {
     port: 5666,
     reuseExistingServer: true,
   },
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
 };
 
 export default config;

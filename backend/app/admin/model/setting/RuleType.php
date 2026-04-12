@@ -12,6 +12,48 @@ use app\service\UploadService;
  */
 class RuleType
 {
+    /**
+     * MIME 展示名称映射（用于前端规则配置展示）
+     * value 永远保留 MIME 原值，label 为短名称
+     *
+     * @var array<string, string>
+     */
+    private const MIME_LABEL_MAP = [
+        'application/pdf' => 'PDF 文档 (.pdf)',
+        'application/msword' => 'Word 文档 (.doc)',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'Word 文档 (.docx)',
+        'application/vnd.ms-excel' => 'Excel 表格 (.xls)',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'Excel 表格 (.xlsx)',
+        'application/vnd.ms-powerpoint' => 'PPT 演示文稿 (.ppt)',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'PPT 演示文稿 (.pptx)',
+        'application/zip' => 'ZIP 压缩包 (.zip)',
+        'application/x-zip-compressed' => 'ZIP 压缩包 (.zip)',
+        'application/vnd.rar' => 'RAR 压缩包 (.rar)',
+        'application/x-rar' => 'RAR 压缩包 (.rar)',
+        'application/x-rar-compressed' => 'RAR 压缩包 (.rar)',
+        'application/x-7z-compressed' => '7Z 压缩包 (.7z)',
+        'application/x-tar' => 'TAR 压缩包 (.tar)',
+        'application/gzip' => 'GZIP 压缩包 (.gz)',
+        'text/plain' => '文本文件 (.txt)',
+        'text/csv' => 'CSV 文件 (.csv)',
+        'application/csv' => 'CSV 文件 (.csv)',
+        'audio/mpeg' => 'MP3 音频 (.mp3)',
+        'audio/mp3' => 'MP3 音频 (.mp3)',
+        'image/jpeg' => 'JPEG 图片 (.jpeg)',
+        'image/jpg' => 'JPG 图片 (.jpg)',
+        'image/png' => 'PNG 图片 (.png)',
+        'image/gif' => 'GIF 图片 (.gif)',
+        'image/webp' => 'WEBP 图片 (.webp)',
+        'video/mp4' => 'MP4 视频 (.mp4)',
+        'video/quicktime' => 'MOV 视频 (.mov)',
+        'video/x-msvideo' => 'AVI 视频 (.avi)',
+        'video/x-matroska' => 'MKV 视频 (.mkv)',
+        'video/x-flv' => 'FLV 视频 (.flv)',
+        'video/x-ms-wmv' => 'WMV 视频 (.wmv)',
+        'video/webm' => 'WEBM 视频 (.webm)',
+        'video/mp2t' => 'TS 视频 (.ts)',
+    ];
+
     // ==================== 规则类型常量 ====================
 
     /** 必填 */
@@ -311,12 +353,40 @@ class RuleType
         $options = [];
         foreach ($rules as $type => $rule) {
             $options[] = [
-                'label' => $type . '（' . implode(', ', $rule['accept_types'] ?? []) . '）',
-                'value' => $rule['accept_types'] ?? [],
+                'label' => $type,
+                'value' => self::formatAcceptTypeOptions((array)($rule['accept_types'] ?? [])),
                 'upload_type' => $type,
             ];
         }
 
         return $options;
+    }
+
+    /**
+     * 将 MIME 列表格式化为前端展示选项
+     *
+     * @param string[] $acceptTypes
+     * @return array<int, array{label: string, value: string}>
+     */
+    public static function formatAcceptTypeOptions(array $acceptTypes): array
+    {
+        $result = [];
+        $seen = [];
+
+        foreach ($acceptTypes as $mime) {
+            if (!is_string($mime) || $mime === '') {
+                continue;
+            }
+            if (isset($seen[$mime])) {
+                continue;
+            }
+            $seen[$mime] = true;
+            $result[] = [
+                'label' => self::MIME_LABEL_MAP[$mime] ?? $mime,
+                'value' => $mime,
+            ];
+        }
+
+        return $result;
     }
 }

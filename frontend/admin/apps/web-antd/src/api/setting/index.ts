@@ -44,6 +44,12 @@ export namespace SettingApi {
   }
 
   /** 验证规则类型定义（后端接口返回） */
+  export interface RuleOptionItem {
+    label: string;
+    value: string;
+  }
+
+  /** 验证规则类型定义（后端接口返回） */
   export interface RuleTypeItem {
     /** 规则类型标识 */
     type: string;
@@ -57,8 +63,8 @@ export namespace SettingApi {
     need_flags?: boolean;
     /** 默认提示信息模板（支持 {name}、{value} 占位符） */
     default_message_template: string;
-    /** 预定义选项列表，有此字段时前端渲染为复选框供用户选择 */
-    options?: string[];
+    /** 预定义选项列表，兼容旧版 string[] 与新版 {label,value}[] */
+    options?: RuleOptionItem[] | string[];
   }
 
   /** 验证规则类型映射（按表单类型分组，key 为表单类型如 input/number 等） */

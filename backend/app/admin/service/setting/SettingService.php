@@ -639,7 +639,7 @@ class SettingService extends BaseService
                 $item = array_intersect_key($rule, array_flip($keepKeys));
                 // 为 accept_types 规则添加 options（当前表单类型对应的 accept_types 列表）
                 if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES && isset($uploadRules[$formType]['accept_types'])) {
-                    $item['options'] = $uploadRules[$formType]['accept_types'];
+                    $item['options'] = RuleType::formatAcceptTypeOptions((array)$uploadRules[$formType]['accept_types']);
                 }
                 return $item;
             }, $applicableRules);
