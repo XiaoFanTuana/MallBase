@@ -6,7 +6,6 @@ namespace app\admin\controller;
 
 use app\service\UploadService;
 use mall_base\base\BaseController;
-use mall_base\log\Logger;
 
 /**
  * 上传控制器
@@ -36,14 +35,6 @@ class UploadController extends BaseController
         $module    = $this->request->param('module', '');
         $relatedId = $this->request->param('related_id', 0);
 
-        Logger::instance()->info('单文件上传', [
-            'type'       => $type,
-            'module'     => $module,
-            'related_id' => $relatedId,
-            'file_name'  => $file->getOriginalName(),
-            'file_size'  => $file->getSize(),
-        ]);
-
         $rules  = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
         $result = $this->service()->upload($file, $rules, 'admin');
 
@@ -66,14 +57,6 @@ class UploadController extends BaseController
         $type      = $this->request->param('type', 'images');
         $module    = $this->request->param('module', '');
         $relatedId = $this->request->param('related_id', 0);
-
-        $fileCount = is_array($files) ? count($files) : 0;
-        Logger::instance()->info('批量文件上传', [
-            'type'       => $type,
-            'module'     => $module,
-            'related_id' => $relatedId,
-            'file_count' => $fileCount,
-        ]);
 
         $rules   = $this->service()->resolveUploadRules($type, $module, (int)$relatedId);
         $results = $this->service()->batchUpload($files, $rules, 'admin');
