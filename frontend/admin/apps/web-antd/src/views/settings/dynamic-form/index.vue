@@ -1575,4 +1575,48 @@ onMounted(loadConfig);
     grid-template-columns: 1fr;
   }
 }
+
+</style>
+
+<style>
+html.dark .setting-form-page {
+  background: #0f0f10;
+}
+
+html.dark .setting-header,
+html.dark .setting-card,
+html.dark .save-bar {
+  background: #141414;
+}
+
+html.dark .setting-header,
+html.dark .editor-tabs,
+html.dark .save-bar,
+html.dark .tab-divider::before {
+  border-color: #2f2f2f;
+}
+
+html.dark .editor-preview,
+html.dark .json-preview {
+  background: #1a1a1a;
+  color: rgb(242 242 242 / 85%);
+}
+
+html.dark .tab-divider-text {
+  background: #0f0f10;
+}
+
+html.dark .header-title,
+html.dark .section-title,
+html.dark .form-label {
+  color: rgb(242 242 242 / 85%);
+}
+
+html.dark .header-desc,
+html.dark .form-remark,
+html.dark .switch-label,
+html.dark .save-tip,
+html.dark .tab-divider-text {
+  color: rgb(255 255 255 / 45%);
+}
 </style>

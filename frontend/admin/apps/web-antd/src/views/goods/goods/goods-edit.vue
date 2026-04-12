@@ -410,4 +410,56 @@ onMounted(() => {});
 /* ===== 另存为模板弹窗 ===== */
 .save-template-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
 .save-template-item { padding: 10px 12px; background: var(--ant-colorBgElevated, #fafafa); border: 1px solid var(--ant-colorBorderSecondary, #f0f0f0); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+
+</style>
+
+<style>
+html.dark .goods-edit-page,
+html.dark .goods-edit-page.fullscreen {
+  background: #0f0f10;
+}
+
+html.dark .goods-edit-page .page-header,
+html.dark .goods-edit-page .edit-tabs,
+html.dark .goods-edit-page .spec-item,
+html.dark .goods-edit-page .tag-chip,
+html.dark .goods-edit-page .save-template-item {
+  background: #141414;
+}
+
+html.dark .goods-edit-page .page-header,
+html.dark .goods-edit-page .spec-item,
+html.dark .goods-edit-page .flag-row,
+html.dark .goods-edit-page .tag-chip,
+html.dark .goods-edit-page .save-template-item,
+html.dark .goods-edit-page .spec-lib-item,
+html.dark .goods-edit-page .spec-lib-val-tag,
+html.dark .goods-edit-page .spec-val-item {
+  border-color: #2f2f2f;
+}
+
+html.dark .goods-edit-page .edit-tabs .ant-tabs-nav,
+html.dark .goods-edit-page .flag-cell,
+html.dark .goods-edit-page .spec-name-row,
+html.dark .goods-edit-page .spec-lib-item,
+html.dark .goods-edit-page .spec-lib-val-tag,
+html.dark .goods-edit-page .spec-val-item {
+  background: #1a1a1a;
+}
+
+html.dark .goods-edit-page .page-title,
+html.dark .goods-edit-page .sku-spec-val,
+html.dark .goods-edit-page .spec-lib-name {
+  color: rgb(242 242 242 / 85%);
+}
+
+html.dark .goods-edit-page .back-btn,
+html.dark .goods-edit-page .fullscreen-btn,
+html.dark .goods-edit-page .form-tip,
+html.dark .goods-edit-page .flag-name,
+html.dark .goods-edit-page .tag-chip,
+html.dark .goods-edit-page .empty-tip,
+html.dark .goods-edit-page .spec-lib-val-tag {
+  color: rgb(255 255 255 / 45%);
+}
 </style>

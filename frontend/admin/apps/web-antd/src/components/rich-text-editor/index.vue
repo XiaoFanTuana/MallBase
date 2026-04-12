@@ -227,4 +227,46 @@ onBeforeUnmount(() => {
 .rich-text-editor :deep(.w-e-bar-divider) {
   border-left-color: var(--ant-colorBorderSecondary, #f0f0f0);
 }
+
+</style>
+
+<style>
+html.dark .rich-text-editor {
+  border-color: #2f2f2f;
+  color: rgb(242 242 242 / 85%);
+  background: #141414;
+}
+
+html.dark .rich-text-editor .rich-text-editor__toolbar {
+  border-bottom-color: #2f2f2f;
+  background: #141414;
+}
+
+html.dark .rich-text-editor .rich-text-editor__body {
+  color: rgb(242 242 242 / 85%);
+  background: #141414;
+}
+
+html.dark .rich-text-editor .w-e-text-container,
+html.dark .rich-text-editor .w-e-bar {
+  background: transparent;
+}
+
+html.dark .rich-text-editor .w-e-text-container [data-slate-editor] {
+  color: rgb(242 242 242 / 85%);
+}
+
+html.dark .rich-text-editor .w-e-bar-item button,
+html.dark .rich-text-editor .w-e-bar-item .menu-item {
+  color: rgb(242 242 242 / 85%);
+}
+
+html.dark .rich-text-editor .w-e-bar-divider {
+  border-left-color: #2f2f2f;
+}
+
+html.dark .rich-text-editor .w-e-bar-item button:hover,
+html.dark .rich-text-editor .w-e-bar-item .menu-item:hover {
+  background: #1f1f1f;
+}
 </style>
