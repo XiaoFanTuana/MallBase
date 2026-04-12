@@ -311,60 +311,60 @@ onMounted(() => {});
 
 <style scoped>
 /* ===== 页面容器 ===== */
-.goods-edit-page { display: flex; flex-direction: column; height: 100%; background: var(--ant-colorBgLayout, #f5f7fa); }
-.goods-edit-page.fullscreen { position: fixed; inset: 0; z-index: 1000; background: var(--ant-colorBgLayout, #f5f7fa); }
+.goods-edit-page { display: flex; flex-direction: column; height: 100%; background: hsl(var(--background-deep)); }
+.goods-edit-page.fullscreen { position: fixed; inset: 0; z-index: 1000; background: hsl(var(--background-deep)); }
 
 /* ===== 页头 ===== */
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; height: 52px; background: var(--ant-colorBgContainer, #fff);
-  border-bottom: 1px solid var(--ant-colorBorderSecondary, #e8edf2); flex-shrink: 0; box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
+  padding: 0 20px; height: 52px; background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border)); flex-shrink: 0; box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
 }
 .page-header-left { display: flex; align-items: center; gap: 12px; }
 .page-header-right { display: flex; align-items: center; gap: 8px; }
-.back-btn { color: var(--ant-colorTextSecondary, #595959); font-size: 13px; }
+.back-btn { color: hsl(var(--muted-foreground)); font-size: 13px; }
 .back-btn:hover { color: #1677ff; }
-.page-title { font-size: 15px; font-weight: 600; color: var(--ant-colorText, #262626); }
-.fullscreen-btn { display: flex; align-items: center; justify-content: center; color: var(--ant-colorTextSecondary, #8c8c8c); }
+.page-title { font-size: 15px; font-weight: 600; color: hsl(var(--foreground)); }
+.fullscreen-btn { display: flex; align-items: center; justify-content: center; color: hsl(var(--muted-foreground)); }
 .fullscreen-btn:hover { color: #1677ff; }
 
 /* ===== 内容区域 ===== */
 .page-body { flex: 1; overflow-y: auto; padding: 16px; }
-.edit-tabs { background: var(--ant-colorBgContainer, #fff); border-radius: 8px; }
-.edit-tabs :deep(.ant-tabs-nav) { padding: 0 20px; margin: 0; background: var(--ant-colorBgElevated, #fafafa); border-radius: 8px 8px 0 0; }
+.edit-tabs { background: hsl(var(--card)); border-radius: 8px; }
+.edit-tabs :deep(.ant-tabs-nav) { padding: 0 20px; margin: 0; background: hsl(var(--popover)); border-radius: 8px 8px 0 0; }
 
 /* ===== tab 内容区域 ===== */
 .tab-body { padding: 20px 24px 16px; }
 
 /* ===== 辅助文字 ===== */
-.form-tip { font-size: 12px; color: var(--ant-colorTextSecondary, #8c8c8c); line-height: 1.4; }
+.form-tip { font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.4; }
 .ml8 { margin-left: 8px; }
 .mb8 { margin-bottom: 8px; }
 
 /* ===== 标签选择 ===== */
 .tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid var(--ant-colorBorder, #d9d9d9); color: var(--ant-colorTextSecondary, #595959); background: var(--ant-colorBgContainer, #fff); user-select: none; transition: all 0.15s; }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); background: hsl(var(--card)); user-select: none; transition: all 0.15s; }
 .tag-chip:hover { border-color: #1677ff; color: #1677ff; }
-.tag-chip.active { border-color: #1677ff; background: var(--ant-colorPrimaryBg, #e6f4ff); color: #1677ff; }
+.tag-chip.active { border-color: #1677ff; background: hsl(var(--primary) / 0.15); color: #1677ff; }
 .tag-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* ===== 标签设置行 ===== */
-.flag-row { display: flex; border: 1px solid var(--ant-colorBorderSecondary, #e8edf2); border-radius: 6px; overflow: hidden; max-width: 520px; }
-.flag-cell { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-right: 1px solid var(--ant-colorBorderSecondary, #e8edf2); background: var(--ant-colorBgElevated, #fafafa); }
+.flag-row { display: flex; border: 1px solid hsl(var(--border)); border-radius: 6px; overflow: hidden; max-width: 520px; }
+.flag-cell { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-right: 1px solid hsl(var(--border)); background: hsl(var(--popover)); }
 .flag-cell:last-child { border-right: none; }
-.flag-name { font-size: 13px; color: var(--ant-colorTextSecondary, #595959); }
+.flag-name { font-size: 13px; color: hsl(var(--muted-foreground)); }
 
 /* ===== 规格区域 ===== */
 .spec-wrapper { display: flex; flex-direction: column; gap: 0; }
 .spec-list { display: flex; flex-direction: column; gap: 12px; }
-.spec-item { border: 1px solid var(--ant-colorBorderSecondary, #e8edf2); border-radius: 6px; overflow: hidden; background: var(--ant-colorBgContainer, #fff); }
-.spec-name-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--ant-colorFillAlter, #f7f9fc); border-bottom: 1px solid var(--ant-colorBorderSecondary, #e8edf2); }
+.spec-item { border: 1px solid hsl(var(--border)); border-radius: 6px; overflow: hidden; background: hsl(var(--card)); }
+.spec-name-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: hsl(var(--popover)); border-bottom: 1px solid hsl(var(--border)); }
 .spec-drag-handle, .val-drag-handle { cursor: grab; padding: 0 4px; color: #bbb; flex-shrink: 0; }
 .spec-drag-handle:active, .val-drag-handle:active { cursor: grabbing; }
 .spec-name-input { width: 180px; }
-.icon-info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--ant-colorBorder, #d9d9d9); font-size: 11px; color: var(--ant-colorTextSecondary, #8c8c8c); cursor: help; flex-shrink: 0; }
+.icon-info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid hsl(var(--border)); font-size: 11px; color: hsl(var(--muted-foreground)); cursor: help; flex-shrink: 0; }
 .spec-values-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
-.spec-val-item { display: inline-flex; align-items: center; gap: 4px; background: var(--ant-colorBgElevated, #fafafa); border: 1px solid var(--ant-colorBorderSecondary, #e8edf2); border-radius: 4px; padding: 2px 6px 2px 4px; }
+.spec-val-item { display: inline-flex; align-items: center; gap: 4px; background: hsl(var(--popover)); border: 1px solid hsl(var(--border)); border-radius: 4px; padding: 2px 6px 2px 4px; }
 .spec-val-item.has-pic { padding: 4px 6px 4px 4px; align-items: flex-start; flex-direction: column; }
 .spec-val-item.has-pic .val-drag-handle { align-self: center; }
 .val-input { width: 100px; }
@@ -372,7 +372,7 @@ onMounted(() => {});
 /* 规格图 */
 .val-pic-cell { display: flex; flex-direction: column; gap: 2px; }
 .val-pic-thumb { position: relative; display: inline-block; }
-.val-pic-thumb img { width: 46px; height: 46px; object-fit: cover; border-radius: 4px; border: 1px solid var(--ant-colorBorderSecondary, #e8edf2); display: block; }
+.val-pic-thumb img { width: 46px; height: 46px; object-fit: cover; border-radius: 4px; border: 1px solid hsl(var(--border)); display: block; }
 .val-pic-del { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; line-height: 1; }
 .val-pic-del:hover { background: #ff4d4f; }
 .val-pic-upload-wrap :deep(.ant-upload) { width: 46px !important; height: 46px !important; min-width: 46px !important; min-height: 46px !important; font-size: 18px; border-radius: 4px; overflow: hidden !important; }
@@ -386,12 +386,12 @@ onMounted(() => {});
 
 /* ===== SKU 表格 ===== */
 .sku-table :deep(.ant-table-cell) { padding: 4px 6px !important; vertical-align: middle; }
-.sku-spec-val { font-weight: 500; color: var(--ant-colorText, #262626); }
+.sku-spec-val { font-weight: 500; color: hsl(var(--foreground)); }
 
 /* SKU 规格图紧凑单元格 */
 .sku-img-cell { display: flex; align-items: center; justify-content: center; }
 .sku-img-cell .sku-img-thumb { position: relative; display: inline-block; }
-.sku-img-cell .sku-img-thumb img { width: 36px; height: 36px; object-fit: cover; border-radius: 3px; border: 1px solid var(--ant-colorBorderSecondary, #e8edf2); display: block; }
+.sku-img-cell .sku-img-thumb img { width: 36px; height: 36px; object-fit: cover; border-radius: 3px; border: 1px solid hsl(var(--border)); display: block; }
 .sku-img-cell .sku-img-del { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer; }
 .sku-img-cell .sku-img-del:hover { background: #ff4d4f; }
 .sku-img-cell :deep(.ant-upload-list) { display: none !important; }
@@ -401,65 +401,14 @@ onMounted(() => {});
 
 /* ===== 规格库弹窗 ===== */
 .spec-lib-list { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; width: 100%; }
-.spec-lib-item { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--ant-colorBgElevated, #fafafa); border: 1px solid var(--ant-colorBorderSecondary, #f0f0f0); border-radius: 6px; }
-.spec-lib-name { font-weight: 500; color: var(--ant-colorText, #262626); }
+.spec-lib-item { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: hsl(var(--popover)); border: 1px solid hsl(var(--border)); border-radius: 6px; }
+.spec-lib-name { font-weight: 500; color: hsl(var(--foreground)); }
 .spec-lib-values { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 24px; }
-.spec-lib-val-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; color: var(--ant-colorTextSecondary, #595959); background: var(--ant-colorFillAlter, #f0f0f0); border: 1px solid var(--ant-colorBorderSecondary, #e8edf2); }
-.empty-tip { color: var(--ant-colorTextSecondary, #8c8c8c); text-align: center; padding: 24px 0; }
+.spec-lib-val-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; color: hsl(var(--muted-foreground)); background: hsl(var(--popover)); border: 1px solid hsl(var(--border)); }
+.empty-tip { color: hsl(var(--muted-foreground)); text-align: center; padding: 24px 0; }
 
 /* ===== 另存为模板弹窗 ===== */
 .save-template-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
-.save-template-item { padding: 10px 12px; background: var(--ant-colorBgElevated, #fafafa); border: 1px solid var(--ant-colorBorderSecondary, #f0f0f0); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+.save-template-item { padding: 10px 12px; background: hsl(var(--popover)); border: 1px solid hsl(var(--border)); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
 
-</style>
-
-<style>
-html.dark .goods-edit-page,
-html.dark .goods-edit-page.fullscreen {
-  background: #0f0f10;
-}
-
-html.dark .goods-edit-page .page-header,
-html.dark .goods-edit-page .edit-tabs,
-html.dark .goods-edit-page .spec-item,
-html.dark .goods-edit-page .tag-chip,
-html.dark .goods-edit-page .save-template-item {
-  background: #141414;
-}
-
-html.dark .goods-edit-page .page-header,
-html.dark .goods-edit-page .spec-item,
-html.dark .goods-edit-page .flag-row,
-html.dark .goods-edit-page .tag-chip,
-html.dark .goods-edit-page .save-template-item,
-html.dark .goods-edit-page .spec-lib-item,
-html.dark .goods-edit-page .spec-lib-val-tag,
-html.dark .goods-edit-page .spec-val-item {
-  border-color: #2f2f2f;
-}
-
-html.dark .goods-edit-page .edit-tabs .ant-tabs-nav,
-html.dark .goods-edit-page .flag-cell,
-html.dark .goods-edit-page .spec-name-row,
-html.dark .goods-edit-page .spec-lib-item,
-html.dark .goods-edit-page .spec-lib-val-tag,
-html.dark .goods-edit-page .spec-val-item {
-  background: #1a1a1a;
-}
-
-html.dark .goods-edit-page .page-title,
-html.dark .goods-edit-page .sku-spec-val,
-html.dark .goods-edit-page .spec-lib-name {
-  color: rgb(242 242 242 / 85%);
-}
-
-html.dark .goods-edit-page .back-btn,
-html.dark .goods-edit-page .fullscreen-btn,
-html.dark .goods-edit-page .form-tip,
-html.dark .goods-edit-page .flag-name,
-html.dark .goods-edit-page .tag-chip,
-html.dark .goods-edit-page .empty-tip,
-html.dark .goods-edit-page .spec-lib-val-tag {
-  color: rgb(255 255 255 / 45%);
-}
 </style>

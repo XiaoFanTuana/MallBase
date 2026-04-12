@@ -1320,13 +1320,13 @@ onMounted(loadConfig);
 .setting-form-page {
   min-height: 100%;
   padding: 24px;
-  background: var(--ant-colorBgLayout, #f5f7fa);
+  background: hsl(var(--background-deep));
 }
 
 .setting-header {
   margin-bottom: 24px;
   padding: 24px 28px;
-  background: var(--ant-colorBgContainer, #fff);
+  background: hsl(var(--card));
   border-radius: 12px;
   box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
 }
@@ -1353,13 +1353,13 @@ onMounted(loadConfig);
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--ant-colorText, #1a1a2e);
+  color: hsl(var(--foreground));
 }
 
 .header-desc {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--ant-colorTextSecondary, #8c8c8c);
+  color: hsl(var(--muted-foreground));
 }
 
 .setting-section {
@@ -1373,12 +1373,12 @@ onMounted(loadConfig);
   padding-left: 4px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--ant-colorText, #333);
+  color: hsl(var(--foreground));
 }
 
 .setting-card {
   padding: 24px;
-  background: var(--ant-colorBgContainer, #fff);
+  background: hsl(var(--card));
   border-radius: 12px;
   box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
 }
@@ -1420,7 +1420,7 @@ onMounted(loadConfig);
   gap: 2px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--ant-colorText, #333);
+  color: hsl(var(--foreground));
 }
 
 .required-star {
@@ -1430,7 +1430,7 @@ onMounted(loadConfig);
 
 .form-remark {
   font-size: 12px;
-  color: var(--ant-colorTextSecondary, #8c8c8c);
+  color: hsl(var(--muted-foreground));
   line-height: 1.5;
   margin-top: 2px;
 }
@@ -1460,11 +1460,11 @@ onMounted(loadConfig);
 
 .switch-label {
   font-size: 13px;
-  color: var(--ant-colorTextSecondary, #8c8c8c);
+  color: hsl(var(--muted-foreground));
 }
 
 .editor-tabs {
-  border: 1px solid var(--ant-colorBorderSecondary, #f0f0f0);
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1472,11 +1472,11 @@ onMounted(loadConfig);
 .editor-preview {
   min-height: 160px;
   padding: 12px 16px;
-  background: var(--ant-colorBgElevated, #fafafa);
+  background: hsl(var(--popover));
   border-radius: 0 0 8px 8px;
   font-size: 14px;
   line-height: 1.8;
-  color: var(--ant-colorText, #333);
+  color: hsl(var(--foreground));
 }
 
 .editor-preview :deep(img) {
@@ -1487,7 +1487,7 @@ onMounted(loadConfig);
 .json-preview {
   min-height: 120px;
   padding: 12px 16px;
-  background: var(--ant-colorBgElevated, #fafafa);
+  background: hsl(var(--popover));
   border-radius: 0 0 8px 8px;
 }
 
@@ -1505,8 +1505,8 @@ onMounted(loadConfig);
   z-index: 10;
   margin-top: 24px;
   padding: 16px 24px;
-  background: var(--ant-colorBgContainer, #fff);
-  border-top: 1px solid var(--ant-colorBorderSecondary, #f0f0f0);
+  background: hsl(var(--card));
+  border-top: 1px solid hsl(var(--border));
   border-radius: 12px;
   box-shadow: 0 -2px 8px rgb(0 0 0 / 6%);
 }
@@ -1520,7 +1520,7 @@ onMounted(loadConfig);
 
 .save-tip {
   font-size: 13px;
-  color: var(--ant-colorTextSecondary, #8c8c8c);
+  color: hsl(var(--muted-foreground));
 }
 
 /* 闪烁高亮动画 */
@@ -1552,7 +1552,7 @@ onMounted(loadConfig);
   left: 0;
   right: 0;
   height: 1px;
-  background: var(--ant-colorBorderSecondary, #e8e8e8);
+  background: hsl(var(--border));
 }
 
 .tab-divider-text {
@@ -1561,8 +1561,8 @@ onMounted(loadConfig);
   padding: 0 16px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--ant-colorTextSecondary, #8c8c8c);
-  background: var(--ant-colorBgLayout, #f5f7fa);
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--background-deep));
 }
 
 @media (width <= 768px) {
@@ -1576,47 +1576,4 @@ onMounted(loadConfig);
   }
 }
 
-</style>
-
-<style>
-html.dark .setting-form-page {
-  background: #0f0f10;
-}
-
-html.dark .setting-header,
-html.dark .setting-card,
-html.dark .save-bar {
-  background: #141414;
-}
-
-html.dark .setting-header,
-html.dark .editor-tabs,
-html.dark .save-bar,
-html.dark .tab-divider::before {
-  border-color: #2f2f2f;
-}
-
-html.dark .editor-preview,
-html.dark .json-preview {
-  background: #1a1a1a;
-  color: rgb(242 242 242 / 85%);
-}
-
-html.dark .tab-divider-text {
-  background: #0f0f10;
-}
-
-html.dark .header-title,
-html.dark .section-title,
-html.dark .form-label {
-  color: rgb(242 242 242 / 85%);
-}
-
-html.dark .header-desc,
-html.dark .form-remark,
-html.dark .switch-label,
-html.dark .save-tip,
-html.dark .tab-divider-text {
-  color: rgb(255 255 255 / 45%);
-}
 </style>
