@@ -248,10 +248,13 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     if (!specListRef.value) return;
     specSortable?.destroy();
     specSortable = Sortable.create(specListRef.value, {
-      handle: '.spec-drag-handle',
+      handle: '.spec-drag-zone',
+      draggable: '.spec-item',
       animation: 150,
       forceFallback: true,
       fallbackTolerance: 4,
+      filter: 'input,textarea,button,.spec-name-actions,.ant-checkbox-wrapper,.ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-select,.ant-select-selector',
+      preventOnFilter: false,
       onEnd({ oldIndex, newIndex }) {
         if (oldIndex === newIndex) return;
         const moved = attrs.value.splice(oldIndex!, 1)[0]!;
@@ -449,7 +452,16 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       if (existing) return existing;
       const detail: Record<string, string> = {};
       for (const c of combo) detail[c.attrName] = c.value;
-      return { spec_values: specValues, detail, price: formData.price || undefined, market_price: formData.market_price || undefined, stock: formData.stock || undefined, sku_code: '', image: undefined };
+      return {
+        spec_values: specValues,
+        detail,
+        price: formData.price || undefined,
+        market_price: formData.market_price || undefined,
+        stock: formData.stock || undefined,
+        sku_code: '',
+        image: undefined,
+        is_show: 1,
+      };
     });
   };
   const applyBatch = () => {
@@ -464,6 +476,9 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       if (batchData['__stock__'] !== undefined && batchData['__stock__'] !== null && batchData['__stock__'] !== '') row.stock = Number(batchData['__stock__']);
       if (batchData['__sku_code__']) row.sku_code = String(batchData['__sku_code__']);
       if (batchData['__image__']) row.image = batchData['__image__'];
+      if (batchData['__is_show__'] !== undefined && batchData['__is_show__'] !== null && batchData['__is_show__'] !== '') {
+        row.is_show = Number(batchData['__is_show__']) as 0 | 1;
+      }
     }
     message.success(`已批量修改 ${targets.length} 个 SKU`);
   };
@@ -472,6 +487,23 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   const resetBatchEditor = () => {
     clearBatch();
     clearBatchFilters();
+  };
+
+  const validateUniqueSkuCodes = () => {
+    const codeMap = new Map<string, number>();
+
+    for (const [index, sku] of skuRows.value.entries()) {
+      const code = String(sku.sku_code || '').trim();
+      if (!code) {
+        continue;
+      }
+
+      if (codeMap.has(code)) {
+        throw new Error(`SKU编码重复：${code}`);
+      }
+
+      codeMap.set(code, index);
+    }
   };
 
   /* ---------- 从规格库 / 模板导入 ---------- */
@@ -650,6 +682,7 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
             row.market_price = sku.market_price || 0;
             row.stock = sku.stock;
             row.sku_code = sku.sku_code || '';
+            row.is_show = Number(sku.status ?? 1) as 0 | 1;
             row.image = sku.image
               ? {
                   url: sku.image,
@@ -683,10 +716,12 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
         })),
       };
       if (specType.value === 'multi' && skuRows.value.length > 0) {
+        validateUniqueSkuCodes();
         submitData.skus = skuRows.value.map((sku) => ({
           spec_values: sku.spec_values, price: sku.price, market_price: sku.market_price,
           stock: sku.stock, sku_code: sku.sku_code || '',
           image: getSkuSubmitImage(sku),
+          status: sku.is_show ?? 1,
         }));
       } else {
         // 单规格时显式清空多规格 SKU，避免“切换后历史 SKU 残留”

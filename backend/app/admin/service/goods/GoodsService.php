@@ -159,6 +159,7 @@ class GoodsService extends BaseService
 
         // 业务校验（事务外）
         $this->validateCategoryAndBrand($data);
+        $this->validateSkuCodes($data['skus'] ?? [], null);
 
         // 事务内只做写入
         $goodsId = $this->transaction(function () use ($data) {
@@ -211,6 +212,7 @@ class GoodsService extends BaseService
         }
 
         $this->validateCategoryAndBrand($data);
+        $this->validateSkuCodes($data['skus'] ?? [], $id);
 
         // 事务内只做写入
         $this->transaction(function () use ($id, $goods, $data) {
@@ -350,9 +352,51 @@ class GoodsService extends BaseService
                     'market_price' => $sku['market_price'] ?? 0,
                     'stock' => $sku['stock'] ?? 0,
                     'image' => $sku['image'] ?? '',
+                    'status' => $sku['status'] ?? 1,
                 ];
             }, $skus);
             $this->model(GoodsSku::class)->saveAll($data);
+        }
+    }
+
+    /**
+     * 校验 SKU 编码唯一性
+     *
+     * @param array $skus
+     * @param int|null $excludeGoodsId
+     */
+    protected function validateSkuCodes(array $skus, ?int $excludeGoodsId): void
+    {
+        if (empty($skus)) {
+            return;
+        }
+
+        $codes = [];
+        foreach ($skus as $index => $sku) {
+            $code = trim((string) ($sku['sku_code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+
+            if (isset($codes[$code])) {
+                throw new BusinessException("SKU编码重复：{$code}");
+            }
+
+            $codes[$code] = $index;
+        }
+
+        if (empty($codes)) {
+            return;
+        }
+
+        $query = $this->model(GoodsSku::class)->whereIn('sku_code', array_keys($codes));
+        if ($excludeGoodsId !== null) {
+            $query->where('goods_id', '<>', $excludeGoodsId);
+        }
+
+        $exists = $query->column('sku_code');
+        if (!empty($exists)) {
+            throw new BusinessException('SKU编码已存在：' . implode('、', array_unique($exists)));
         }
     }
 

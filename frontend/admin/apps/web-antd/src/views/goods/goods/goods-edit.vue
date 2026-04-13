@@ -185,7 +185,10 @@ onMounted(() => {});
                         <div v-for="(attr, attrIdx) in attrs" :key="attr.id" class="spec-item">
                           <div class="spec-name-row">
                             <div class="spec-name-main">
-                              <span class="spec-drag-handle" title="拖拽排序"><svg width="12" height="12" viewBox="0 0 12 12" fill="#bbb"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
+                              <span class="spec-drag-zone" title="拖拽排序">
+                                <span class="spec-drag-handle"><svg width="12" height="12" viewBox="0 0 12 12" fill="#bbb"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
+                                <span class="spec-drag-label">拖拽排序</span>
+                              </span>
                               <a-input v-model:value="attr.value" placeholder="规格名称" :maxlength="30" show-count class="spec-name-input" @change="generateSkuCombinations" />
                             </div>
                             <div class="spec-name-actions">
@@ -308,7 +311,10 @@ onMounted(() => {});
                               <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-cell-control" />
                             </template>
                             <template v-else-if="column.dataIndex === '_action'">
-                              <span class="batch-action-placeholder">-</span>
+                              <a-select v-model:value="(batchData as any)['__is_show__']" placeholder="显示状态" size="small" allow-clear class="batch-cell-control">
+                                <a-select-option :value="1">批量显示</a-select-option>
+                                <a-select-option :value="0">批量隐藏</a-select-option>
+                              </a-select>
                             </template>
                           </template>
                         </a-table>
@@ -469,6 +475,9 @@ onMounted(() => {});
 .spec-name-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; background: hsl(var(--popover) / 0.9); border-bottom: 1px solid hsl(var(--border)); }
 .spec-name-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .spec-name-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.spec-drag-zone { display: inline-flex; align-items: center; gap: 6px; min-width: 84px; height: 28px; padding: 0 8px; border-radius: 10px; background: hsl(var(--card)); border: 1px dashed hsl(var(--border)); cursor: grab; user-select: none; }
+.spec-drag-zone:active { cursor: grabbing; }
+.spec-drag-label { font-size: 12px; color: hsl(var(--muted-foreground)); }
 .spec-drag-handle, .val-drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; cursor: grab; padding: 0; color: #bbb; flex-shrink: 0; }
 .spec-drag-handle:active, .val-drag-handle:active { cursor: grabbing; }
 .spec-name-input { width: 240px; }
@@ -522,7 +531,6 @@ onMounted(() => {});
 .batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 100% !important; height: 100% !important; min-width: 100% !important; min-height: 100% !important; border-radius: 10px !important; }
 .sku-batch-table { min-width: max-content; }
 .sku-batch-table :deep(.ant-table-tbody > tr > td) { background: hsl(var(--card)); }
-.batch-action-placeholder { color: hsl(var(--muted-foreground)); }
 .sku-hit-stat { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 32px; border-radius: 10px; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: 12px; }
 .sku-hit-stat strong { font-size: 15px; color: hsl(var(--foreground)); }
 .sku-table :deep(.ant-table-cell) { padding: 4px 6px !important; vertical-align: middle; }
