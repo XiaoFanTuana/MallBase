@@ -7,7 +7,7 @@ import type { GoodsTagApi } from '#/api/goods';
 
 import type { FileInfo } from '#/components/upload';
 
-import { computed, nextTick, reactive, ref, type Ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, type Ref } from 'vue';
 
 import Sortable from 'sortablejs';
 import { Modal, message } from 'ant-design-vue';
@@ -254,15 +254,21 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
       animation: 150,
       filter: 'input,textarea,button,.spec-name-actions,.ant-checkbox-wrapper,.ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-select,.ant-select-selector',
       preventOnFilter: false,
-      onEnd({ oldIndex, newIndex }) {
+      onEnd({ oldIndex, newIndex, item, from }) {
         if (oldIndex === newIndex) return;
+        // SortableJS 已经移动了 DOM，先把它恢复原位，让 Vue 来统一渲染
+        const children = [...from.children];
+        if (oldIndex! < newIndex!) {
+          from.insertBefore(item, children[oldIndex!]!);
+        } else {
+          from.insertBefore(item, children[oldIndex! + 1] ?? null);
+        }
         const moved = attrs.value.splice(oldIndex!, 1)[0]!;
         attrs.value.splice(newIndex!, 0, moved);
         generateSkuCombinations();
-        nextTick(() => {
-          initSpecDrag();
-          initValueDrag();
-        });
+        // 用 setTimeout 延迟到拖拽事件队列全部清空后再重建 value 监听
+        // 不能在 onEnd 里调用 destroy()，否则 SortableJS 全局 dragover 监听会访问已销毁实例
+        setTimeout(() => nextTick(initValueDrag), 0);
       },
     });
   };
@@ -272,17 +278,42 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     valueSortables[attrIdx]?.destroy();
     valueSortables[attrIdx] = Sortable.create(el, {
       handle: '.val-drag-handle',
+      draggable: '.spec-val-item',
       animation: 150,
-      onEnd({ oldIndex, newIndex }) {
+      onEnd({ oldIndex, newIndex, item, from }) {
         if (oldIndex === newIndex) return;
+        // SortableJS 已经移动了 DOM，先把它恢复原位，让 Vue 来统一渲染
+        const children = [...from.children];
+        if (oldIndex! < newIndex!) {
+          from.insertBefore(item, children[oldIndex!]!);
+        } else {
+          from.insertBefore(item, children[oldIndex! + 1] ?? null);
+        }
         const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
         attrs.value[attrIdx]!.detail.splice(newIndex!, 0, moved);
         generateSkuCombinations();
-        nextTick(() => initValueDragAt(attrIdx));
+        // 无需 reinit：容器元素不变，SortableJS 实例仍然有效
       },
     });
   };
   const initValueDrag = () => { attrs.value.forEach((_, idx) => initValueDragAt(idx)); };
+
+  // 当 specListRef 挂载时自动初始化拖拽（解决 v-else 条件渲染时序问题）
+  watch(specListRef, (el) => {
+    if (el) {
+      nextTick(() => {
+        initSpecDrag();
+        initValueDrag();
+      });
+    }
+  });
+
+  onBeforeUnmount(() => {
+    specSortable?.destroy();
+    specSortable = null;
+    valueSortables.forEach((s) => s?.destroy());
+    valueSortables.length = 0;
+  });
 
   /* ---------- SKU 表格 ---------- */
   const skuRows = ref<SkuRow[]>([]);

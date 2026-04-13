@@ -87,8 +87,9 @@ const brandOptions = ref<GoodsBrandApi.BrandItem[]>([]);
 const tagOptions = ref<GoodsTagApi.TagItem[]>([]);
 
 /* ---------- 规格 attrs 模型 ---------- */
-interface AttrDetail { value: string; pic: FileInfo | string }
-interface Attr { value: string; add_pic: 0 | 1; detail: AttrDetail[] }
+const createLocalId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+interface AttrDetail { id: string; value: string; pic: FileInfo | string }
+interface Attr { id: string; value: string; add_pic: 0 | 1; detail: AttrDetail[] }
 
 const specType = ref<'single' | 'multi'>('single');
 const attrs = ref<Attr[]>([]);
@@ -110,17 +111,18 @@ const getPicUrl = (pic: FileInfo | string): string => {
 };
 
 const handleAddSpec = () => {
-  attrs.value.push({ value: '', add_pic: 0, detail: [{ value: '', pic: '' }] });
+  attrs.value.push({ id: createLocalId(), value: '', add_pic: 0, detail: [{ id: createLocalId(), value: '', pic: '' }] });
   nextTick(initValueDrag);
 };
 
 const handleRemoveSpec = (idx: number) => {
   attrs.value.splice(idx, 1);
   generateSkuCombinations();
+  nextTick(() => { initSpecDrag(); initValueDrag(); });
 };
 
 const addSpecValue = (attrIdx: number) => {
-  attrs.value[attrIdx]!.detail.push({ value: '', pic: '' });
+  attrs.value[attrIdx]!.detail.push({ id: createLocalId(), value: '', pic: '' });
   nextTick(() => initValueDragAt(attrIdx));
 };
 
@@ -151,12 +153,22 @@ const initSpecDrag = () => {
   specSortable?.destroy();
   specSortable = Sortable.create(specListRef.value, {
     handle: '.spec-drag-handle',
+    draggable: '.spec-item',
     animation: 150,
-    onEnd({ oldIndex, newIndex }) {
+    onEnd({ oldIndex, newIndex, item, from }) {
       if (oldIndex === newIndex) return;
+      // SortableJS 已经移动了 DOM，先把它恢复原位，让 Vue 来统一渲染
+      const children = [...from.children];
+      if (oldIndex! < newIndex!) {
+        from.insertBefore(item, children[oldIndex!]!);
+      } else {
+        from.insertBefore(item, children[oldIndex! + 1] ?? null);
+      }
       const moved = attrs.value.splice(oldIndex!, 1)[0]!;
       attrs.value.splice(newIndex!, 0, moved);
       generateSkuCombinations();
+      // setTimeout 推迟到拖拽事件队列清空后，避免在 SortableJS 全局 dragover 监听触发期间 destroy 实例
+      setTimeout(() => nextTick(initValueDrag), 0);
     },
   });
 };
@@ -167,12 +179,21 @@ const initValueDragAt = (attrIdx: number) => {
   valueSortables[attrIdx]?.destroy();
   valueSortables[attrIdx] = Sortable.create(el, {
     handle: '.val-drag-handle',
+    draggable: '.spec-val-item',
     animation: 150,
-    onEnd({ oldIndex, newIndex }) {
+    onEnd({ oldIndex, newIndex, item, from }) {
       if (oldIndex === newIndex) return;
+      // SortableJS 已经移动了 DOM，先把它恢复原位，让 Vue 来统一渲染
+      const children = [...from.children];
+      if (oldIndex! < newIndex!) {
+        from.insertBefore(item, children[oldIndex!]!);
+      } else {
+        from.insertBefore(item, children[oldIndex! + 1] ?? null);
+      }
       const moved = attrs.value[attrIdx]!.detail.splice(oldIndex!, 1)[0]!;
       attrs.value[attrIdx]!.detail.splice(newIndex!, 0, moved);
       generateSkuCombinations();
+      // 值拖拽容器元素不变，实例仍有效，无需重新初始化
     },
   });
 };
@@ -180,6 +201,16 @@ const initValueDragAt = (attrIdx: number) => {
 const initValueDrag = () => {
   attrs.value.forEach((_, idx) => initValueDragAt(idx));
 };
+
+// 当多规格区域挂载时自动初始化拖拽（解决 v-else 条件渲染导致 specListRef 为 null 的时序问题）
+watch(specListRef, (el) => {
+  if (el) {
+    nextTick(() => {
+      initSpecDrag();
+      initValueDrag();
+    });
+  }
+});
 
 /* ---------- SKU 表格 ---------- */
 interface SkuRow {
@@ -199,9 +230,10 @@ const multiSpecDraft = ref<{ attrs: Attr[]; skuRows: SkuRow[] }>({ attrs: [], sk
 
 const cloneAttrs = (source: Attr[]): Attr[] =>
   source.map((attr) => ({
+    id: attr.id || createLocalId(),
     value: attr.value,
     add_pic: attr.add_pic,
-    detail: attr.detail.map((det) => ({ value: det.value, pic: det.pic })),
+    detail: attr.detail.map((det) => ({ id: det.id || createLocalId(), value: det.value, pic: det.pic })),
   }));
 
 const cloneSkuRows = (source: SkuRow[]): SkuRow[] =>
@@ -369,9 +401,9 @@ const confirmSelectSpecs = () => {
   let added = 0;
   for (const spec of selected) {
     if (attrs.value.some((a) => a.value === spec.name)) continue;
-    const values = (spec.spec_values || spec.specValues || []).map((v) => ({ value: v.value, pic: '' }));
-    if (values.length === 0) values.push({ value: '', pic: '' });
-    attrs.value.push({ value: spec.name, add_pic: 0, detail: values });
+    const values = (spec.spec_values || spec.specValues || []).map((v) => ({ id: createLocalId(), value: v.value, pic: '' }));
+    if (values.length === 0) values.push({ id: createLocalId(), value: '', pic: '' });
+    attrs.value.push({ id: createLocalId(), value: spec.name, add_pic: 0, detail: values });
     added++;
   }
   if (added === 0 && selected.length > 0) {
@@ -467,9 +499,6 @@ watch(() => props.visible, async (val) => {
     activeTab.value = 'basic';
     await loadOptions();
     if (props.editData) await loadEditData(props.editData.id);
-    await nextTick();
-    initSpecDrag();
-    initValueDrag();
   }
 });
 
@@ -513,6 +542,7 @@ const loadEditData = async (id: number) => {
       const colCount = specValues.length;
 
       const newAttrs: Attr[] = Array.from({ length: colCount }, (_, i) => ({
+        id: createLocalId(),
         value: `规格${i + 1}`,
         add_pic: 0,
         detail: [],
@@ -524,7 +554,7 @@ const loadEditData = async (id: number) => {
         parts.forEach((v, i) => { if (v) valueSetsByPos[i]?.add(v); });
       }
       for (let i = 0; i < colCount; i++) {
-        newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => ({ value: v, pic: '' }));
+        newAttrs[i]!.detail = [...(valueSetsByPos[i] || [])].map((v) => ({ id: createLocalId(), value: v, pic: '' }));
       }
       attrs.value = newAttrs;
 
@@ -603,7 +633,7 @@ const handleSpecTypeChange = (val: 'single' | 'multi') => {
   specType.value = val;
   if (val === 'multi') {
     restoreMultiSpecDraft();
-    nextTick(() => { initSpecDrag(); initValueDrag(); });
+    // specListRef watcher 会在多规格区域挂载后自动初始化拖拽
   }
 };
 
@@ -776,7 +806,7 @@ onMounted(() => loadOptions());
                     <div ref="specListRef" class="spec-list">
                       <div
                         v-for="(attr, attrIdx) in attrs"
-                        :key="attrIdx"
+                        :key="attr.id"
                         class="spec-item"
                       >
                         <!-- 规格名行 -->
@@ -812,7 +842,7 @@ onMounted(() => loadOptions());
                         >
                           <div
                             v-for="(det, detIdx) in attr.detail"
-                            :key="detIdx"
+                            :key="det.id"
                             class="spec-val-item"
                             :class="{ 'has-pic': attr.add_pic === 1 }"
                           >

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 
-import { computed, nextTick, onMounted, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -24,7 +24,7 @@ const {
   toggleFullscreen, categoryTreeData, brandOptions, tagOptions,
   specType, attrs, canAddPic, getPicPreviewUrl, getSkuPreviewImage,
   handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic, handleSpecValueImageChange,
-  specListRef, valueListRefs, initSpecDrag, initValueDrag,
+  specListRef, valueListRefs,
   skuRows, batchData, batchFilters, matchedSkuRows, tableData, skuColumns,
   generateSkuCombinations, applyBatch, resetBatchEditor,
   specLibVisible, specImportTab, specLibLoading, specLibList, selectedSpecIds,
@@ -59,9 +59,6 @@ watch(editId, async (id) => {
   resetForm();
   await loadOptions();
   if (id) await loadEditData(id);
-  await nextTick();
-  initSpecDrag();
-  initValueDrag();
 }, { immediate: true });
 
 onMounted(() => {});
