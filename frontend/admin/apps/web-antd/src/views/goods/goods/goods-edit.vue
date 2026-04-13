@@ -24,10 +24,10 @@ const {
   formData, rules, formRef, loading, activeTab, isFullscreen, isEdit,
   toggleFullscreen, categoryTreeData, brandOptions, tagOptions,
   specType, attrs, canAddPic, getPicPreviewUrl, getSkuPreviewImage,
-  handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic,
+  handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic, handleSpecValueImageChange,
   specListRef, valueListRefs, initSpecDrag, initValueDrag,
-  skuRows, batchData, tableData, skuColumns,
-  generateSkuCombinations, applyBatch, clearBatch,
+  skuRows, batchData, batchFilters, matchedSkuRows, tableData, skuColumns,
+  generateSkuCombinations, applyBatch, resetBatchEditor,
   specLibVisible, specImportTab, specLibLoading, specLibList, selectedSpecIds,
   specTemplateList, selectedTemplateIds, openSpecLib, confirmSelectSpecs,
   saveTemplateVisible, saveTemplateList, saveTemplateLoading, saveTemplateName,
@@ -156,87 +156,138 @@ onMounted(() => {});
                 </template>
                 <template v-else>
                   <a-form-item label="商品规格" :wrapper-col="{ span: 22 }">
-                    <div class="spec-wrapper">
+                    <div class="spec-wrapper spec-designer">
+                      <div class="spec-designer-head">
+                        <div>
+                          <div class="spec-designer-title">规格设计器</div>
+                          <div class="form-tip">规格组与规格值都支持拖拽排序，带图规格值可同步替换命中 SKU 图片</div>
+                        </div>
+                      </div>
                       <div ref="specListRef" class="spec-list">
                         <div v-for="(attr, attrIdx) in attrs" :key="attrIdx" class="spec-item">
                           <div class="spec-name-row">
-                            <span class="spec-drag-handle" title="拖拽排序"><svg width="12" height="12" viewBox="0 0 12 12" fill="#bbb"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
-                            <a-input v-model:value="attr.value" placeholder="规格名称" :maxlength="30" show-count class="spec-name-input" @change="generateSkuCombinations" />
-                            <a-checkbox :checked="attr.add_pic === 1" :disabled="attr.add_pic === 0 && !canAddPic" @change="(e: any) => { attr.add_pic = e.target.checked ? 1 : 0; toggleAddPic(e.target.checked, attrIdx); }">添加规格图</a-checkbox>
-                            <a-tooltip title="只能同时为一个规格开启规格图" placement="right"><span class="icon-info">?</span></a-tooltip>
-                            <a-button type="text" danger size="small" class="ml8" @click="handleRemoveSpec(attrIdx)">删除</a-button>
+                            <div class="spec-name-main">
+                              <span class="spec-drag-handle" title="拖拽排序"><svg width="12" height="12" viewBox="0 0 12 12" fill="#bbb"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
+                              <a-input v-model:value="attr.value" placeholder="规格名称" :maxlength="30" show-count class="spec-name-input" @change="generateSkuCombinations" />
+                            </div>
+                            <div class="spec-name-actions">
+                              <a-checkbox :checked="attr.add_pic === 1" :disabled="attr.add_pic === 0 && !canAddPic" @change="(e: any) => { attr.add_pic = e.target.checked ? 1 : 0; toggleAddPic(e.target.checked, attrIdx); }">规格图</a-checkbox>
+                              <a-tooltip title="只能同时为一个规格开启规格图" placement="right"><span class="icon-info">?</span></a-tooltip>
+                              <a-button type="text" danger size="small" @click="handleRemoveSpec(attrIdx)">删除</a-button>
+                            </div>
+                          </div>
+                          <div class="spec-item-meta">
+                            <span>{{ attr.detail.length }} 个规格值</span>
+                            <span v-if="attr.add_pic === 1">已开启规格图，图片可同步替换命中 SKU</span>
+                            <span v-else>纯文字规格，规格值支持拖动调整顺序</span>
                           </div>
                           <div :ref="(el) => { valueListRefs[attrIdx] = el as HTMLElement }" class="spec-values-row">
-                            <div v-for="(det, detIdx) in attr.detail" :key="detIdx" class="spec-val-item" :class="{ 'has-pic': attr.add_pic === 1 }">
-                              <span class="val-drag-handle"><svg width="10" height="10" viewBox="0 0 12 12" fill="#ccc"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
-                              <a-input v-model:value="det.value" placeholder="规格值" :maxlength="30" class="val-input" @change="generateSkuCombinations" />
-                              <!-- 规格图：CSS show/hide 避免 Upload 卸载竞态 -->
-                              <template v-if="attr.add_pic">
-                                <div class="val-pic-cell">
-                                  <div class="val-pic-thumb" :style="{ display: det.pic ? 'inline-block' : 'none' }">
-                                    <img :src="getPicPreviewUrl(det.pic)" width="46" height="46" />
-                                    <span class="val-pic-del" @click.stop="attrs[attrIdx]!.detail[detIdx]!.pic = ''">×</span>
+                            <template v-if="attr.add_pic">
+                              <div v-for="(det, detIdx) in attr.detail" :key="detIdx" class="spec-val-item has-pic">
+                                <div class="spec-val-media-top">
+                                  <span class="val-drag-handle"><svg width="10" height="10" viewBox="0 0 12 12" fill="#ccc"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
+                                  <span class="val-del media-del" @click="removeSpecValue(attrIdx, detIdx)">×</span>
+                                </div>
+                                <div class="val-pic-cell media-card">
+                                  <div v-if="det.pic" class="val-pic-thumb media-thumb">
+                                    <img :src="getPicPreviewUrl(det.pic)" />
+                                    <span class="val-pic-del" @click.stop="handleSpecValueImageChange(attrIdx, detIdx, '')">×</span>
                                   </div>
-                                  <div class="val-pic-upload-wrap" :style="{ display: det.pic ? 'none' : 'inline-block' }">
+                                  <div v-else class="val-pic-upload-wrap media-thumb media-upload-wrap">
                                     <Upload type="image" module="goods" :show-upload-list="false" class="val-pic-upload"
-                                      @update:value="(v: FileInfo | undefined) => { if (v) attrs[attrIdx]!.detail[detIdx]!.pic = v; }" />
+                                      @update:value="(v: FileInfo | undefined) => handleSpecValueImageChange(attrIdx, detIdx, v)" />
                                   </div>
                                 </div>
-                              </template>
-                              <span class="val-del" @click="removeSpecValue(attrIdx, detIdx)">×</span>
-                            </div>
-                            <span class="add-val-btn" @click="addSpecValue(attrIdx)">+ 添加规格值</span>
+                                <a-input v-model:value="det.value" placeholder="规格值" :maxlength="30" class="val-input media-input" @change="generateSkuCombinations" />
+                              </div>
+                              <button type="button" class="add-val-card add-val-card-pic" @click="addSpecValue(attrIdx)">
+                                <span class="add-val-prefix">+</span>
+                                <span>添加带图规格值</span>
+                              </button>
+                            </template>
+                            <template v-else>
+                              <div v-for="(det, detIdx) in attr.detail" :key="detIdx" class="spec-val-item">
+                                <span class="val-drag-handle"><svg width="10" height="10" viewBox="0 0 12 12" fill="#ccc"><circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg></span>
+                                <a-input v-model:value="det.value" placeholder="规格值" :maxlength="30" class="val-input" @change="generateSkuCombinations" />
+                                <span class="val-del" @click="removeSpecValue(attrIdx, detIdx)">×</span>
+                              </div>
+                              <button type="button" class="add-val-card" @click="addSpecValue(attrIdx)">
+                                <span class="add-val-prefix">+</span>
+                                <span>添加规格值</span>
+                              </button>
+                            </template>
                           </div>
                         </div>
                       </div>
-                      <div class="spec-actions">
-                        <a-button v-if="attrs.length < 4" @click="handleAddSpec">添加新规格</a-button>
-                        <a-button @click="openSpecLib">从规格库导入</a-button>
-                        <a-button type="text" :disabled="attrs.length === 0" @click="openSaveTemplate">另存为模板</a-button>
+                      <div class="spec-actions light-toolbar">
+                        <button v-if="attrs.length < 4" type="button" class="light-tool-btn primary" @click="handleAddSpec">添加新规格</button>
+                        <button type="button" class="light-tool-btn" @click="openSpecLib">从规格库导入</button>
+                        <button type="button" class="light-tool-btn" :disabled="attrs.length === 0" @click="openSaveTemplate">另存为模板</button>
                       </div>
                     </div>
                   </a-form-item>
                   <a-form-item v-if="tableData.length > 0" label="商品属性" :wrapper-col="{ span: 22 }">
-                    <a-table :columns="(skuColumns as any[])" :data-source="tableData" :pagination="false" :scroll="{ x: 860, y: 400 }" size="small" bordered row-key="spec_values" class="sku-table">
+                    <div class="sku-panel">
+                      <div class="sku-panel-head">
+                        <div>
+                          <div class="sku-panel-title">SKU 组合与批量设置</div>
+                          <div class="form-tip">批量编辑可先按规格筛选，再对命中的 SKU 统一处理</div>
+                        </div>
+                        <div class="sku-panel-summary">已生成 {{ skuRows.length }} 个 SKU</div>
+                      </div>
+                      <div class="sku-batch-toolbar">
+                        <div class="sku-batch-left">
+                          <a-select
+                            v-for="(attr, attrIdx) in attrs"
+                            :key="attrIdx"
+                            v-model:value="batchFilters[attr.value || `规格${attrIdx + 1}`]"
+                            :placeholder="`${attr.value || `规格${attrIdx + 1}`}：全部`"
+                            size="small"
+                            allow-clear
+                            class="batch-filter-select"
+                          >
+                            <a-select-option v-for="det in attr.detail.filter((item) => item.value)" :key="det.value" :value="det.value">{{ attr.value || `规格${attrIdx + 1}` }}：{{ det.value }}</a-select-option>
+                          </a-select>
+                          <a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" class="batch-editor" />
+                          <a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" class="batch-editor" />
+                          <a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" class="batch-editor" />
+                          <a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU编码" size="small" class="batch-editor" />
+                          <div class="batch-image-editor">
+                            <span class="batch-image-label">批量设图</span>
+                            <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
+                          </div>
+                        </div>
+                        <div class="sku-batch-right">
+                          <div class="sku-hit-stat">
+                            <span>命中 SKU</span>
+                            <strong>{{ matchedSkuRows.length }}</strong>
+                          </div>
+                          <button type="button" class="light-tool-btn primary" @click="applyBatch">批量修改 / 快速清空</button>
+                          <button type="button" class="light-tool-btn" @click="resetBatchEditor">重置</button>
+                        </div>
+                      </div>
+                    </div>
+                    <a-table :columns="(skuColumns as any[])" :data-source="tableData" :pagination="false" :scroll="{ x: 860, y: 400 }" size="small" bordered row-key="spec_values" class="sku-table compact-table">
                       <template #bodyCell="{ column, record, index: rowIdx }">
-                        <template v-if="(record as SkuRow)._isBatch">
-                          <template v-if="(column as any)._isSpecCol">
-                            <a-select v-model:value="batchData[(column as any).title]" :placeholder="`选 ${(column as any).title}`" size="small" allow-clear style="width:100%">
-                              <a-select-option v-for="det in attrs[(column as any)._attrIdx]?.detail || []" :key="det.value" :value="det.value">{{ det.value }}</a-select-option>
-                            </a-select>
-                          </template>
-                          <template v-else-if="column.dataIndex === 'image'">
-                            <div class="sku-img-cell">
-                              <Upload v-model:value="(batchData as any)['__image__']" type="image" module="goods" :show-upload-list="false" />
+                        <template v-if="(column as any)._isSpecCol"><span class="sku-spec-val">{{ (record as SkuRow).detail[(column as any).title] }}</span></template>
+                        <template v-else-if="column.dataIndex === 'image'">
+                          <div class="sku-img-cell">
+                            <div v-if="getSkuPreviewImage(record as SkuRow)" class="sku-img-thumb">
+                              <img :src="getPicPreviewUrl(getSkuPreviewImage(record as SkuRow)!)" />
+                              <span v-if="(record as SkuRow).image" class="sku-img-del" @click.stop="(record as SkuRow).image = undefined">×</span>
                             </div>
-                          </template>
-                          <template v-else-if="column.dataIndex === 'price'"><a-input-number v-model:value="(batchData as any)['__price__']" placeholder="批量售价" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
-                          <template v-else-if="column.dataIndex === 'market_price'"><a-input-number v-model:value="(batchData as any)['__market_price__']" placeholder="批量市价" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
-                          <template v-else-if="column.dataIndex === 'stock'"><a-input-number v-model:value="(batchData as any)['__stock__']" placeholder="批量库存" :min="0" size="small" :controls="false" style="width:100%" /></template>
-                          <template v-else-if="column.dataIndex === 'sku_code'"><a-input v-model:value="batchData['__sku_code__']" placeholder="批量SKU" size="small" /></template>
-                          <template v-else-if="column.dataIndex === '_action'"><a @click="applyBatch">批量修改</a><a-divider type="vertical" /><a @click="clearBatch">清空</a></template>
+                            <div v-else class="sku-upload-wrap">
+                              <Upload type="image" module="goods" :show-upload-list="false"
+                                @update:value="(v: FileInfo | undefined) => { if (v) (record as SkuRow).image = v; }" />
+                            </div>
+                          </div>
                         </template>
-                        <template v-else>
-                          <template v-if="(column as any)._isSpecCol"><span class="sku-spec-val">{{ (record as SkuRow).detail[(column as any).title] }}</span></template>
-                          <template v-else-if="column.dataIndex === 'image'">
-                            <div class="sku-img-cell">
-                              <div v-if="getSkuPreviewImage(record as SkuRow)" class="sku-img-thumb">
-                                <img :src="getPicPreviewUrl(getSkuPreviewImage(record as SkuRow)!)" />
-                                <span v-if="(record as SkuRow).image" class="sku-img-del" @click.stop="(record as SkuRow).image = undefined">×</span>
-                              </div>
-                              <div v-else class="sku-upload-wrap">
-                                <Upload type="image" module="goods" :show-upload-list="false"
-                                  @update:value="(v: FileInfo | undefined) => { if (v) (record as SkuRow).image = v; }" />
-                              </div>
-                            </div>
-                          </template>
-                          <template v-else-if="column.dataIndex === 'price'"><a-input-number v-model:value="(record as SkuRow).price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
-                          <template v-else-if="column.dataIndex === 'market_price'"><a-input-number v-model:value="(record as SkuRow).market_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
-                          <template v-else-if="column.dataIndex === 'stock'"><a-input-number v-model:value="(record as SkuRow).stock" :min="0" size="small" :controls="false" style="width:100%" /></template>
-                          <template v-else-if="column.dataIndex === 'sku_code'"><a-input v-model:value="(record as SkuRow).sku_code" size="small" placeholder="选填" allow-clear /></template>
-                          <template v-else-if="column.dataIndex === '_action'">
-                            <a-switch v-model:checked="(record as any).is_show" :checked-value="1" :un-checked-value="0" checked-children="显" un-checked-children="隐" size="small" />
-                          </template>
+                        <template v-else-if="column.dataIndex === 'price'"><a-input-number v-model:value="(record as SkuRow).price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
+                        <template v-else-if="column.dataIndex === 'market_price'"><a-input-number v-model:value="(record as SkuRow).market_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" /></template>
+                        <template v-else-if="column.dataIndex === 'stock'"><a-input-number v-model:value="(record as SkuRow).stock" :min="0" size="small" :controls="false" style="width:100%" /></template>
+                        <template v-else-if="column.dataIndex === 'sku_code'"><a-input v-model:value="(record as SkuRow).sku_code" size="small" placeholder="选填" allow-clear /></template>
+                        <template v-else-if="column.dataIndex === '_action'">
+                          <a-switch v-model:checked="(record as any).is_show" :checked-value="1" :un-checked-value="0" checked-children="显" un-checked-children="隐" size="small" />
                         </template>
                       </template>
                     </a-table>
@@ -360,36 +411,72 @@ onMounted(() => {});
 
 /* ===== 规格区域 ===== */
 .spec-wrapper { display: flex; flex-direction: column; gap: 0; }
-.spec-list { display: flex; flex-direction: column; gap: 12px; }
-.spec-item { border: 1px solid hsl(var(--border)); border-radius: 6px; overflow: hidden; background: hsl(var(--card)); }
-.spec-name-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: hsl(var(--popover)); border-bottom: 1px solid hsl(var(--border)); }
+.spec-designer { border: 1px solid hsl(var(--border)); border-radius: 14px; background: hsl(var(--card)); overflow: hidden; }
+.spec-designer-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 14px 8px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--popover)); }
+.spec-designer-title,
+.sku-panel-title { font-size: 17px; font-weight: 700; color: hsl(var(--foreground)); margin-bottom: 2px; }
+.spec-list { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+.spec-item { border: 1px solid hsl(var(--border)); border-radius: 12px; overflow: hidden; background: hsl(var(--card)); }
+.spec-name-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; background: hsl(var(--popover) / 0.9); border-bottom: 1px solid hsl(var(--border)); }
+.spec-name-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.spec-name-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .spec-drag-handle, .val-drag-handle { cursor: grab; padding: 0 4px; color: #bbb; flex-shrink: 0; }
 .spec-drag-handle:active, .val-drag-handle:active { cursor: grabbing; }
-.spec-name-input { width: 180px; }
+.spec-name-input { width: 240px; }
 .icon-info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid hsl(var(--border)); font-size: 11px; color: hsl(var(--muted-foreground)); cursor: help; flex-shrink: 0; }
-.spec-values-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
-.spec-val-item { display: inline-flex; align-items: center; gap: 4px; background: hsl(var(--popover)); border: 1px solid hsl(var(--border)); border-radius: 4px; padding: 2px 6px 2px 4px; }
-.spec-val-item.has-pic { padding: 4px 6px 4px 4px; align-items: flex-start; flex-direction: column; }
-.spec-val-item.has-pic .val-drag-handle { align-self: center; }
-.val-input { width: 100px; }
+.spec-item-meta { display: flex; align-items: center; gap: 10px; padding: 0 12px 6px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.spec-values-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; padding: 8px 10px 10px; border-top: 1px solid hsl(var(--border) / 0.7); }
+.spec-val-item { display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: hsl(var(--popover)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 5px 8px; min-height: 46px; }
+.spec-val-item.has-pic { width: 122px; padding: 6px; align-items: stretch; flex-direction: column; justify-content: flex-start; min-height: auto; }
+.spec-val-media-top { display: flex; align-items: center; justify-content: space-between; line-height: 1; }
+.val-input { width: 96px; }
+.media-input { width: 100%; }
 
 /* 规格图 */
 .val-pic-cell { display: flex; flex-direction: column; gap: 2px; }
+.media-card { width: 100%; }
 .val-pic-thumb { position: relative; display: inline-block; }
 .val-pic-thumb img { width: 46px; height: 46px; object-fit: cover; border-radius: 4px; border: 1px solid hsl(var(--border)); display: block; }
+.media-thumb,
+.media-thumb :deep(.ant-upload.ant-upload-select) { width: 100% !important; height: 64px !important; min-width: 100% !important; min-height: 64px !important; max-width: 100% !important; max-height: 64px !important; border-radius: 10px !important; }
+.media-thumb img { width: 100%; height: 64px; object-fit: cover; border-radius: 10px; }
 .val-pic-del { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; line-height: 1; }
 .val-pic-del:hover { background: #ff4d4f; }
 .val-pic-upload-wrap :deep(.ant-upload) { width: 46px !important; height: 46px !important; min-width: 46px !important; min-height: 46px !important; font-size: 18px; border-radius: 4px; overflow: hidden !important; }
 .val-pic-upload-wrap :deep(.ant-upload-text) { display: none !important; }
 .val-pic-upload-wrap :deep(.ant-upload-list) { display: none !important; }
-.val-del { font-size: 16px; color: #bfbfbf; cursor: pointer; line-height: 1; transition: color 0.15s; margin-left: 2px; align-self: center; }
+.media-upload-wrap :deep(.ant-upload) { border-style: dashed !important; }
+.val-del { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; font-size: 16px; color: #bfbfbf; cursor: pointer; line-height: 1; transition: color 0.15s; margin-left: 2px; align-self: center; }
 .val-del:hover { color: #ff4d4f; }
-.add-val-btn { color: #1677ff; font-size: 13px; cursor: pointer; padding: 2px 4px; }
-.add-val-btn:hover { opacity: 0.8; }
-.spec-actions { display: flex; gap: 8px; padding: 12px 0 4px; }
+.media-del { align-self: auto; }
+.add-val-card { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 126px; min-height: 46px; border: 1px dashed hsl(var(--primary) / 0.28); border-radius: 12px; background: hsl(var(--primary) / 0.05); color: hsl(var(--foreground)); font-size: 13px; font-weight: 600; cursor: pointer; padding: 0 12px; }
+.add-val-card-pic { min-height: 112px; flex-direction: column; gap: 4px; }
+.add-val-prefix { font-size: 18px; line-height: 1; }
+.add-val-card:hover { border-color: hsl(var(--primary)); color: hsl(var(--primary)); }
+.spec-actions { display: flex; gap: 8px; padding: 0 10px 10px; }
+.light-toolbar { flex-wrap: wrap; }
+.light-tool-btn { height: 32px; padding: 0 13px; border-radius: 10px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--foreground)); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
+.light-tool-btn:hover { border-color: hsl(var(--primary)); color: hsl(var(--primary)); }
+.light-tool-btn.primary { background: hsl(var(--primary) / 0.08); border-color: hsl(var(--primary) / 0.24); color: hsl(var(--primary)); }
+.light-tool-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* ===== SKU 表格 ===== */
+.sku-panel { margin-bottom: 10px; }
+.sku-panel-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.sku-panel-summary { font-size: 13px; color: hsl(var(--muted-foreground)); padding-top: 4px; }
+.sku-batch-toolbar { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 9px 12px; margin-bottom: 10px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--primary) / 0.05); }
+.sku-batch-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sku-batch-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.batch-filter-select { width: 170px; }
+.batch-editor { width: 120px; }
+.batch-image-editor { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
+.batch-image-label { font-size: 12px; color: hsl(var(--muted-foreground)); }
+.batch-image-editor :deep(.ant-upload.ant-upload-select) { width: 30px !important; height: 30px !important; min-width: 30px !important; min-height: 30px !important; border-radius: 8px !important; }
+.sku-hit-stat { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 32px; border-radius: 10px; background: hsl(var(--card)); color: hsl(var(--muted-foreground)); font-size: 12px; }
+.sku-hit-stat strong { font-size: 15px; color: hsl(var(--foreground)); }
 .sku-table :deep(.ant-table-cell) { padding: 4px 6px !important; vertical-align: middle; }
+.compact-table :deep(.ant-table-thead > tr > th) { padding: 8px 9px !important; font-size: 12px; background: hsl(var(--popover)); }
+.compact-table :deep(.ant-table-tbody > tr > td) { padding: 6px 9px !important; }
 .sku-spec-val { font-weight: 500; color: hsl(var(--foreground)); }
 
 /* SKU 规格图紧凑单元格 */
@@ -402,6 +489,19 @@ onMounted(() => {});
 .sku-img-cell :deep(.ant-upload.ant-upload-select) { width: 36px !important; height: 36px !important; min-width: 36px !important; min-height: 36px !important; max-width: 36px !important; max-height: 36px !important; font-size: 14px !important; border-radius: 3px !important; overflow: hidden !important; }
 .sku-img-cell :deep(.ant-upload-text) { display: none !important; }
 .sku-img-cell :deep(.ant-upload-wrapper) { display: block; width: 36px; height: 36px; }
+
+@media (max-width: 1280px) {
+  .sku-batch-toolbar,
+  .page-header,
+  .spec-name-row {
+    flex-wrap: wrap;
+  }
+
+  .sku-batch-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
 
 /* ===== 规格库弹窗 ===== */
 .spec-lib-list { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; width: 100%; }

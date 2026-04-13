@@ -9,7 +9,7 @@ import type { FileInfo } from '#/components/upload';
 import { computed, nextTick, reactive, ref, type Ref } from 'vue';
 
 import Sortable from 'sortablejs';
-import { message } from 'ant-design-vue';
+import { Modal, message } from 'ant-design-vue';
 
 import {
   createGoodsApi,
@@ -33,7 +33,6 @@ export interface Attr {
   detail: AttrDetail[];
 }
 export interface SkuRow {
-  _isBatch?: true;
   spec_values: string;
   detail: Record<string, string>;
   price: number | undefined;
@@ -125,6 +124,65 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     return getPicUrl(image || '');
   };
 
+  const updateMatchedSkuImages = (specName: string, specValue: string, nextPic: FileInfo | string | undefined) => {
+    for (const row of skuRows.value) {
+      if (row.detail[specName] === specValue) {
+        row.image = nextPic;
+      }
+    }
+  };
+
+  const confirmSpecImageSync = (matchedCount: number, overriddenCount: number) =>
+    new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (result: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(result);
+      };
+      let content = `可以同步修改下方 ${matchedCount} 个命中 SKU 的规格图片，确定要替换吗？`;
+      if (overriddenCount > 0) {
+        content += ` 其中 ${overriddenCount} 个 SKU 已手动设置过图片，确认后也会一起覆盖。`;
+      }
+      Modal.confirm({
+        title: '提示',
+        content,
+        okText: '替换',
+        cancelText: '暂不',
+        onOk: () => finish(true),
+        onCancel: () => finish(false),
+        afterClose: () => finish(false),
+      });
+    });
+
+  const handleSpecValueImageChange = async (attrIdx: number, detIdx: number, nextPic?: FileInfo | string) => {
+    const attr = attrs.value[attrIdx];
+    const detail = attr?.detail[detIdx];
+    if (!attr || !detail) {
+      return;
+    }
+
+    const nextValue = nextPic || '';
+    const matchedRows = skuRows.value.filter((row) => row.detail[attr.value] === detail.value);
+    detail.pic = nextValue;
+
+    if (!nextValue || matchedRows.length === 0) {
+      if (!nextValue) {
+        updateMatchedSkuImages(attr.value, detail.value, undefined);
+      }
+      return;
+    }
+
+    const overriddenCount = matchedRows.filter((row) => !!row.image).length;
+    const confirmed = await confirmSpecImageSync(matchedRows.length, overriddenCount);
+    if (confirmed) {
+      updateMatchedSkuImages(attr.value, detail.value, nextValue);
+      message.success('已同步替换命中 SKU 图片');
+    }
+  };
+
   const handleAddSpec = () => {
     attrs.value.push({ value: '', add_pic: 0, detail: [{ value: '', pic: '' }] });
     nextTick(initValueDrag);
@@ -200,7 +258,6 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
 
   const cloneSkuRows = (source: SkuRow[]): SkuRow[] =>
     source.map((row) => ({
-      _isBatch: row._isBatch,
       spec_values: row.spec_values,
       detail: { ...row.detail },
       price: row.price,
@@ -227,21 +284,23 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
   };
 
   const batchData = reactive<Record<string, any>>({});
-  const tableData = computed<SkuRow[]>(() => {
-    if (skuRows.value.length === 0) return [];
-    const batch: SkuRow = {
-      _isBatch: true, spec_values: '__batch__', detail: {},
-      price: undefined, market_price: undefined, stock: undefined, sku_code: '', image: undefined,
-    };
-    return [batch, ...skuRows.value];
-  });
+  const batchFilters = reactive<Record<string, string | undefined>>({});
+  const tableData = computed<SkuRow[]>(() => skuRows.value);
+  const matchedSkuRows = computed(() =>
+    skuRows.value.filter((row) =>
+      attrs.value.every((attr, idx) => {
+        const title = attr.value || `规格${idx + 1}`;
+        const filterValue = batchFilters[title];
+        return !filterValue || row.detail[title] === filterValue;
+      }),
+    ),
+  );
   const skuColumns = computed(() => {
     const specCols = attrs.value.map((attr, idx) => {
       const col: any = { title: attr.value || `规格${idx + 1}`, dataIndex: `_spec_${idx}`, width: 110, _isSpecCol: true, _attrIdx: idx };
       if (idx === 0) {
         col.customCell = (_record: SkuRow, rowIdx: number) => {
-          if (_record._isBatch) return {};
-          const dataIdx = rowIdx - 1;
+          const dataIdx = rowIdx;
           const span = spanMap.value.get(`${dataIdx}_0`);
           if (span === 0) return { rowspan: 0, colSpan: 0 };
           if (span !== undefined) return { rowspan: span };
@@ -301,16 +360,26 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     });
   };
   const applyBatch = () => {
-    for (const row of skuRows.value) {
-      if (batchData['__price__']) row.price = Number(batchData['__price__']);
-      if (batchData['__market_price__']) row.market_price = Number(batchData['__market_price__']);
-      if (batchData['__stock__']) row.stock = Number(batchData['__stock__']);
+    const targets = matchedSkuRows.value;
+    if (targets.length === 0) {
+      message.warning('当前筛选条件下没有可批量修改的 SKU');
+      return;
+    }
+    for (const row of targets) {
+      if (batchData['__price__'] !== undefined && batchData['__price__'] !== null && batchData['__price__'] !== '') row.price = Number(batchData['__price__']);
+      if (batchData['__market_price__'] !== undefined && batchData['__market_price__'] !== null && batchData['__market_price__'] !== '') row.market_price = Number(batchData['__market_price__']);
+      if (batchData['__stock__'] !== undefined && batchData['__stock__'] !== null && batchData['__stock__'] !== '') row.stock = Number(batchData['__stock__']);
       if (batchData['__sku_code__']) row.sku_code = String(batchData['__sku_code__']);
       if (batchData['__image__']) row.image = batchData['__image__'];
     }
-    message.success('批量设置成功');
+    message.success(`已批量修改 ${targets.length} 个 SKU`);
   };
   const clearBatch = () => { Object.keys(batchData).forEach((k) => { batchData[k] = ''; }); };
+  const clearBatchFilters = () => { Object.keys(batchFilters).forEach((k) => { batchFilters[k] = undefined; }); };
+  const resetBatchEditor = () => {
+    clearBatch();
+    clearBatchFilters();
+  };
 
   /* ---------- 从规格库 / 模板导入 ---------- */
   const specLibVisible = ref(false);
@@ -424,6 +493,8 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     attrs.value = [];
     skuRows.value = [];
     multiSpecDraft.value = { attrs: [], skuRows: [] };
+    clearBatchFilters();
+    clearBatch();
     isFullscreen.value = false;
     activeTab.value = 'basic';
   };
@@ -553,9 +624,10 @@ export function useGoodsEdit(editIdRef: Ref<number | undefined>) {
     specType, attrs, canAddPic, getPicPreviewUrl, getPicUrl,
     getSkuPreviewImage,
     handleAddSpec, handleRemoveSpec, addSpecValue, removeSpecValue, toggleAddPic,
+    handleSpecValueImageChange,
     specListRef, valueListRefs, initSpecDrag, initValueDrag,
-    skuRows, batchData, tableData, skuColumns, spanMap,
-    generateSkuCombinations, applyBatch, clearBatch,
+    skuRows, batchData, batchFilters, matchedSkuRows, tableData, skuColumns, spanMap,
+    generateSkuCombinations, applyBatch, clearBatch, clearBatchFilters, resetBatchEditor,
     specLibVisible, specImportTab, specLibLoading, specLibList, selectedSpecIds,
     specTemplateList, selectedTemplateIds, openSpecLib, confirmSelectSpecs,
     saveTemplateVisible, saveTemplateList, saveTemplateLoading, saveTemplateName,
