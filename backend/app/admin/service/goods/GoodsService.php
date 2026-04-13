@@ -111,7 +111,6 @@ class GoodsService extends BaseService
         }
 
         $result = $goods->toArray();
-        $result['spec_meta'] = $this->hydrateSpecMeta($result['spec_meta'] ?? []);
 
         // 获取商品图片
         $images = $this->model(GoodsImage::class)
@@ -169,9 +168,8 @@ class GoodsService extends BaseService
             $goods->save($data);
 
             $goodsId = $goods->id;
-            $this->persistSpecMeta((int) $goodsId, $data['spec_meta'] ?? null);
 
-            // 同步图片
+            // 同步图片 TODO  一会修改
             if (!empty($data['images']) && is_array($data['images'])) {
                 $this->syncImages($goodsId, $data['images']);
             }
@@ -221,7 +219,6 @@ class GoodsService extends BaseService
         // 事务内只做写入
         $this->transaction(function () use ($id, $goods, $data) {
             $goods->save($data);
-            $this->persistSpecMeta($id, $data['spec_meta'] ?? null);
 
             // 同步图片
             if (array_key_exists('images', $data) && is_array($data['images'])) {
@@ -435,56 +432,6 @@ class GoodsService extends BaseService
         }, array_filter($data['spec_meta'], 'is_array')));
 
         return $data;
-    }
-
-    /**
-     * 为规格元数据补充完整图片地址
-     *
-     * @param mixed $specMeta
-     * @return array
-     */
-    protected function hydrateSpecMeta($specMeta): array
-    {
-        if (is_string($specMeta) && $specMeta !== '') {
-            $decoded = json_decode($specMeta, true);
-            $specMeta = is_array($decoded) ? $decoded : [];
-        }
-
-        if (!is_array($specMeta)) {
-            return [];
-        }
-
-        return array_values(array_map(function (array $item) {
-            $values = array_values(array_map(function (array $value) {
-                $pic = (string) ($value['pic'] ?? '');
-                return [
-                    'value' => (string) ($value['value'] ?? ''),
-                    'pic' => $pic,
-                    'pic_full_url' => buildUploadUrl($pic),
-                ];
-            }, array_filter($item['values'] ?? [], 'is_array')));
-
-            return [
-                'name' => (string) ($item['name'] ?? ''),
-                'add_pic' => (int) (($item['add_pic'] ?? 0) ? 1 : 0),
-                'values' => $values,
-            ];
-        }, array_filter($specMeta, 'is_array')));
-    }
-
-    /**
-     * 通过模型持久化规格元数据。
-     *
-     * 规格元数据是商品正式字段，仍然必须走模型层，避免绕过项目约定。
-     *
-     * @param int $goodsId
-     * @param mixed $specMeta
-     */
-    protected function persistSpecMeta(int $goodsId, $specMeta): void
-    {
-        $this->model()->updateById($goodsId, [
-            'spec_meta' => is_array($specMeta) ? $specMeta : null,
-        ]);
     }
 
     /**
