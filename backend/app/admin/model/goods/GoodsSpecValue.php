@@ -11,14 +11,4 @@ use mall_base\base\BaseModel;
 class GoodsSpecValue extends BaseModel
 {
     protected $name = 'goods_spec_value';
-
-    /**
-     * 搜索器-按规格ID搜索
-     */
-    public function searchSpecIdAttr($query, $value)
-    {
-        if ($value !== '' && $value !== null) {
-            $query->where('spec_id', $value);
-        }
-    }
 }

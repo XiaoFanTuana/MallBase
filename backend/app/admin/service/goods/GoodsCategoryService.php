@@ -15,25 +15,32 @@ class GoodsCategoryService extends BaseService
 {
     protected string $modelClass = GoodsCategory::class;
 
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
+            ->when(($where['name'] ?? null) !== null && $where['name'] !== '', function ($q) use ($where) {
+                $q->whereLike('name', '%' . $where['name'] . '%');
+            })
+            ->when(($where['pid'] ?? null) !== null && $where['pid'] !== '', function ($q) use ($where) {
+                $q->where('pid', $where['pid']);
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            });
+    }
+
     /**
      * 获取分类列表
      */
     public function getList(array $where, int $page, int $limit): array
     {
-        $searchWhere = array_filter($where, function ($value) {
-            return $value !== '' && $value !== null;
-        });
-
-        $list = $this->model()
-            ->withSearch(['name', 'pid', 'status'], $searchWhere)
+        $list = $this->buildListQuery($where)
             ->order('sort', 'asc')
             ->order('id', 'desc')
             ->page($page, $limit)
             ->select();
 
-        $total = $this->model()
-            ->withSearch(['name', 'pid', 'status'], $searchWhere)
-            ->count();
+        $total = $this->buildListQuery($where)->count();
 
         $list = $list->toArray();
 

@@ -14,36 +14,6 @@ class GoodsCategory extends BaseModel
     protected array $append = ['image_full_url'];
 
     /**
-     * 搜索器-按名称搜索
-     */
-    public function searchNameAttr($query, $value)
-    {
-        if ($value !== '' && $value !== null) {
-            $query->whereLike('name', '%' . $value . '%');
-        }
-    }
-
-    /**
-     * 搜索器-按父级ID搜索
-     */
-    public function searchPidAttr($query, $value)
-    {
-        if ($value !== '' && $value !== null) {
-            $query->where('pid', $value);
-        }
-    }
-
-    /**
-     * 搜索器-按状态搜索
-     */
-    public function searchStatusAttr($query, $value)
-    {
-        if ($value !== '' && $value !== null) {
-            $query->where('status', $value);
-        }
-    }
-
-    /**
      * 分类图片完整地址
      */
     public function getImageFullUrlAttr($value, $data): string

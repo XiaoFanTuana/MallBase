@@ -19,6 +19,20 @@ class UserGroupService extends BaseService
      */
     protected string $modelClass = UserGroup::class;
 
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
+            ->when(($where['name'] ?? null) !== null && $where['name'] !== '', function ($q) use ($where) {
+                $q->whereLike('name', '%' . $where['name'] . '%');
+            })
+            ->when(($where['code'] ?? null) !== null && $where['code'] !== '', function ($q) use ($where) {
+                $q->whereLike('code', '%' . $where['code'] . '%');
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            });
+    }
+
     /**
      * 获取分组列表
      *
@@ -29,21 +43,13 @@ class UserGroupService extends BaseService
      */
     public function getList(array $where, int $page, int $limit): array
     {
-        // 过滤空值，避免 withSearch 搜索器查不到数据
-        $searchWhere = array_filter($where, function ($value) {
-            return $value !== '' && $value !== null;
-        });
-
-        $list = $this->model()
-            ->withSearch(['name', 'code', 'status'], $searchWhere)
+        $list = $this->buildListQuery($where)
             ->order('sort', 'asc')
             ->order('id', 'desc')
             ->page($page, $limit)
             ->select();
 
-        $total = $this->model()
-            ->withSearch(['name', 'code', 'status'], $searchWhere)
-            ->count();
+        $total = $this->buildListQuery($where)->count();
 
         $list = $list->toArray();
 

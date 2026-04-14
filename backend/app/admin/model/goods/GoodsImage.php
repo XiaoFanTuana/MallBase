@@ -13,16 +13,6 @@ class GoodsImage extends BaseModel
     protected $name = 'goods_image';
     protected array $append = ['full_url'];
 
-    /**
-     * 搜索器-按商品ID搜索
-     */
-    public function searchGoodsIdAttr($query, $value)
-    {
-        if ($value !== '' && $value !== null) {
-            $query->where('goods_id', $value);
-        }
-    }
-
     public function getFullUrlAttr($value, $data): string
     {
         return buildUploadUrl($data['url'] ?? '');
