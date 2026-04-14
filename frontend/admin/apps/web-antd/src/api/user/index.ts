@@ -1,3 +1,6 @@
+import type { UserGroupApi } from './group';
+import type { UserTagApi } from './tag';
+
 import { requestClient } from '#/api/request';
 
 export namespace ClientUserApi {
@@ -199,3 +202,4 @@ export async function changeClientMyPasswordApi(data: ClientUserApi.ChangePasswo
 // 导出分组和标签 API
 export * from './group';
 export * from './tag';
+export * from './address';

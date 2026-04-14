@@ -31,6 +31,16 @@ const routes: RouteRecordRaw[] = [
       order: 3,
     },
   },
+  {
+    name: 'UserAddressManagement',
+    path: '/user/address',
+    component: () => import('#/views/user/address/index.vue'),
+    meta: {
+      icon: 'lucide:map-pin-house',
+      title: '用户地址',
+      order: 4,
+    },
+  },
 ];
 
 export default routes;

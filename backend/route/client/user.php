@@ -19,3 +19,12 @@ Route::group('client/user/my', function () {
     Route::put('password', 'updateMyPassword');
     Route::post('logout', 'logout');
 })->prefix('user/UserController/')->middleware([JwtAuth::class]);
+
+Route::group('client/user/address', function () {
+    Route::get('list', 'list');
+    Route::get('info/:id', 'info');
+    Route::post('create', 'create');
+    Route::put('update/:id', 'update');
+    Route::delete('delete/:id', 'delete');
+    Route::put('setDefault/:id', 'setDefault');
+})->prefix('user.UserAddressController/')->middleware([JwtAuth::class]);
