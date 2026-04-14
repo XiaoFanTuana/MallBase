@@ -29,5 +29,6 @@ Route::group('config', function () {
         '_group_code' => 'SystemConfig',
         '_group_name_desc' => '系统配置相关接口',
         '_path' => '/config',
+        '_is_show' => 0,
         '_auth' => true,
     ]);

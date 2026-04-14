@@ -19,7 +19,7 @@ Route::group('setting/freight-template', function () {
         '_group_name' => '运费模板',
         '_group_code' => 'SystemFreightTemplate',
         '_group_name_desc' => '运费模板管理',
-        '_parent' => 'SystemManagement',
+        '_parent' => 'SystemGoodsManagement',
         '_icon' => 'lucide:truck',
         '_path' => '/settings/freight-template',
         '_auth' => true,
