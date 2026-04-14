@@ -13,22 +13,28 @@ interface CascaderOption {
   children?: CascaderOption[];
 }
 
-const props = withDefaults(defineProps<{
-  value?: Array<number | number[]> | number[];
-  multiple?: boolean;
-  placeholder?: string;
-}>(), {
-  value: () => [],
-  multiple: false,
-  placeholder: '请选择地区',
-});
+type RegionPickerValue = Array<number | number[]> | number[];
+
+const props = withDefaults(
+  defineProps<{
+    multiple?: boolean;
+    placeholder?: string;
+    value?: Array<number | number[]> | number[];
+  }>(),
+  {
+    value: () => [],
+    multiple: false,
+    placeholder: '请选择地区',
+  },
+);
 
 const emit = defineEmits<{
-  (e: 'update:value', value: Array<number | number[]> | number[]): void;
+  (e: 'update:value', value: RegionPickerValue): void;
 }>();
 
 const options = ref<CascaderOption[]>([]);
-const innerValue = ref<Array<number | number[]> | number[]>(props.multiple ? [] : []);
+const innerValue = ref<RegionPickerValue>(props.multiple ? [] : []);
+const resolvedLeafIds = ref(new Set<number>());
 
 watch(
   () => props.value,
@@ -41,7 +47,7 @@ watch(
 
 const cascaderValue = computed({
   get: () => innerValue.value,
-  set: (value) => {
+  set: (value: RegionPickerValue) => {
     innerValue.value = value;
     emit('update:value', value);
   },
@@ -50,7 +56,7 @@ const cascaderValue = computed({
 async function loadRootOptions() {
   if (options.value.length > 0) return;
   const list = await getRegionChildrenApi(0);
-  options.value = list.map(mapOption);
+  options.value = list.map((item) => mapOption(item));
 }
 
 function mapOption(item: RegionApi.RegionItem): CascaderOption {
@@ -66,13 +72,18 @@ async function ensureValueOptions() {
   await loadRootOptions();
 
   const values = props.multiple
-    ? ((innerValue.value as Array<number[] | number>) || [])
-      .map((item) => Array.isArray(item) ? item[item.length - 1] : item)
-      .filter(Boolean)
-    : [((innerValue.value as number[]) || [])[3]].filter(Boolean);
+    ? ((innerValue.value as Array<number | number[]>) || [])
+        .map((item) => (Array.isArray(item) ? item[item.length - 1] : item))
+        .filter((item): item is number => typeof item === 'number' && item > 0)
+    : [((innerValue.value as number[]) || [])[3]].filter(
+        (item): item is number => typeof item === 'number' && item > 0,
+      );
 
   for (const leafId of values) {
-    await mergePath(Number(leafId));
+    if (resolvedLeafIds.value.has(leafId)) {
+      continue;
+    }
+    await mergePath(leafId);
   }
 }
 
@@ -82,14 +93,13 @@ async function mergePath(leafId: number) {
   if (!Array.isArray(path) || path.length === 0) return;
 
   if (props.multiple) {
-    const current = (innerValue.value as Array<number[] | number>) || [];
+    const current = (innerValue.value as Array<number | number[]>) || [];
     innerValue.value = current.map((item) => {
       if (Array.isArray(item)) {
         return item;
       }
       return item === leafId ? path.map((node) => node.id) : item;
     });
-    emit('update:value', innerValue.value);
   }
 
   let current = options.value;
@@ -104,6 +114,8 @@ async function mergePath(leafId: number) {
     }
     current = existing.children || [];
   }
+
+  resolvedLeafIds.value.add(leafId);
 }
 
 async function handleLoadData(selectedOptions: CascaderOption[]) {
@@ -113,7 +125,7 @@ async function handleLoadData(selectedOptions: CascaderOption[]) {
   }
 
   const children = await getRegionChildrenApi(targetOption.value);
-  targetOption.children = children.map(mapOption);
+  targetOption.children = children.map((item) => mapOption(item));
 }
 </script>
 
