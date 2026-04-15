@@ -306,6 +306,240 @@ class RegionResolverService
         ];
     }
 
+    /**
+     * 规范化区域规则（支持省/市/区/街道任意层级）
+     *
+     * @param array<int, int|string> $regionIds
+     * @return array{
+     *     region_ids: array<int, int>,
+     *     region_codes: array<int, string>,
+     *     region_names: array<int, string>,
+     *     region_path_texts: array<int, string>,
+     *     match_level: int,
+     *     items: array<int, array{id:int, level:int, code:string, name:string, province_id:int, city_id:int, district_id:int, street_id:int, path_text:string}>,
+     *     region_status: int,
+     *     region_invalid_reason: string|null
+     * }
+     */
+    public function normalizeRegionSelections(array $regionIds): array
+    {
+        $regionIds = array_values(array_unique(array_map('intval', $regionIds)));
+        if ($regionIds === []) {
+            throw new BusinessException('请选择区域');
+        }
+
+        $regions = Db::name('region')
+            ->whereIn('id', $regionIds)
+            ->select()
+            ->toArray();
+
+        if (count($regions) !== count($regionIds)) {
+            throw new BusinessException('所选区域存在无效数据');
+        }
+
+        $regionMap = array_column($regions, null, 'id');
+
+        $ids = [];
+        $codes = [];
+        $names = [];
+        $paths = [];
+        $items = [];
+        $maxLevel = 0;
+
+        foreach ($regionIds as $id) {
+            $region = $regionMap[$id] ?? null;
+            if (!$region) {
+                throw new BusinessException('所选区域存在无效数据');
+            }
+
+            $level = (int) $region['level'];
+            if ($level < 1 || $level > 4) {
+                throw new BusinessException('所选区域层级不正确');
+            }
+            if ((int) $region['status'] !== 1) {
+                throw new BusinessException(sprintf('所选%s已停用，请重新选择', $this->levelLabel($level)));
+            }
+
+            $path = $this->getPath($id);
+            if (count($path) !== $level) {
+                throw new BusinessException(sprintf('%s路径数据不完整', $this->levelLabel($level)));
+            }
+
+            $reason = $this->validatePathStatusByLevel($path, $level);
+            if ($reason !== null) {
+                throw new BusinessException($reason);
+            }
+
+            $pathText = implode(' / ', array_column($path, 'name'));
+
+            $ids[] = (int) $region['id'];
+            $codes[] = (string) $region['code'];
+            $names[] = (string) $region['name'];
+            $paths[] = $pathText;
+            $items[] = [
+                'id' => (int) $region['id'],
+                'level' => $level,
+                'code' => (string) $region['code'],
+                'name' => (string) $region['name'],
+                'province_id' => $level >= 1 ? (int) ($path[0]['id'] ?? 0) : 0,
+                'city_id' => $level >= 2 ? (int) ($path[1]['id'] ?? 0) : 0,
+                'district_id' => $level >= 3 ? (int) ($path[2]['id'] ?? 0) : 0,
+                'street_id' => $level >= 4 ? (int) ($path[3]['id'] ?? 0) : 0,
+                'path_text' => $pathText,
+            ];
+
+            if ($level > $maxLevel) {
+                $maxLevel = $level;
+            }
+        }
+
+        return [
+            'region_ids' => $ids,
+            'region_codes' => $codes,
+            'region_names' => $names,
+            'region_path_texts' => $paths,
+            'match_level' => $maxLevel,
+            'items' => $items,
+            'region_status' => 1,
+            'region_invalid_reason' => null,
+        ];
+    }
+
+    /**
+     * 通过区域编码重新匹配规则数据（支持任意层级）
+     *
+     * @param array<int, int|string> $regionCodes
+     * @return array<string, mixed>
+     */
+    public function rematchRegionSelectionsByCodes(array $regionCodes): array
+    {
+        $regionCodes = array_values(array_unique(array_filter(array_map(
+            static fn ($code): string => trim((string) $code),
+            $regionCodes,
+        ))));
+
+        if ($regionCodes === []) {
+            return [
+                'success' => false,
+                'reason' => '区域编码未匹配',
+            ];
+        }
+
+        $regions = Db::name('region')
+            ->whereIn('code', $regionCodes)
+            ->select()
+            ->toArray();
+
+        $byCode = array_column($regions, null, 'code');
+
+        $ids = [];
+        $codes = [];
+        $names = [];
+        $paths = [];
+        $items = [];
+        $maxLevel = 0;
+
+        foreach ($regionCodes as $code) {
+            $region = $byCode[$code] ?? null;
+            if (!$region) {
+                return [
+                    'success' => false,
+                    'reason' => '区域编码未匹配：' . $code,
+                ];
+            }
+
+            $level = (int) $region['level'];
+            if ($level < 1 || $level > 4) {
+                return [
+                    'success' => false,
+                    'reason' => sprintf('区域层级不正确：%s', $code),
+                ];
+            }
+
+            if ((int) $region['status'] !== 1) {
+                return [
+                    'success' => false,
+                    'reason' => sprintf('%s已停用：%s', $this->levelLabel($level), $code),
+                ];
+            }
+
+            $path = $this->getPath((int) $region['id']);
+            if (count($path) !== $level) {
+                return [
+                    'success' => false,
+                    'reason' => sprintf('%s路径数据不完整：%s', $this->levelLabel($level), $code),
+                ];
+            }
+
+            $reason = $this->validatePathStatusByLevel($path, $level);
+            if ($reason !== null) {
+                return [
+                    'success' => false,
+                    'reason' => $reason . '：' . $code,
+                ];
+            }
+
+            $pathText = implode(' / ', array_column($path, 'name'));
+
+            $ids[] = (int) $region['id'];
+            $codes[] = (string) $region['code'];
+            $names[] = (string) $region['name'];
+            $paths[] = $pathText;
+            $items[] = [
+                'id' => (int) $region['id'],
+                'level' => $level,
+                'code' => (string) $region['code'],
+                'name' => (string) $region['name'],
+                'province_id' => $level >= 1 ? (int) ($path[0]['id'] ?? 0) : 0,
+                'city_id' => $level >= 2 ? (int) ($path[1]['id'] ?? 0) : 0,
+                'district_id' => $level >= 3 ? (int) ($path[2]['id'] ?? 0) : 0,
+                'street_id' => $level >= 4 ? (int) ($path[3]['id'] ?? 0) : 0,
+                'path_text' => $pathText,
+            ];
+
+            if ($level > $maxLevel) {
+                $maxLevel = $level;
+            }
+        }
+
+        return [
+            'success' => true,
+            'reason' => null,
+            'data' => [
+                'region_ids' => $ids,
+                'region_codes' => $codes,
+                'region_names' => $names,
+                'region_path_texts' => $paths,
+                'match_level' => $maxLevel,
+                'items' => $items,
+                'region_status' => 1,
+                'region_invalid_reason' => null,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $rule
+     * @return array<string, mixed>
+     */
+    public function getRegionRuleState(array $rule): array
+    {
+        $matched = $this->rematchRegionSelectionsByCodes((array) ($rule['region_codes'] ?? []));
+        if ($matched['success'] ?? false) {
+            return [
+                'valid' => true,
+                'reason' => null,
+                'data' => $matched['data'],
+            ];
+        }
+
+        return [
+            'valid' => false,
+            'reason' => $matched['reason'] ?? '规则包含已失效区域，请重新选择',
+            'data' => null,
+        ];
+    }
+
     public function isAddressRegionValid(array $address): bool
     {
         return $this->getAddressRegionState($address)['valid'];
@@ -415,6 +649,44 @@ class RegionResolverService
 
         if ((int) $street['parent_id'] !== (int) $district['id']) {
             return '地区父子关系不匹配';
+        }
+
+        return null;
+    }
+
+    protected function levelLabel(int $level): string
+    {
+        return match ($level) {
+            1 => '省级',
+            2 => '市级',
+            3 => '区县',
+            4 => '街道',
+            default => '未知层级',
+        };
+    }
+
+    /**
+     * 按指定层级校验路径（省=1 层、市=2 层、区=3 层、街道=4 层）
+     *
+     * @param array<int, array<string, mixed>> $path
+     */
+    protected function validatePathStatusByLevel(array $path, int $level): ?string
+    {
+        if (count($path) !== $level) {
+            return '地区路径数据不完整';
+        }
+
+        foreach ($path as $index => $region) {
+            if ((int) ($region['status'] ?? 0) !== 1) {
+                return sprintf('%s已停用', $this->levelLabel($index + 1));
+            }
+        }
+
+        $count = count($path);
+        for ($i = 1; $i < $count; $i++) {
+            if ((int) ($path[$i]['parent_id'] ?? 0) !== (int) ($path[$i - 1]['id'] ?? 0)) {
+                return '地区父子关系不匹配';
+            }
         }
 
         return null;

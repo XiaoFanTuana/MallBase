@@ -59,10 +59,11 @@ DROP TABLE IF EXISTS `mb_freight_template_rule`;
 CREATE TABLE `mb_freight_template_rule` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '规则ID',
   `template_id` bigint(20) unsigned NOT NULL COMMENT '模板ID',
-  `region_ids` json NOT NULL COMMENT '街道ID集合',
-  `region_codes` json NOT NULL COMMENT '街道编码集合',
-  `region_names` json NOT NULL COMMENT '街道名称集合',
+  `region_ids` json NOT NULL COMMENT '区域ID集合（可为省/市/区/街道任意层级ID）',
+  `region_codes` json NOT NULL COMMENT '区域编码集合',
+  `region_names` json NOT NULL COMMENT '区域名称集合',
   `region_path_texts` json NOT NULL COMMENT '区域路径快照集合',
+  `match_level` tinyint(1) NOT NULL DEFAULT 4 COMMENT '规则最精确层级：1省 2市 3区 4街道（匹配优先级 4>3>2>1）',
   `first_amount` decimal(10,2) NOT NULL DEFAULT 1.00 COMMENT '首件/首重',
   `first_fee` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '首费',
   `continue_amount` decimal(10,2) NOT NULL DEFAULT 1.00 COMMENT '续件/续重',
@@ -74,5 +75,6 @@ CREATE TABLE `mb_freight_template_rule` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_template_id` (`template_id`),
-  KEY `idx_region_status` (`region_status`)
+  KEY `idx_region_status` (`region_status`),
+  KEY `idx_match_level` (`match_level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运费模板区域规则表';
