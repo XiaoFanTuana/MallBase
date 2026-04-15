@@ -224,4 +224,50 @@ test.describe('Freight template region display', () => {
       }
     }
   });
+
+  test('点击"全选省份"应一键填入全部省级地区并渲染中文 tag', async ({
+    page,
+  }) => {
+    await page.goto('/auth/login?e2e=1');
+    await authLogin(page);
+    await expect(page).not.toHaveURL(/\/auth\/login/);
+
+    // 打开新增模板弹窗：ant-design 会在两个中文字符按钮之间插入空格（"新 增 模 板" 4 字则不插入），
+    // 这里保守用正则匹配，容忍任何空格规则
+    await page.goto('/settings/freight-template');
+    await page
+      .getByRole('button', { name: /新\s*增\s*模\s*板/ })
+      .click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    const selectAllBtn = page
+      .locator('[data-testid="region-picker-select-all"]')
+      .first();
+    await expect(selectAllBtn).toBeVisible();
+    await selectAllBtn.click();
+
+    const tagLocator = page.locator('[data-testid="region-picker-tag"]');
+    // 全国省份数通常 ≥ 30（23 省 + 5 自治区 + 4 直辖市 + 2 特别行政区），
+    // 真实 mb_region 可能剔除港澳台，放宽到 30
+    await expect
+      .poll(async () => tagLocator.count(), { timeout: 8000 })
+      .toBeGreaterThanOrEqual(30);
+
+    const tagTexts = await tagLocator.allInnerTexts();
+    for (const raw of tagTexts) {
+      const text = raw.trim();
+      expect(
+        CJK_REGEX.test(text),
+        `tag 文本应包含中文：got "${text}"`,
+      ).toBeTruthy();
+      expect(
+        PURE_DIGIT_REGEX.test(text),
+        `tag 文本不应为纯数字 ID：got "${text}"`,
+      ).toBeFalsy();
+    }
+
+    // 典型省份名应至少命中一个
+    const joined = tagTexts.join('\n');
+    expect(joined).toMatch(/北京|上海|广东|天津|浙江/);
+  });
 });

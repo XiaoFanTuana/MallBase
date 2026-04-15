@@ -3,6 +3,8 @@ import type { RegionApi } from '#/api/region';
 
 import { computed, ref, watch } from 'vue';
 
+import { message } from 'ant-design-vue';
+
 import { getRegionChildrenApi, getRegionPathApi } from '#/api/region';
 
 interface CascaderOption {
@@ -17,6 +19,7 @@ type RegionPickerValue = Array<number | number[]> | number[];
 
 const props = withDefaults(
   defineProps<{
+    allowSelectAll?: boolean;
     labels?: string[];
     leafOnly?: boolean;
     multiple?: boolean;
@@ -29,6 +32,7 @@ const props = withDefaults(
     multiple: false,
     placeholder: '请选择地区',
     leafOnly: true,
+    allowSelectAll: false,
   },
 );
 
@@ -40,6 +44,11 @@ const options = ref<CascaderOption[]>([]);
 const innerValue = ref<RegionPickerValue>(props.multiple ? [] : []);
 const resolvedLeafIds = ref(new Set<number>());
 const resolvedPathLabels = ref(new Map<number, string[]>());
+const selectingAll = ref(false);
+
+const showSelectAllButton = computed(
+  () => props.allowSelectAll && props.multiple,
+);
 
 watch(
   [() => props.value, () => props.labels],
@@ -282,39 +291,101 @@ async function handleLoadData(selectedOptions: CascaderOption[]) {
   const children = await getRegionChildrenApi(targetOption.value);
   targetOption.children = children.map((item) => mapOption(item));
 }
+
+async function handleSelectAllProvinces() {
+  if (!showSelectAllButton.value || selectingAll.value) return;
+  selectingAll.value = true;
+  try {
+    const list = await getRegionChildrenApi(0);
+    if (!Array.isArray(list) || list.length === 0) {
+      message.warning('省份列表为空');
+      return;
+    }
+
+    // 合并到 options：已存在的省份保留其 children 子树，避免把用户之前展开过的层级打掉
+    for (const item of list) {
+      const exists = options.value.some((opt) => opt.value === item.id);
+      if (!exists) {
+        options.value.push(mapOption(item));
+      }
+    }
+
+    // 预写 tag 文案 + 标记已解析，tagRender 可直接命中，不再触发 region/path 查询
+    for (const item of list) {
+      resolvedPathLabels.value.set(item.id, [item.name]);
+      resolvedLeafIds.value.add(item.id);
+    }
+
+    // 多选模式下 cascader 需要 Array<number[]>，每条路径单独一个 tag
+    const next = list.map((item) => [item.id]) as RegionPickerValue;
+    innerValue.value = next;
+    emit('update:value', next);
+  } catch {
+    message.error('获取省份列表失败');
+  } finally {
+    selectingAll.value = false;
+  }
+}
 </script>
 
 <template>
-  <a-cascader
-    v-model:value="cascaderValue"
-    :options="options"
-    :load-data="handleLoadData"
-    :multiple="multiple"
-    :placeholder="placeholder"
-    :field-names="{ label: 'label', value: 'value', children: 'children' }"
-    :display-render="displayRender"
-    :change-on-select="!leafOnly"
-    style="width: 100%"
-  >
-    <template
-      v-if="multiple"
-      #tagRender="{ value, label, closable, onClose }"
+  <div :class="{ 'region-picker-inline': showSelectAllButton }">
+    <a-cascader
+      v-model:value="cascaderValue"
+      :options="options"
+      :load-data="handleLoadData"
+      :multiple="multiple"
+      :placeholder="placeholder"
+      :field-names="{ label: 'label', value: 'value', children: 'children' }"
+      :display-render="displayRender"
+      :change-on-select="!leafOnly"
+      style="width: 100%"
     >
-      <a-tag
-        :closable="closable"
-        class="region-picker-tag"
-        data-testid="region-picker-tag"
-        @close="onClose"
-        @mousedown.prevent
+      <template
+        v-if="multiple"
+        #tagRender="{ value, label, closable, onClose }"
       >
-        {{ resolveTagText(value, label) }}
-      </a-tag>
-    </template>
-  </a-cascader>
+        <a-tag
+          :closable="closable"
+          class="region-picker-tag"
+          data-testid="region-picker-tag"
+          @close="onClose"
+          @mousedown.prevent
+        >
+          {{ resolveTagText(value, label) }}
+        </a-tag>
+      </template>
+    </a-cascader>
+    <a-button
+      v-if="showSelectAllButton"
+      class="region-picker-select-all"
+      data-testid="region-picker-select-all"
+      :loading="selectingAll"
+      @click="handleSelectAllProvinces"
+    >
+      全选省份
+    </a-button>
+  </div>
 </template>
 
 <style scoped>
 .region-picker-tag {
   margin-inline-end: 4px;
+}
+
+.region-picker-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.region-picker-inline > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.region-picker-select-all {
+  flex: 0 0 auto;
 }
 </style>

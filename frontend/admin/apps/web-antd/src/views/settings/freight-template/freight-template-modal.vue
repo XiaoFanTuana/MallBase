@@ -177,54 +177,57 @@ async function handleSubmit() {
           <a-radio-button value="weight">按重</a-radio-button>
         </a-radio-group>
       </a-form-item>
-      <a-alert
-        class="mb-4"
-        message="全国默认运费（未匹配任何区域规则时使用）"
-        show-icon
-        type="info"
-      />
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="默认首件/重">
-            <a-input-number
-              v-model:value="formData.default_first_amount"
-              :min="0.01"
-              :precision="2"
-              style="width: 100%"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="默认首费">
-            <a-input-number
-              v-model:value="formData.default_first_fee"
-              :min="0"
-              :precision="2"
-              style="width: 100%"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="默认续件/重">
-            <a-input-number
-              v-model:value="formData.default_continue_amount"
-              :min="0.01"
-              :precision="2"
-              style="width: 100%"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="默认续费">
-            <a-input-number
-              v-model:value="formData.default_continue_fee"
-              :min="0"
-              :precision="2"
-              style="width: 100%"
-            />
-          </a-form-item>
-        </a-col>
-      </a-row>
+      <div class="default-fee-card mb-4">
+        <div class="default-fee-header">
+          <h4 class="default-fee-title">全国默认（兜底运费）</h4>
+          <p class="default-fee-desc">
+            只要不加下方区域规则，或某地没被任何规则覆盖，系统都会用这里的价格。
+            想做"全国一口价"只需填好这四个字段，下方规则可以不加。
+          </p>
+        </div>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="默认首件/重">
+              <a-input-number
+                v-model:value="formData.default_first_amount"
+                :min="0.01"
+                :precision="2"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="默认首费">
+              <a-input-number
+                v-model:value="formData.default_first_fee"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="默认续件/重">
+              <a-input-number
+                v-model:value="formData.default_continue_amount"
+                :min="0.01"
+                :precision="2"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="默认续费">
+              <a-input-number
+                v-model:value="formData.default_continue_fee"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </div>
       <a-form-item label="备注">
         <a-input v-model:value="formData.remark" allow-clear />
       </a-form-item>
@@ -236,10 +239,13 @@ async function handleSubmit() {
         />
       </a-form-item>
 
-      <div class="mb-3 flex items-center justify-between">
+      <div class="mb-1 flex items-center justify-between">
         <h4 class="mb-0">区域规则</h4>
         <a-button type="dashed" @click="addRule">新增规则</a-button>
       </div>
+      <p class="mb-3 rule-section-hint">
+        仅用于省 / 市 / 区 / 街道的差异化覆盖；全国一口价请用上方默认。
+      </p>
       <a-alert
         class="mb-3"
         message="匹配优先级：街道 > 区县 > 市 > 省 > 全国默认。同一层级的地区不能跨规则重复配置。未添加任何规则时将使用全国默认运费。"
@@ -260,6 +266,7 @@ async function handleSubmit() {
                 multiple
                 :leaf-only="false"
                 :labels="rule.region_path_texts"
+                :allow-select-all="true"
                 placeholder="请选择地区（支持省 / 市 / 区县 / 街道，可多选）"
               />
             </a-form-item>
@@ -321,3 +328,35 @@ async function handleSubmit() {
     </a-form>
   </a-modal>
 </template>
+
+<style scoped>
+.default-fee-card {
+  padding: 16px 16px 0;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background-color: hsl(var(--muted) / 0.35);
+}
+
+.default-fee-header {
+  margin-bottom: 8px;
+}
+
+.default-fee-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.default-fee-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: hsl(var(--foreground) / 0.7);
+}
+
+.rule-section-hint {
+  margin: 0;
+  font-size: 12px;
+  color: hsl(var(--foreground) / 0.6);
+}
+</style>
