@@ -35,11 +35,14 @@ const emit = defineEmits<{
 const options = ref<CascaderOption[]>([]);
 const innerValue = ref<RegionPickerValue>(props.multiple ? [] : []);
 const resolvedLeafIds = ref(new Set<number>());
+const resolvedPathLabels = ref(new Map<number, string[]>());
 
 watch(
   () => props.value,
   async (value) => {
-    innerValue.value = value ?? (props.multiple ? [] : []);
+    innerValue.value = normalizeIncomingValue(
+      value ?? (props.multiple ? [] : []),
+    );
     await ensureValueOptions();
   },
   { immediate: true, deep: true },
@@ -48,10 +51,26 @@ watch(
 const cascaderValue = computed({
   get: () => innerValue.value,
   set: (value: RegionPickerValue) => {
-    innerValue.value = value;
-    emit('update:value', value);
+    const normalized = normalizeIncomingValue(value);
+    innerValue.value = normalized;
+    emit('update:value', normalized);
   },
 });
+
+function normalizeIncomingValue(value: RegionPickerValue): RegionPickerValue {
+  if (!Array.isArray(value)) {
+    return props.multiple ? [] : [];
+  }
+
+  return value.map((item) => {
+    if (Array.isArray(item)) {
+      return item.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    }
+
+    const normalized = Number(item);
+    return Number.isInteger(normalized) && normalized > 0 ? normalized : item;
+  }) as RegionPickerValue;
+}
 
 async function loadRootOptions() {
   if (options.value.length > 0) return;
@@ -91,6 +110,10 @@ async function mergePath(leafId: number) {
   if (!leafId) return;
   const path = await getRegionPathApi(leafId);
   if (!Array.isArray(path) || path.length === 0) return;
+  resolvedPathLabels.value.set(
+    leafId,
+    path.map((node) => node.name),
+  );
 
   if (props.multiple) {
     const current = (innerValue.value as Array<number | number[]>) || [];
@@ -118,6 +141,52 @@ async function mergePath(leafId: number) {
   resolvedLeafIds.value.add(leafId);
 }
 
+function displayRender({
+  labels,
+}: {
+  labels: unknown[];
+  selectedOptions?: CascaderOption[];
+}) {
+  let normalizedLabels: string[] = [];
+  if (Array.isArray(labels)) {
+    normalizedLabels = labels.map((label) =>
+      typeof label === 'string' || typeof label === 'number'
+        ? String(label)
+        : String((label as { label?: string }).label ?? ''),
+    );
+  } else if (labels === null || labels === undefined) {
+    normalizedLabels = [];
+  } else {
+    normalizedLabels = [String(labels)];
+  }
+
+  if (
+    normalizedLabels.length > 0 &&
+    normalizedLabels.every((label) => label !== '')
+  ) {
+    return normalizedLabels.join(' / ');
+  }
+
+  if (props.multiple) {
+    return normalizedLabels.join(' / ');
+  }
+
+  const currentPath = Array.isArray(innerValue.value)
+    ? (innerValue.value as number[])
+    : [];
+  const leafId = currentPath[currentPath.length - 1];
+  const normalizedLeafId = Number(leafId);
+  if (
+    Number.isInteger(normalizedLeafId) &&
+    normalizedLeafId > 0 &&
+    resolvedPathLabels.value.has(normalizedLeafId)
+  ) {
+    return resolvedPathLabels.value.get(normalizedLeafId)!.join(' / ');
+  }
+
+  return normalizedLabels.join(' / ');
+}
+
 async function handleLoadData(selectedOptions: CascaderOption[]) {
   const targetOption = selectedOptions[selectedOptions.length - 1];
   if (!targetOption || targetOption.isLeaf) {
@@ -137,6 +206,7 @@ async function handleLoadData(selectedOptions: CascaderOption[]) {
     :multiple="multiple"
     :placeholder="placeholder"
     :field-names="{ label: 'label', value: 'value', children: 'children' }"
+    :display-render="displayRender"
     style="width: 100%"
   />
 </template>
