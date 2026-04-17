@@ -37,7 +37,11 @@
 - `vbenAdmin/e2e-webantd-realapi`
 - `vbenAdmin/goods-spec-toggle-state`
 
-### 2.3 UniApp（预留）
+### 2.3 通用
+
+- `docs-linking`
+
+### 2.4 UniApp（预留）
 
 - `uniapp/api-contract`
 - `uniapp/auth-token-flow`
