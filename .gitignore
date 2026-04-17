@@ -3,7 +3,6 @@
 .LSOverride
 .idea/
 .vscode/
-CLAUDE.md
 .claude/
 
 # Docker dev data
