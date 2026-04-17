@@ -1,0 +1,20 @@
+.git
+.github
+.codex
+.claude
+docs
+test
+*.md
+!deploy/**
+
+# Backend
+backend/vendor
+backend/runtime
+backend/.env
+
+# Frontend
+frontend/admin/node_modules
+frontend/admin/.turbo
+frontend/admin/apps/*/dist
+frontend/admin/apps/*/dist.zip
+frontend/admin/playground
