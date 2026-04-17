@@ -61,6 +61,7 @@ mall-base/
 ├── docs/                           # 文档
 │   ├── install.md                  # 安装指南
 │   ├── freight-template-roadmap.md # 运费模板路线图
+│   ├── claude-code-guide.md        # Claude Code 使用指南
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
 ├── docker-compose.yml              # 单容器部署（默认）
@@ -112,6 +113,7 @@ docker compose restart
 | [安装指南](docs/install.md) | Docker / 原生部署、安装向导、配置修改 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
+| [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
 
 ## 开发约定
 
