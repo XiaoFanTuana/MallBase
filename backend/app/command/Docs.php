@@ -209,14 +209,13 @@ class Docs extends Command
             $action = is_string($routeValue) ? $routeValue : '';
 
             // 从 prefix 构造控制器类名
-            // prefix 格式: auth/AdminController/
+            // prefix 格式: admin.auth.AdminController/
             if (!empty($prefix)) {
-                // 移除末尾的 /
                 $prefix = rtrim($prefix, '/');
 
-                // 将 / 转换为 \ 并添加命名空间前缀
-                // auth/AdminController -> app\admin\controller\auth\AdminController
-                $controllerClass = 'app\\' . $appName . '\\controller\\' . str_replace('/', '\\', $prefix);
+                // prefix 已包含模块名（如 admin.auth.AdminController）
+                // 将 . 和 / 转换为 \ 并添加命名空间前缀
+                $controllerClass = 'app\\controller\\' . str_replace(['.', '/'], '\\', $prefix);
             }
 
             // 获取参数
@@ -244,7 +243,7 @@ class Docs extends Command
                 $groupName = $option['_group_name'];
             } else if (!empty($controllerClass)) {
                 // 从控制器类名中提取模块名
-                // 例如：app\admin\controller\auth\AdminController -> admin
+                // 例如：app\controller\admin\auth\AdminController -> admin
                 $namespaceParts = explode('\\', $controllerClass);
                 $controllerName = end($namespaceParts); // AdminController
 
