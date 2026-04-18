@@ -1,9 +1,52 @@
 # ==========================================
-# 开发环境扩展：MySQL + Redis + 代码映射
-# 用法: docker compose -f docker-compose.prod.yml -f docker-compose.dev.yml up -d --build
+# 开发环境：后端容器 + MySQL + Redis
+#
+# 全套启动: docker compose -f docker-compose.dev.yml up -d
+# 仅后端:   docker compose -f docker-compose.dev.yml up -d backend
+#           （仅后端时需自备 MySQL + Redis）
 # ==========================================
 
 services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: mallbase-dev
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      APP_DEBUG: "true"
+      DB_TYPE: mysql
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_NAME: ${DB_NAME:-mallbase}
+      DB_USER: ${DB_USER:-mallbase}
+      DB_PASS: ${DB_PASS:-mallbase123}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_CHARSET: utf8mb4
+      CACHE_DRIVER: redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_CACHE_DB: ${REDIS_CACHE_DB:-0}
+      SWOOLE_HTTP_HOST: 0.0.0.0
+      SWOOLE_HTTP_PORT: 8080
+      SWOOLE_WORKER_NUM: ${SWOOLE_WORKER_NUM:-0}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+      CORS_ALLOW_HEADERS: Authorization,Content-Type,X-Requested-With
+      TZ: Asia/Shanghai
+    volumes:
+      - ./backend:/app
+      - backend_vendor:/app/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   mysql:
     image: mysql:8.0
     container_name: mallbase-mysql
@@ -18,7 +61,7 @@ services:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - ./data/mysql:/var/lib/mysql
-      - ./backend/app/install/data/schema:/docker-entrypoint-initdb.d/sql:ro
+      - ./backend/install/data/schema:/docker-entrypoint-initdb.d/sql:ro
       - ./deploy/docker/mysql/init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
     command:
       - --character-set-server=utf8mb4
@@ -43,19 +86,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-
-  backend:
-    volumes:
-      - ./backend:/app
-      - backend_vendor:/app/vendor
-    environment:
-      DB_HOST: mysql
-      REDIS_HOST: redis
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
 volumes:
   backend_vendor:

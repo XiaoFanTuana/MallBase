@@ -1,38 +1,12 @@
 # ==========================================
-# MallBase 单容器构建（前端 + 后端）
+# MallBase 后端容器（PHP 8.2 + Swoole）
 # ==========================================
 
-# --- Stage 1: 前端构建 ---
-FROM node:22-slim AS frontend-builder
-
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-ENV NODE_OPTIONS=--max-old-space-size=8192
-
-RUN npm i -g corepack
-
-WORKDIR /frontend
-
-COPY frontend/admin/ .
-
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-
-ARG VITE_GLOB_API_URL=/api
-RUN echo "VITE_BASE=/admin/" > apps/web-antd/.env.production \
-    && echo "VITE_GLOB_API_URL=${VITE_GLOB_API_URL}" >> apps/web-antd/.env.production \
-    && echo "VITE_COMPRESS=gzip" >> apps/web-antd/.env.production \
-    && echo "VITE_PWA=false" >> apps/web-antd/.env.production \
-    && echo "VITE_ROUTER_HISTORY=hash" >> apps/web-antd/.env.production \
-    && echo "VITE_INJECT_APP_LOADING=true" >> apps/web-antd/.env.production \
-    && echo "VITE_ARCHIVER=false" >> apps/web-antd/.env.production
-
-RUN pnpm run build --filter=@vben/web-antd
-
-# --- Stage 2: 后端运行 ---
 FROM phpswoole/swoole:php8.2-alpine
 
 WORKDIR /app
 
+# PHP 扩展
 RUN apk add --no-cache \
     libzip-dev \
     libpng-dev \
@@ -51,23 +25,24 @@ RUN apk add --no-cache \
         opcache \
     && rm -rf /var/cache/apk/*
 
+# OPCache + JIT
 RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.enable_cli=1" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.jit_buffer_size=128M" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.jit=1255" >> /usr/local/etc/php/conf.d/opcache.ini
 
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# 依赖安装（利用 Docker 缓存层）
 COPY backend/composer.json backend/composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
+# 应用代码
 COPY backend/ .
 RUN composer dump-autoload --optimize --no-dev \
-    && mkdir -p runtime public/admin public/uploads \
+    && mkdir -p runtime public/uploads \
     && chmod -R 777 runtime
-
-# 复制前端构建产物到 public/admin/
-COPY --from=frontend-builder /frontend/apps/web-antd/dist/ public/admin/
 
 EXPOSE 8080
 

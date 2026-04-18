@@ -2,257 +2,709 @@
 
 ## 环境要求
 
-### Docker 部署（方式一 ~ 三）
+| 依赖 | 最低版本 | 用途 |
+|------|---------|------|
+| PHP | 8.2+ | 后端运行 |
+| Swoole 扩展 | 5.0+（兼容 4.2.9+） | 高性能 HTTP 服务 |
+| Redis 扩展 (phpredis) | 5.3.4+（推荐 6.0+） | 缓存/会话 |
+| MySQL | 8.0+ | 数据库 |
+| Redis | 6.0+ | 缓存 |
+| Composer | 2.0+ | PHP 依赖管理 |
+| Node.js | 20.19.0+（仅构建前端） | 前端打包 |
+| pnpm | 10.0.0+（仅构建前端） | 前端包管理 |
 
-| 依赖 | 版本 |
-|------|------|
-| Docker | >= 20.10 |
-| Docker Compose | >= 2.0 |
-| MySQL | >= 8.0（外部服务，方式三自带） |
-| Redis | >= 6.0（外部服务，方式三自带） |
+### PHP 扩展清单
 
-> Docker 镜像已内置 PHP 8.2、Swoole、Node.js 22 等构建和运行依赖，无需在宿主机安装。
-
-### 原生部署（方式四）
-
-| 依赖 | 版本 | 来源 |
+| 扩展 | 用途 | 必须 |
 |------|------|------|
-| PHP | >= 8.2 | `composer.json` |
-| Swoole 扩展 | >= 4.2.9（推荐 5.0+） | `think-swoole` 依赖链 `open-smf/connection-pool` |
-| Redis 扩展 (phpredis) | >= 5.3.4（推荐 6.0+） | PHP 8.2 兼容性要求 |
-| MySQL | >= 8.0 | `docker-compose.dev.yml` |
-| Redis | >= 6.0 | `docker-compose.dev.yml` |
-| Composer | >= 2.0 | `Dockerfile` |
-| Node.js | >= 20.19.0（仅构建前端） | `frontend/admin/package.json` engines |
-| pnpm | >= 10.0.0（仅构建前端） | `frontend/admin/package.json` engines |
+| swoole | HTTP 服务器 | 是 |
+| pdo_mysql | 数据库驱动 | 是 |
+| redis | 缓存驱动 | 是 |
+| mbstring | 多字节字符串 | 是 |
+| gd | 图片处理 | 是 |
+| zip | 压缩包处理 | 是 |
+| intl | 国际化 | 是 |
+| bcmath | 高精度数学（价格计算） | 是 |
+| opcache | PHP 性能优化 | 推荐 |
 
-## 方式一：Docker 一键部署（推荐）
+---
 
-单容器运行（前端 + 后端），MySQL 和 Redis 由用户自行准备（本地安装或云服务）。
+## 选择安装方式
 
-> 以下所有 `docker compose` 命令均在**项目根目录**（`mall-base/`）执行。
+| 方式 | 容器数 | 适合场景 | 前端 |
+|------|-------|---------|------|
+| [方式一：手动安装](#方式一手动安装无-docker) | 0 | 低配服务器、完全控制 | 宿主机 Nginx |
+| [方式二：Docker 开发（仅后端）](#方式二docker-开发仅后端容器) | 1 | 本地开发、已有 MySQL/Redis | 本地 `pnpm dev` |
+| [方式三：Docker 开发（全套）](#方式三docker-开发全套) | 3 | 本地开发、一键启动 | 本地 `pnpm dev` |
+| [方式四：Docker 生产](#方式四docker-生产) | 1 | 生产部署 | 宿主机 Nginx |
+
+---
+
+## 方式一：手动安装（无 Docker）
+
+适合低配服务器、需要完全控制环境的场景。
+
+### 1. 安装 PHP 8.2 + 扩展
+
+#### Ubuntu / Debian
 
 ```bash
-cd mall-base
+# 添加 PHP 仓库
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:ondrej/php
+sudo apt update
 
-# 构建并启动
-docker compose up -d --build
+# 安装 PHP 和扩展
+sudo apt install -y \
+    php8.2-cli \
+    php8.2-dev \
+    php8.2-mysql \
+    php8.2-redis \
+    php8.2-mbstring \
+    php8.2-gd \
+    php8.2-zip \
+    php8.2-intl \
+    php8.2-bcmath \
+    php8.2-opcache \
+    php8.2-xml \
+    php8.2-curl
 
-# 访问安装向导
-# http://localhost（默认端口 80）
+# 安装 Swoole 扩展
+pecl install swoole
+echo "extension=swoole.so" | sudo tee /etc/php/8.2/cli/conf.d/20-swoole.ini
 ```
 
-安装向导会引导你完成：
-1. 环境检测
-2. 填写 MySQL 连接信息
-3. 填写 Redis 连接信息
-4. 创建管理员账号 + 配置 CORS 跨域地址
-5. 可选导入演示数据
-
-**安装完成后必须重启容器（使 .env 配置生效）：**
+#### CentOS / RHEL / AlmaLinux
 
 ```bash
-docker compose restart
+# 添加 Remi 仓库
+sudo dnf install -y epel-release
+sudo dnf install -y https://rpms.remirepo.net/enterprise/remi-release-$(rpm -E %rhel).rpm
+sudo dnf module reset php
+sudo dnf module enable php:remi-8.2
+
+# 安装 PHP 和扩展
+sudo dnf install -y \
+    php-cli \
+    php-devel \
+    php-mysqlnd \
+    php-pecl-redis \
+    php-mbstring \
+    php-gd \
+    php-pecl-zip \
+    php-intl \
+    php-bcmath \
+    php-opcache \
+    php-xml \
+    php-curl
+
+# 安装 Swoole 扩展
+pecl install swoole
+echo "extension=swoole.so" | sudo tee /etc/php.d/20-swoole.ini
 ```
 
-重启后访问 `/admin` 进入后台。
-
-### 自定义端口
+#### macOS
 
 ```bash
-# 在项目根目录执行
-APP_PORT=8080 docker compose up -d --build
+brew install php@8.2
+pecl install swoole
+pecl install redis
 ```
 
-### 自定义前端 API 地址
+#### 验证安装
 
 ```bash
-# 在项目根目录执行
-VITE_GLOB_API_URL=/api docker compose up -d --build
+php -v
+# PHP 8.2.x ...
+
+php -m | grep -E "swoole|redis|pdo_mysql|gd|mbstring|zip|intl|bcmath|opcache"
+# 应输出以上所有扩展名
 ```
 
-## 方式二：Docker 双容器（生产环境）
+### 2. 安装 MySQL 8.0
 
-前端走 Nginx（静态文件 + 反向代理），后端走 Swoole。适合需要 Nginx 做 SSL / 反向代理的生产场景。
+#### Ubuntu / Debian
 
 ```bash
-# 在项目根目录执行
-docker compose -f docker-compose.prod.yml up -d --build
+sudo apt install -y mysql-server
+sudo systemctl start mysql
+sudo systemctl enable mysql
+
+# 创建数据库和用户
+sudo mysql -e "
+CREATE DATABASE mallbase DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'mallbase'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON mallbase.* TO 'mallbase'@'localhost';
+FLUSH PRIVILEGES;
+"
 ```
 
-- 前端：`http://localhost`（端口 80）
-- 后端 API：`http://localhost:8080`
-
-环境变量参考 `deploy/docker/.env.example`。
-
-**安装完成后重启：**
+#### CentOS / RHEL
 
 ```bash
-# 在项目根目录执行
-docker compose -f docker-compose.prod.yml restart
+sudo dnf install -y mysql-server
+sudo systemctl start mysqld
+sudo systemctl enable mysqld
 ```
 
-> 如需 SSL 证书或负载均衡，建议在容器外层加一层入口 Nginx / Traefik / 云 ALB，当前容器内的 `nginx.conf` 无需修改。
-
-## 方式三：Docker 开发环境（含 MySQL + Redis）
-
-在单容器基础上叠加 MySQL 8.0 和 Redis 7 容器，适合本地开发。
+### 3. 安装 Redis
 
 ```bash
-# 在项目根目录执行
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# Ubuntu / Debian
+sudo apt install -y redis-server
+sudo systemctl start redis
+sudo systemctl enable redis
+
+# CentOS / RHEL
+sudo dnf install -y redis
+sudo systemctl start redis
+sudo systemctl enable redis
+
+# 验证
+redis-cli ping
+# 输出 PONG
 ```
 
-MySQL/Redis 数据持久化在项目根目录的 `data/` 目录。
-
-此模式下 MySQL 容器会自动导入建表 SQL，但仍需通过安装向导配置 .env 和创建管理员。安装向导中数据库地址填 `mysql`（容器名），Redis 地址填 `redis`。
-
-**安装完成后重启：**
+### 4. 安装 Composer
 
 ```bash
-# 在项目根目录执行
-docker compose -f docker-compose.yml -f docker-compose.dev.yml restart
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+composer -V
 ```
 
-## 方式四：原生部署
-
-### 1. 安装后端依赖
+### 5. 部署后端
 
 ```bash
-# 从项目根目录进入 backend
 cd mall-base/backend
-composer install
+
+# 安装 PHP 依赖（生产环境不装开发依赖）
+composer install --no-dev --optimize-autoloader
 ```
 
-### 2. 启动 Swoole 服务
+### 6. 构建前端
 
 ```bash
-# 在 backend/ 目录下执行
-php think swoole
-```
+# 安装 Node.js（如未安装）
+# 推荐使用 nvm: https://github.com/nvm-sh/nvm
+nvm install 22
+nvm use 22
 
-默认监听 `0.0.0.0:8080`。
+# 安装 pnpm
+npm i -g pnpm
 
-### 3. 访问安装向导
-
-浏览器打开 `http://your-server:8080`，按向导完成安装。
-
-### 4. 重启服务（使 .env 配置生效）
-
-```bash
-# 在 backend/ 目录下执行
-php think swoole:stop
-php think swoole
-```
-
-重启后访问 `/admin` 进入后台。
-
-### 5. 前端单独构建（可选）
-
-如果需要修改前端代码后重新构建：
-
-```bash
-# 从项目根目录进入前端目录
+# 构建前端
 cd mall-base/frontend/admin
 pnpm install
 pnpm run build --filter=@vben/web-antd
 ```
 
-构建产物复制到 `backend/public/admin/`。
+构建产物在 `frontend/admin/apps/web-antd/dist/`。
 
-## 安装后
-
-- 后台地址：`/admin`
-- 使用安装时创建的管理员账号登录
-- 如需导入地区数据：在 `backend/` 目录下执行 `php think region:import`
-
-## 安装后修改配置
-
-安装向导会自动生成 `backend/.env` 文件。如需修改配置（如 CORS、JWT、调试模式等），编辑此文件后重启服务。
-
-### Docker 部署
+### 7. 部署前端文件
 
 ```bash
-# 进入容器（容器内工作目录为 /app，即 backend）
-docker exec -it mallbase sh
-vi .env
-
-# 编辑完成后退出容器，重启使配置生效
-exit
-docker restart mallbase
+# 复制构建产物到 Nginx 目录
+sudo mkdir -p /var/www/mallbase/admin
+sudo cp -r frontend/admin/apps/web-antd/dist/* /var/www/mallbase/admin/
 ```
 
-如使用 Docker Compose（在项目根目录执行）：
+### 8. 配置 Nginx
+
+```bash
+# 复制配置文件
+sudo cp deploy/nginx/mallbase.conf /etc/nginx/sites-available/mallbase.conf
+sudo ln -s /etc/nginx/sites-available/mallbase.conf /etc/nginx/sites-enabled/
+
+# 编辑配置：修改 server_name 和路径
+sudo vim /etc/nginx/sites-available/mallbase.conf
+
+# 验证配置 + 重载
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+> 配置文件详见 `deploy/nginx/mallbase.conf`，包含 SSL 和非 SSL 两个版本。
+
+### 9. 启动 Swoole
+
+```bash
+cd mall-base/backend
+php think swoole
+```
+
+默认监听 `0.0.0.0:8080`。
+
+> **后台运行**：可使用 `nohup php think swoole &` 或 systemd 管理。
+
+### 10. 访问安装向导
+
+浏览器打开 `http://your-domain/install`，按向导完成：
+
+1. 环境检测
+2. 填写 MySQL 连接信息
+3. 填写 Redis 连接信息
+4. 创建管理员账号 + 配置 CORS
+5. 可选导入演示数据
+
+### 11. 重启 Swoole
+
+安装向导会生成 `backend/.env` 配置文件，**必须重启 Swoole 才能加载**：
+
+```bash
+# 找到 Swoole 主进程并杀掉
+lsof -ti :8080 | xargs kill
+
+# 重新启动
+cd mall-base/backend
+php think swoole
+```
+
+重启后访问 `/admin` 进入后台管理系统。
+
+### 方式一利弊
+
+| 优点 | 缺点 |
+|------|------|
+| 资源占用最低 | 环境配置繁琐 |
+| 完全掌控所有组件 | 需要手动管理进程 |
+| 适合低配服务器（1 核 2G 即可） | PHP 扩展安装可能遇到编译问题 |
+| 性能最好（无容器开销） | 不同服务器环境差异大 |
+
+---
+
+## 方式二：Docker 开发（仅后端容器）
+
+适合本地开发，宿主机已有 MySQL 和 Redis 的场景。
+
+### 前提
+
+- Docker 已安装
+- 宿主机已有 MySQL 8.0+ 和 Redis 6.0+
+
+### 1. 启动后端容器
+
+```bash
+cd mall-base
+
+# 仅启动后端容器
+docker compose -f docker-compose.dev.yml up -d backend
+```
+
+> 如果宿主机的 MySQL/Redis 不在默认端口或需要密码，创建 `.env` 文件：
+>
+> ```bash
+> cp deploy/docker/.env.example .env
+> # 编辑 .env，修改 DB_HOST、REDIS_HOST 等
+> # DB_HOST 填 host.docker.internal（Docker Desktop）或宿主机 IP
+> ```
+
+### 2. 安装 Composer 依赖
+
+首次启动后需要安装依赖（因为 vendor 目录走的是 Docker volume）：
+
+```bash
+docker exec mallbase-dev composer install
+```
+
+### 3. 访问安装向导
+
+浏览器打开 `http://localhost:8080/install`，按向导完成安装。
+
+> 数据库地址填 `host.docker.internal`（Docker Desktop）或宿主机实际 IP。
+
+### 4. 重启容器
+
+```bash
+docker compose -f docker-compose.dev.yml restart backend
+```
+
+### 5. 启动前端开发服务器
+
+```bash
+cd mall-base/frontend/admin
+pnpm install
+pnpm run dev --filter=@vben/web-antd
+```
+
+前端开发服务器默认运行在 `http://localhost:5666`。
+
+### 修改代码
+
+代码通过 Docker volume 映射（`./backend:/app`），**直接修改宿主机的 `backend/` 目录即可**，容器内实时同步。
+
+开启 `APP_DEBUG=true` 后 Swoole 会自动检测文件变化并重载（macOS 需要 `brew install fswatch`）。
+
+### 方式二利弊
+
+| 优点 | 缺点 |
+|------|------|
+| 只多一个容器，资源占用小 | 需要自行安装 MySQL/Redis |
+| 代码实时同步，开发体验好 | MySQL/Redis 版本需要自行管理 |
+| 不影响宿主机 PHP 环境 | Docker Desktop 文件映射有性能损耗 |
+
+---
+
+## 方式三：Docker 开发（全套）
+
+一键启动后端 + MySQL + Redis，适合快速搭建完整开发环境。
+
+### 1. 启动全套容器
+
+```bash
+cd mall-base
+docker compose -f docker-compose.dev.yml up -d
+```
+
+等待 MySQL 和 Redis 健康检查通过后，后端容器自动启动。
+
+### 2. 安装 Composer 依赖
+
+```bash
+docker exec mallbase-dev composer install
+```
+
+### 3. 访问安装向导
+
+浏览器打开 `http://localhost:8080/install`，填写：
+
+| 配置项 | 值 |
+|--------|-----|
+| 数据库地址 | `mysql` |
+| 数据库端口 | `3306` |
+| 数据库名 | `mallbase` |
+| 数据库用户 | `mallbase` |
+| 数据库密码 | `mallbase123` |
+| Redis 地址 | `redis` |
+| Redis 端口 | `6379` |
+| Redis 密码 | （留空） |
+
+> MySQL 容器首次启动会自动导入建表 SQL，安装向导中可跳过导入步骤。
+
+### 4. 重启容器
+
+```bash
+docker compose -f docker-compose.dev.yml restart
+```
+
+### 5. 启动前端开发服务器
+
+```bash
+cd mall-base/frontend/admin
+pnpm install
+pnpm run dev --filter=@vben/web-antd
+```
+
+### 从本地连接容器内的 MySQL
+
+容器端口已映射到宿主机，可直接用本地客户端连接：
+
+```bash
+# 命令行
+mysql -h 127.0.0.1 -P 3306 -u mallbase -p
+# 密码: mallbase123
+```
+
+**GUI 工具**（Navicat / DBeaver / DataGrip 等）：
+
+| 设置 | 值 |
+|------|-----|
+| 主机 | `127.0.0.1` |
+| 端口 | `3306`（或 `.env` 中的 `MYSQL_PORT`） |
+| 用户名 | `mallbase` |
+| 密码 | `mallbase123` |
+| 数据库 | `mallbase` |
+
+### 从本地连接容器内的 Redis
+
+```bash
+# 命令行
+redis-cli -h 127.0.0.1 -p 6379
+
+# GUI 工具（如 RedisInsight / Another Redis Desktop Manager）
+# 主机: 127.0.0.1
+# 端口: 6379
+```
+
+### 数据持久化
+
+MySQL 和 Redis 数据映射到项目根目录的 `data/` 文件夹：
+
+```
+mall-base/
+├── data/
+│   ├── mysql/    ← MySQL 数据文件
+│   └── redis/    ← Redis 数据文件
+```
+
+容器删除后数据不丢失。如需彻底重置：
+
+```bash
+docker compose -f docker-compose.dev.yml down
+rm -rf data/mysql data/redis
+docker compose -f docker-compose.dev.yml up -d
+```
+
+### 修改代码
+
+与方式二相同，代码通过 volume 映射，**直接修改宿主机文件即可**。
+
+### 方式三利弊
+
+| 优点 | 缺点 |
+|------|------|
+| 一键启动完整环境 | 3 个容器，资源占用较高 |
+| 零配置，开箱即用 | 2 核 4G 以下服务器可能吃力 |
+| 数据持久化到宿主机 | Docker Desktop 文件映射有性能损耗 |
+| 本地客户端可直接连接 MySQL/Redis | |
+
+---
+
+## 方式四：Docker 生产
+
+单后端容器 + 宿主机 Nginx，适合生产部署。
+
+### 架构
+
+```
+用户浏览器
+    ↓
+宿主机 Nginx (:443)
+    ├── /admin/*        → 直接返回前端静态文件
+    ├── /admin/api/*    → proxy_pass → Swoole 容器 (:8080)
+    ├── /install/*      → proxy_pass → Swoole 容器 (:8080)
+    ├── /client/*       → proxy_pass → Swoole 容器 (:8080)
+    └── /               → 301 → /admin/
+```
+
+### 1. 准备环境变量
+
+```bash
+cd mall-base
+
+# 复制并编辑环境变量
+cp deploy/docker/.env.example .env
+vim .env
+```
+
+关键配置：
+
+```ini
+# 数据库（填写你的 MySQL 地址）
+DB_HOST=127.0.0.1
+DB_NAME=mallbase
+DB_USER=mallbase
+DB_PASS=your_secure_password
+
+# Redis
+REDIS_HOST=127.0.0.1
+
+# JWT（改为随机字符串）
+JWT_SECRET=your-random-64-char-string
+
+# CORS（填写你的域名）
+CORS_ALLOWED_ORIGINS=https://mall.example.com
+```
+
+### 2. 构建并启动后端容器
+
+```bash
+docker compose up -d --build
+```
+
+### 3. 构建前端
+
+在**本地开发机**或 **CI** 上构建（不在服务器上构建）：
+
+```bash
+cd mall-base/frontend/admin
+pnpm install
+pnpm run build --filter=@vben/web-antd
+```
+
+### 4. 部署前端文件到服务器
+
+```bash
+# 将构建产物上传到服务器
+scp -r frontend/admin/apps/web-antd/dist/* user@server:/var/www/mallbase/admin/
+```
+
+### 5. 配置宿主机 Nginx
+
+```bash
+# 复制配置文件到服务器
+sudo cp deploy/nginx/mallbase.conf /etc/nginx/sites-available/mallbase.conf
+sudo ln -s /etc/nginx/sites-available/mallbase.conf /etc/nginx/sites-enabled/
+
+# 修改 server_name、SSL 证书路径、前端文件路径
+sudo vim /etc/nginx/sites-available/mallbase.conf
+
+# 验证并重载
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 6. 访问安装向导
+
+浏览器打开 `https://mall.example.com/install`，按向导完成安装。
+
+### 7. 重启容器
 
 ```bash
 docker compose restart
-# 或双容器：
-docker compose -f docker-compose.prod.yml restart
 ```
 
-### 原生部署
+### 修改代码
+
+生产环境代码打包在镜像中，修改代码需要重新构建镜像：
 
 ```bash
-# 在 backend/ 目录下执行
-vi .env
-php think swoole:stop && php think swoole
+# 拉取最新代码
+git pull
+
+# 重新构建并启动
+docker compose up -d --build
 ```
+
+如果只是修改 `.env` 配置，直接进容器编辑：
+
+```bash
+docker exec -it mallbase sh
+vi .env
+exit
+docker compose restart
+```
+
+### 方式四利弊
+
+| 优点 | 缺点 |
+|------|------|
+| 镜像不可变，部署一致 | 改代码需重新 build |
+| 版本可回滚（保留旧镜像） | 需要额外配置宿主机 Nginx |
+| 资源占用低（仅 1 个容器） | 前端构建需要在别处完成 |
+| SSL / 负载均衡由宿主机 Nginx 处理 | |
+
+---
+
+## 安装后
+
+### 访问后台
+
+安装并重启后，访问 `/admin` 进入后台管理系统，使用安装时创建的管理员账号登录。
+
+### 导入地区数据
+
+```bash
+# 手动安装
+cd mall-base/backend
+php think region:import
+
+# Docker
+docker exec mallbase php think region:import
+# 或开发环境
+docker exec mallbase-dev php think region:import
+```
+
+### 修改配置
+
+安装向导生成的 `backend/.env` 文件包含所有运行配置。修改后需要重启：
+
+| 部署方式 | 重启命令 |
+|---------|---------|
+| 手动安装 | `lsof -ti :8080 \| xargs kill && php think swoole` |
+| Docker 生产 | `docker compose restart` |
+| Docker 开发 | `docker compose -f docker-compose.dev.yml restart` |
 
 ### 常用配置项
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
-| `APP_DEBUG` | 调试模式（生产环境必须关闭） | `false` |
+| `APP_DEBUG` | 调试模式（**生产必须关闭**） | `false` |
 | `JWT_SECRET` | JWT 签名密钥（安装时自动生成） | 随机值 |
 | `JWT_EXPIRE` | 访问令牌有效期（秒） | `7200` |
 | `JWT_REFRESH_EXPIRE` | 刷新令牌有效期（秒） | `2592000` |
-| `CORS_ALLOWED_ORIGINS` | 允许跨域的前端地址（逗号分隔，`*` 全部允许） | 安装时配置 |
-| `CORS_ALLOW_METHODS` | 允许的 HTTP 方法 | `GET,POST,PUT,DELETE,OPTIONS` |
-| `CORS_ALLOW_HEADERS` | 允许的请求头 | `Authorization,Content-Type,X-Requested-With` |
-| `SWOOLE_WORKER_NUM` | Worker 进程数（`0` = CPU 核数自动） | `0` |
-| `SWOOLE_MAX_REQUEST` | Worker 处理请求上限后重启（防内存泄漏） | `2000` |
-| `CACHE_DRIVER` | 缓存驱动（`redis` / `file`） | `redis` |
+| `CORS_ALLOWED_ORIGINS` | 允许跨域的前端地址 | 安装时配置 |
+| `SWOOLE_WORKER_NUM` | Worker 进程数（`0` = CPU 核数） | `0` |
 
-完整配置项参考 `backend/.example.env`。
-
-## 目录结构
-
-```
-backend/app/install/          # 安装模块
-├── controller/               # 安装接口
-├── service/                  # 安装逻辑
-└── data/                     # 安装数据
-    ├── schema/               # 建表 SQL（按序号排列）
-    ├── demo/                 # 演示数据
-    └── region/               # 地区数据
-```
+---
 
 ## 常见问题
 
-### 安装完成后页面报错
+### 安装完成后页面报错 / 接口返回旧数据
 
-安装向导写入 `.env` 后，Swoole 进程仍使用旧配置。**必须重启服务**才能加载新的数据库和 Redis 配置。
+Swoole 是常驻内存服务，`.env` 变更后**必须重启**才能加载。
 
 ### Docker 容器内连接宿主机 MySQL/Redis
 
-使用 `host.docker.internal` 作为数据库/Redis 地址（Docker Desktop 自动支持，Linux 需要 `extra_hosts` 配置，`docker-compose.yml` 已包含）。
+| 平台 | 地址 |
+|------|------|
+| Docker Desktop (Mac/Win) | `host.docker.internal` |
+| Linux | `172.17.0.1` 或宿主机实际 IP |
+
+`docker-compose.yml` 已配置 `extra_hosts`，Linux 下也支持 `host.docker.internal`。
 
 ### 重新安装
 
-删除 `backend/install.lock` 文件后重启服务，即可重新进入安装向导。
+删除锁文件后重启服务：
+
+```bash
+# 手动安装
+rm backend/install/install.lock
+
+# Docker
+docker exec mallbase rm install/install.lock
+docker compose restart
+```
+
+### Swoole 进程杀不掉
+
+```bash
+# 按端口批量杀
+lsof -ti :8080 | xargs kill -9
+```
+
+### 前端构建 out of memory
+
+```bash
+export NODE_OPTIONS=--max-old-space-size=4096
+pnpm run build --filter=@vben/web-antd
+```
 
 ### 验证 CORS 配置
 
 ```bash
 # 白名单 Origin（应返回 204 + Access-Control-Allow-Origin）
 curl -i -X OPTIONS 'http://127.0.0.1:8080/' \
-  -H 'Origin: http://localhost:3000' \
+  -H 'Origin: https://mall.example.com' \
   -H 'Access-Control-Request-Method: GET'
+```
 
-# 非白名单 Origin（应返回 403）
-curl -i -X OPTIONS 'http://127.0.0.1:8080/' \
-  -H 'Origin: http://evil.example.com' \
-  -H 'Access-Control-Request-Method: GET'
+---
+
+## 目录结构
+
+```
+mall-base/
+├── backend/                  # 后端（PHP/ThinkPHP/Swoole）
+│   ├── app/                  # 应用代码
+│   ├── config/               # 配置文件
+│   ├── install/              # 安装数据
+│   │   └── data/
+│   │       ├── schema/       # 建表 SQL
+│   │       ├── demo/         # 演示数据
+│   │       └── region/       # 地区数据
+│   └── public/               # 静态资源
+├── frontend/admin/           # 后台前端（Vben Admin）
+├── deploy/
+│   ├── docker/
+│   │   ├── Dockerfile        # 后端容器构建
+│   │   ├── .env.example      # 环境变量示例
+│   │   └── mysql/init.sh     # MySQL 初始化脚本
+│   └── nginx/
+│       └── mallbase.conf     # Nginx 配置示例
+├── docker-compose.yml        # 生产环境
+└── docker-compose.dev.yml    # 开发环境
 ```
 
 ## 交流与反馈
