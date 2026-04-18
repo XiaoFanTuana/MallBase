@@ -1,47 +1,12 @@
 <?php
 
 use think\facade\Route;
-use app\admin\middleware\{
-    JwtAuth,
-    CheckPermission,
-    AdminOperationLogMiddleware,
-    RequestLockMiddleware
-};
 
-/*
-|--------------------------------------------------------------------------
-| 后台 API
-|--------------------------------------------------------------------------
-*/
-Route::group('api/', function () {
-
-    // 加载 admin 子路由
-    load_routes('admin');
-
-    // API 未匹配兜底
-    Route::miss(function () {
-        return json([
-            'code' => 404,
-            'msg' => '接口不存在',
-            'data' => null,
-        ]);
-    });
-
-})
-    ->option([
-        '_lock' => true, // 请求锁
-        '_group_name' => '后台管理'
-    ])
-    ->middleware([
-        JwtAuth::class,
-        CheckPermission::class,   // CORS 必须最前
-        RequestLockMiddleware::class,   // 防重复提交
-        AdminOperationLogMiddleware::class,           // 操作日志（最后）
-    ]);
 /*
 |--------------------------------------------------------------------------
 | 静态文件访问（上传的文件）
 |--------------------------------------------------------------------------
+| /uploads/... 不经过 MultiApp（无 app/uploads/ 目录）
 */
 Route::group('uploads', function () {
     Route::miss(function () {
@@ -52,12 +17,10 @@ Route::group('uploads', function () {
             abort(404, '文件不存在');
         }
 
-        // 获取文件 MIME 类型
         $mimeType = mime_content_type($filePath);
 
-        // 返回文件
         return response(file_get_contents($filePath), 200, [
-            'Content-Type' => $mimeType,
+            'Content-Type'  => $mimeType,
             'Cache-Control' => 'public, max-age=31536000',
         ]);
     });
@@ -65,78 +28,9 @@ Route::group('uploads', function () {
 
 /*
 |--------------------------------------------------------------------------
-| 后台前端静态文件（构建产物）
+| 全局兜底
 |--------------------------------------------------------------------------
+| 注意：此 miss 会被 Swoole 预加载并 clone 到每个请求，
+| 若在此设置 Route::miss()，会拦截多应用（admin/client/install）的路由匹配。
+| 因此不在此设置全局 miss，各应用自行在 app/{name}/route/app.php 中处理。
 */
-Route::group('admin', function () {
-    Route::miss(function () {
-        $path = request()->pathinfo();
-        $publicPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR;
-
-        // 尝试直接匹配静态文件（如 admin/assets/xxx.js）
-        $filePath = $publicPath . str_replace('/', DIRECTORY_SEPARATOR, $path);
-        if (is_file($filePath)) {
-            $mimeTypes = [
-                'js'   => 'application/javascript',
-                'mjs'  => 'application/javascript',
-                'css'  => 'text/css',
-                'svg'  => 'image/svg+xml',
-                'png'  => 'image/png',
-                'jpg'  => 'image/jpeg',
-                'jpeg' => 'image/jpeg',
-                'gif'  => 'image/gif',
-                'ico'  => 'image/x-icon',
-                'woff' => 'font/woff',
-                'woff2'=> 'font/woff2',
-                'ttf'  => 'font/ttf',
-                'eot'  => 'application/vnd.ms-fontobject',
-                'json' => 'application/json',
-            ];
-
-            $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-            $mimeType = $mimeTypes[$ext] ?? mime_content_type($filePath);
-
-            return response(file_get_contents($filePath), 200, [
-                'Content-Type'  => $mimeType,
-                'Cache-Control' => 'public, max-age=31536000, immutable',
-            ]);
-        }
-
-        // SPA fallback: 返回 admin/index.html
-        $indexPath = $publicPath . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
-        if (is_file($indexPath)) {
-            return response(file_get_contents($indexPath), 200, [
-                'Content-Type' => 'text/html; charset=utf-8',
-            ]);
-        }
-
-        // 兜底：返回旧的 admin.html
-        $legacyPath = $publicPath . 'admin.html';
-        if (is_file($legacyPath)) {
-            return view($legacyPath);
-        }
-
-        abort(404, '前端页面未找到，请先构建前端');
-    });
-});
-
-/*
-|--------------------------------------------------------------------------
-| 根路径兜底
-|--------------------------------------------------------------------------
-*/
-Route::miss(function () {
-    $indexPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
-    if (is_file($indexPath)) {
-        return response(file_get_contents($indexPath), 200, [
-            'Content-Type' => 'text/html; charset=utf-8',
-        ]);
-    }
-
-    $legacyPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR . 'admin.html';
-    if (is_file($legacyPath)) {
-        return view($legacyPath);
-    }
-
-    abort(404, '页面未找到');
-});

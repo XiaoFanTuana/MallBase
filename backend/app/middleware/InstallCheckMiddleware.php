@@ -13,7 +13,7 @@ class InstallCheckMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         $path = $request->pathinfo();
-        $isInstallRoute = str_starts_with($path, 'install/');
+        $isInstallRoute = str_starts_with($path, 'install/') || $path === 'install';
         $isInstalled = file_exists(app()->getRootPath() . 'install.lock');
 
         if ($isInstalled && $isInstallRoute && str_starts_with($path, 'install/api/')) {

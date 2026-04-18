@@ -3,8 +3,7 @@
 use app\client\middleware\JwtAuth;
 use think\facade\Route;
 
-// 买家订单（全部需登录）
-Route::group('client/order', function () {
+Route::group('order', function () {
     Route::post('create', 'create');
     Route::post('pay/:sn', 'pay');
     Route::post('cancel/:id', 'cancel');
