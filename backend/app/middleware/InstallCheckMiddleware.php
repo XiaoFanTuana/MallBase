@@ -22,10 +22,10 @@ class InstallCheckMiddleware
 
         if (!$isInstalled && !$isInstallRoute) {
             if ($request->isAjax() || str_contains($request->header('accept', ''), 'application/json')) {
-                return json(['code' => 302, 'message' => '系统未安装', 'data' => ['redirect' => '/install/']], 302);
+                return json(['code' => 302, 'message' => '系统未安装', 'data' => ['redirect' => '/install']], 302);
             }
 
-            return redirect('/install/');
+            return redirect('/install');
         }
 
         return $next($request);
