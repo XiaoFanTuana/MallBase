@@ -50,6 +50,8 @@ services:
     volumes:
       - ./backend:/app
       - backend_vendor:/app/vendor
+      # 安装 SQL/demo 数据（随仓库跟踪，位于 deploy/install/data；以只读方式映射进容器）
+      - ./deploy/install/data:/app/install/data:ro
     depends_on:
       ensure-env:
         condition: service_completed_successfully
@@ -72,7 +74,7 @@ services:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - ./data/mysql:/var/lib/mysql
-      - ./backend/install/data/schema:/docker-entrypoint-initdb.d/sql:ro
+      - ./deploy/install/data/schema:/docker-entrypoint-initdb.d/sql:ro
       - ./deploy/docker/mysql/init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
     command:
       - --character-set-server=utf8mb4

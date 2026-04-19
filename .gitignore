@@ -5,8 +5,8 @@
 .vscode/
 .claude/
 
-# Docker dev data
-data/
+# Docker dev data（MySQL / Redis 宿主挂载目录，仅项目根的 /data/）
+/data/
 
 # Frontend build artifacts
 backend/public/admin/

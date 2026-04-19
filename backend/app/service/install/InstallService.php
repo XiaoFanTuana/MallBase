@@ -307,7 +307,7 @@ ENV;
 
     private function importSqlFiles(PDO $pdo): void
     {
-        $sqlDir = root_path() . 'install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'schema';
+        $sqlDir = $this->installDataPath('schema');
 
         $files = glob($sqlDir . DIRECTORY_SEPARATOR . '*.sql');
         sort($files);
@@ -348,7 +348,7 @@ ENV;
 
     private function importDemoData(PDO $pdo): void
     {
-        $demoDir = root_path() . 'install' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'demo';
+        $demoDir = $this->installDataPath('demo');
 
         if (!is_dir($demoDir)) {
             return;
@@ -378,5 +378,19 @@ ENV;
     private function lockFilePath(): string
     {
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+    }
+
+    private function installDataPath(string $subdir): string
+    {
+        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
+        $deployPath  = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
+            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'data'
+            . DIRECTORY_SEPARATOR . $subdir;
+        if (is_dir($deployPath)) {
+            return $deployPath;
+        }
+
+        return root_path() . 'install' . DIRECTORY_SEPARATOR . 'data'
+            . DIRECTORY_SEPARATOR . $subdir;
     }
 }
