@@ -45,12 +45,18 @@ class AdminService extends BaseService
         $admin->last_login_ip = Request::ip();
         $admin->save();
 
+        // password_changed_at=NULL 表示该账号从未改过密码（由 install:auto 或初始化 SQL 创建），
+        // 前端据此将首次登录用户强制跳转到改密页；同时该标记写进 JWT 载荷，
+        // 用于后端强制拦截——避免用户绕过前端直接访问业务接口。
+        $mustChangePassword = $admin->password_changed_at === null;
+
         // 生成 JWT Token（encode 自动生成 access_token + refresh_token）
         $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
-            'admin_id' => $admin->id,
-            'username' => $admin->username,
-            'nickname' => $admin->nickname,
+            'admin_id'             => $admin->id,
+            'username'             => $admin->username,
+            'nickname'             => $admin->nickname,
+            'must_change_password' => $mustChangePassword,
         ]);
 
         // 存储 refresh_token 到 Redis
@@ -60,6 +66,8 @@ class AdminService extends BaseService
             $admin->id,
             $jwtService->getRefreshExpire()
         );
+
+        $token['must_change_password'] = $mustChangePassword;
 
         return $token;
     }
@@ -342,6 +350,8 @@ class AdminService extends BaseService
         }
         // 使用模型属性赋值，会触发 setPasswordAttr 修改器
         $admin->password = $data['password'];
+        // 写入最近改密时间，清除"首次强制改密"标记；后续主动改密也统一刷新该字段。
+        $admin->password_changed_at = date('Y-m-d H:i:s');
         return $admin->save();
     }
 
@@ -431,11 +441,15 @@ class AdminService extends BaseService
         // 撤销旧的 refresh_token
         $jwtCacheService->revokeRefreshToken($admin->id);
 
+        // 刷新时重新判定 must_change_password，避免首次改密前靠刷新 token 绕过中间件守卫。
+        $mustChangePassword = $admin->password_changed_at === null;
+
         // 生成新的 token 对
         $token = $jwtService->encode([
-            'admin_id' => $admin->id,
-            'username' => $admin->username,
-            'nickname' => $admin->nickname,
+            'admin_id'             => $admin->id,
+            'username'             => $admin->username,
+            'nickname'             => $admin->nickname,
+            'must_change_password' => $mustChangePassword,
         ]);
 
         // 存储新的 refresh_token 到 Redis
@@ -444,6 +458,8 @@ class AdminService extends BaseService
             $admin->id,
             $jwtService->getRefreshExpire()
         );
+
+        $token['must_change_password'] = $mustChangePassword;
 
         return $token;
     }

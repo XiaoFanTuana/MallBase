@@ -182,6 +182,34 @@ class InstallService
         }
     }
 
+    /**
+     * 从进程 env 构建安装参数（方式三 Docker 全套零向导使用）
+     *
+     * 仅在 env 完备的场景下调用，不尝试推测/填充缺省连接信息。
+     * ADMIN_USER / ADMIN_PASS 允许缺省，INSTALL_DEMO 默认不导入。
+     */
+    public function buildParamsFromEnv(): array
+    {
+        $get = static function (string $name): string {
+            $value = getenv($name);
+            return $value === false ? '' : trim((string)$value);
+        };
+
+        return [
+            'db_host'        => $get('DB_HOST'),
+            'db_port'        => $get('DB_PORT') !== '' ? (int)$get('DB_PORT') : 3306,
+            'db_user'        => $get('DB_USER'),
+            'db_pass'        => $get('DB_PASS'),
+            'db_name'        => $get('DB_NAME'),
+            'redis_host'     => $get('REDIS_HOST'),
+            'redis_port'     => $get('REDIS_PORT') !== '' ? (int)$get('REDIS_PORT') : 6379,
+            'redis_password' => $get('REDIS_PASSWORD'),
+            'admin_user'     => $get('ADMIN_USER') !== '' ? $get('ADMIN_USER') : 'admin',
+            'admin_pass'     => $get('ADMIN_PASS') !== '' ? $get('ADMIN_PASS') : 'admin123',
+            'import_demo'    => $get('INSTALL_DEMO') === '1',
+        ];
+    }
+
     public function execute(array $params): array
     {
         $dbConfig = [
@@ -365,10 +393,12 @@ ENV;
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $now = date('Y-m-d H:i:s');
 
+        // password_changed_at 显式置 NULL：登录时据此判断是否强制首次改密。
+        // ON DUPLICATE 分支也把它重置为 NULL，保证重跑安装能回到"初始默认密码待改"状态。
         $stmt = $pdo->prepare(
-            "INSERT INTO `mb_admin` (`id`, `username`, `nickname`, `password`, `avatar`, `status`, `create_time`, `update_time`)
-             VALUES (1, :username, :nickname, :password, '', 1, :create_time, :update_time)
-             ON DUPLICATE KEY UPDATE `username` = :username2, `password` = :password2, `update_time` = :update_time2"
+            "INSERT INTO `mb_admin` (`id`, `username`, `nickname`, `password`, `avatar`, `status`, `password_changed_at`, `create_time`, `update_time`)
+             VALUES (1, :username, :nickname, :password, '', 1, NULL, :create_time, :update_time)
+             ON DUPLICATE KEY UPDATE `username` = :username2, `password` = :password2, `password_changed_at` = NULL, `update_time` = :update_time2"
         );
 
         $stmt->execute([
