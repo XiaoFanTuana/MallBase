@@ -15,6 +15,7 @@ Route::group('install', function () {
     });
 
     Route::group('api', function () {
+        Route::get('status', 'status');
         Route::get('check', 'check');
         Route::post('test-db', 'testDb');
         Route::post('test-redis', 'testRedis');

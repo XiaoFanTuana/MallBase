@@ -8,12 +8,27 @@ use PDO;
 use PDOException;
 use Redis;
 use RedisException;
+use think\facade\Console;
 
 class InstallService
 {
     public function isInstalled(): bool
     {
         return file_exists($this->lockFilePath());
+    }
+
+    public function getLockInfo(): ?array
+    {
+        $path = $this->lockFilePath();
+        if (!file_exists($path)) {
+            return null;
+        }
+        $raw = file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : null;
     }
 
     public function checkEnvironment(): array
@@ -228,9 +243,26 @@ class InstallService
 
         $pdo = null;
 
+        $permissionsSynced = true;
+        $permissionsSyncError = null;
+        try {
+            Console::call('sync:permissions');
+        } catch (\Throwable $e) {
+            $permissionsSynced = false;
+            $permissionsSyncError = $e->getMessage();
+        }
+
         $this->writeLockFile();
 
-        return ['success' => true, 'message' => '安装完成'];
+        $response = [
+            'success'            => true,
+            'message'            => '安装完成',
+            'permissions_synced' => $permissionsSynced,
+        ];
+        if (!$permissionsSynced) {
+            $response['permissions_sync_error'] = $permissionsSyncError;
+        }
+        return $response;
     }
 
     private function writeEnvFile(array $db, array $redis, string $jwtSecret, string $corsOrigins = '*'): void

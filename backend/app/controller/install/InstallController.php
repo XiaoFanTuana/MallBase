@@ -23,6 +23,22 @@ class InstallController
         return json(['code' => 200, 'data' => $result, 'message' => 'ok']);
     }
 
+    public function status(): Response
+    {
+        $installed = $this->service->isInstalled();
+        $data = [
+            'installed'    => $installed,
+            'installed_at' => null,
+            'version'      => null,
+        ];
+        if ($installed) {
+            $info = $this->service->getLockInfo() ?? [];
+            $data['installed_at'] = $info['installed_at'] ?? null;
+            $data['version']      = $info['version'] ?? null;
+        }
+        return json(['code' => 200, 'data' => $data, 'message' => 'ok']);
+    }
+
     public function testDb(Request $request): Response
     {
         $config = [
