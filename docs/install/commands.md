@@ -135,7 +135,15 @@ docker logs mallbase-frontend-build
 
 ## 容器内依赖安装
 
-### 初始化后端 `vendor`
+### 启动前初始化后端 `vendor`
+
+适用：方式二、方式三
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm --no-deps backend composer install
+```
+
+### 已启动容器里重新安装后端依赖
 
 适用：方式二、方式三
 

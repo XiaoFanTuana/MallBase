@@ -73,6 +73,23 @@ docker logs mallbase-frontend-build
 
 脚本每 15 秒会输出一次“进行中，请稍候”，有日志就说明没卡死。
 
+### `backend` 日志报 `Failed opening required '/app/vendor/autoload.php'`
+
+原因：
+
+- 宿主机挂载了 `./backend:/app`
+- 这会覆盖镜像层里原本已经安装好的 `vendor`
+- 首次启动时宿主机 `backend/vendor` 还不存在
+
+处理：
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm --no-deps backend composer install
+docker compose -f docker-compose.dev.yml up -d --no-deps backend
+```
+
+如果你直接执行 `up -d --no-deps backend`，当前开发镜像入口脚本也会自动补一次 `composer install`。首次启动时间较长属于正常现象。
+
 ## MySQL / Redis 连接
 
 ### `Connection refused` 连不上 MySQL

@@ -56,7 +56,7 @@
 
 - 只启动后端容器，数据库和 Redis 由宿主机提供。
 - 完整步骤见 [docker-backend-only.md](./docker-backend-only.md)。
-- 常用命令如 `docker exec mallbase-dev composer install` 和清理命令见 [commands.md](./commands.md)。
+- 常用命令如启动前初始化 `vendor`、重新安装依赖和清理命令见 [commands.md](./commands.md)。
 
 ### 方式三：Docker 开发（全套）
 

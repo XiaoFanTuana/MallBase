@@ -23,9 +23,15 @@
 cd /path/to/mall-base
 ```
 
-零配置方式：可直接跳过复制步骤，首次启动时由 `ensure-env` 自动生成两份 `.env`。
+方式二启动命令使用的是：
 
-如果要自定义端口、密码或数据库名，手动准备：
+```bash
+docker compose -f docker-compose.dev.yml up -d --no-deps backend
+```
+
+由于这里显式带了 `--no-deps`，`ensure-env` 不会一起启动，所以方式二不要依赖“零配置自动生成 `.env`”。
+
+请先手动准备：
 
 ```bash
 cp deploy/docker/.example.env .env
@@ -45,15 +51,19 @@ docker compose -f docker-compose.dev.yml up -d --no-deps backend
 
 这里必须带 `--no-deps`，否则 Compose 会顺带把方式三的 MySQL、Redis、`install-auto` 一并拉起。
 
-### 3. 初始化 PHP 依赖
+### 3. 首次启动时等待自动安装 PHP 依赖
 
-开发模式下，PHP 依赖会直接写回宿主机 `backend/vendor`，方便编辑器跳转：
+开发模式下，PHP 依赖会直接写回宿主机 `backend/vendor`，方便编辑器跳转。
+
+首次启动时，如果宿主机 `backend/vendor` 还不存在，容器入口脚本会自动执行一次 `composer install`。
+
+这一步会让首次启动时间明显变长，日志里看到 `composer install` 输出是正常现象。完成后，宿主机和容器都会看到同一份 `backend/vendor`。
+
+如果你想在启动前手动先装好依赖，也可以执行：
 
 ```bash
-docker exec mallbase-dev composer install
+docker compose -f docker-compose.dev.yml run --rm --no-deps backend composer install
 ```
-
-执行完成后，宿主机和容器都会看到同一份 `backend/vendor`。
 
 ### 4. 访问安装向导
 
@@ -93,9 +103,14 @@ http://localhost:5666
 
 ```bash
 docker ps
-docker exec mallbase-dev php -v
 ls backend/vendor
 curl -I http://127.0.0.1:8080/
+```
+
+如果容器已经正常起来，再补充检查：
+
+```bash
+docker exec mallbase-dev php -v
 ```
 
 浏览器访问：
