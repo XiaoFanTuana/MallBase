@@ -338,13 +338,16 @@ docker compose -f docker-compose.dev.yml up -d --no-deps backend
 之所以首次启动后还要跑一次 `composer install`，是因为开发模式把：
 
 - `./backend` 挂载到了容器内的 `/app`
-- `/app/vendor` 又单独挂成了 Docker named volume
 
-这样做可以让源码实时同步，但也意味着镜像构建阶段装好的 `/app/vendor` 不会直接出现在这个全新的 volume 里，所以第一次要把依赖安装进 volume：
+开发模式现在默认把 PHP 依赖直接写回宿主机 `backend/vendor`，这样编辑器可以直接跳转 vendor 里的源码；镜像构建阶段装好的依赖不会自动落到宿主机，所以第一次仍然需要手动执行一次：
 
 ```bash
 docker exec mallbase-dev composer install
 ```
+
+执行完成后，宿主机可直接看到 `backend/vendor`，容器内 `/app/vendor` 与宿主机目录保持一致。
+
+> 如果你之前用过旧版开发编排，Docker 里可能还残留一个历史 volume `backend_vendor`。它不会再被当前开发模式使用，可以先忽略；想清理时执行 `docker volume rm mall-base_backend_vendor` 即可。
 
 ### 4. 访问安装向导
 
@@ -393,6 +396,12 @@ pnpm run dev:antd -- --host 0.0.0.0
 ### 修改代码
 
 代码通过 Docker volume 映射（`./backend:/app`），**直接修改宿主机的 `backend/` 目录即可**，容器内实时同步。
+
+开发模式下，前后端依赖目录也都会直接落到宿主机，方便编辑器跳转和本地检索：
+
+- PHP 依赖：`backend/vendor`
+- 前端依赖：`frontend/admin/node_modules`
+- 应用级依赖：`frontend/admin/apps/web-antd/node_modules`
 
 开启 `APP_DEBUG=true` 后 Swoole 会自动检测文件变化并重载（macOS 需要 `brew install fswatch`）。
 
@@ -535,6 +544,13 @@ docker compose -f docker-compose.dev.yml --profile build up frontend-build
 - 它没有 `5666:5666` 这样的 dev 端口映射
 - 默认命令是 `sh /frontend-build.sh`，执行完会自动退出
 - 适合“我要重新出一份静态资源”，不适合“HMR 实时开发”
+
+开发模式下，这个打包容器安装的前端依赖会直接落到宿主机：
+
+- `frontend/admin/node_modules`
+- `frontend/admin/apps/web-antd/node_modules`
+
+这样便于编辑器跳转依赖源码；pnpm 的下载缓存仍放在 Docker volume `frontend_pnpm_store` 中。
 
 所以方式三里如果你问“怎么在容器里面跑 `pnpm run dev:antd`”，答案是：**当前 compose 默认没提供这条现成流程**。推荐二选一：
 
@@ -690,6 +706,7 @@ sh deploy/docker/cleanup-dev.sh --all-images
 - `data/`
 - 根 `.env`
 - `backend/.env`
+- `backend/vendor`
 - `deploy/install/install.lock`
 - `backend/public/admin`
 - `frontend/admin/node_modules`
@@ -712,7 +729,10 @@ rm -rf data/
 rm -f deploy/install/install.lock
 rm -f backend/.env
 rm -f .env
+rm -rf backend/vendor
 rm -rf backend/public/admin
+rm -rf frontend/admin/node_modules
+rm -rf frontend/admin/apps/web-antd/node_modules
 rm -rf frontend/admin/apps/web-antd/dist
 ```
 ```bash

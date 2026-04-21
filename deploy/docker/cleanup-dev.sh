@@ -11,6 +11,7 @@ set -eu
 #      - data/
 #      - .env
 #      - backend/.env
+#      - backend/vendor
 #      - deploy/install/install.lock
 #      - backend/public/admin
 #      - frontend/admin/node_modules
@@ -87,6 +88,7 @@ echo ">>> [cleanup-dev] 删除宿主机生成文件"
 rm -rf "$ROOT_DIR/data"
 rm -f "$ROOT_DIR/.env"
 rm -f "$ROOT_DIR/backend/.env"
+rm -rf "$ROOT_DIR/backend/vendor"
 rm -f "$ROOT_DIR/deploy/install/install.lock"
 rm -rf "$ROOT_DIR/backend/public/admin"
 rm -rf "$ROOT_DIR/frontend/admin/node_modules"

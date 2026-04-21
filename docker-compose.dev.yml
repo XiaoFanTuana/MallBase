@@ -63,7 +63,6 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - ./backend:/app
-      - backend_vendor:/app/vendor
       - ./deploy/install:/app/install
     command: php think install:auto
     restart: "no"
@@ -91,7 +90,6 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - ./backend:/app
-      - backend_vendor:/app/vendor
       # 安装目录（包含 schema/demo 数据与 install.lock；宿主落盘到 deploy/install）
       - ./deploy/install:/app/install
     depends_on:
@@ -192,5 +190,4 @@ services:
         condition: service_healthy
 
 volumes:
-  backend_vendor:
   frontend_pnpm_store:
