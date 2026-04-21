@@ -6,9 +6,9 @@
 <title>MallBase - 系统安装</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#16a34a;--warning:#d97706;--danger:#dc2626;--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;--radius:10px}
+:root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#16a34a;--warning:#d97706;--danger:#dc2626;--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;--muted:#94a3b8;--radius:10px}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.container{width:100%;max-width:600px}
+.container{width:100%;max-width:720px}
 .header{text-align:center;margin-bottom:32px}
 .header h1{font-size:28px;font-weight:700;color:var(--text)}
 .header p{color:var(--text-secondary);margin-top:8px;font-size:14px}
@@ -23,6 +23,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 input[type="text"],input[type="password"],input[type="number"]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;outline:none;transition:border-color .2s}
 input:focus{border-color:var(--primary)}
+.field-hint{margin-top:6px;font-size:12px;line-height:1.6;color:var(--muted)}
 .btn{padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
 .btn-primary{background:var(--primary);color:#fff}
 .btn-primary:hover{background:var(--primary-hover)}
@@ -32,7 +33,7 @@ input:focus{border-color:var(--primary)}
 .btn-test{background:#f0fdf4;color:var(--success);border:1px solid #bbf7d0;font-size:13px;padding:8px 14px}
 .btn-test:hover{background:#dcfce7}
 .btn-large{padding:14px 32px;font-size:16px}
-.actions{display:flex;justify-content:space-between;margin-top:24px}
+.actions{display:flex;justify-content:space-between;align-items:center;margin-top:24px}
 .check-list{list-style:none}
 .check-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
 .check-item:last-child{border-bottom:none}
@@ -41,29 +42,23 @@ input:focus{border-color:var(--primary)}
 .check-item .icon{width:20px;text-align:center}
 .pass{color:var(--success)}
 .fail{color:var(--danger)}
-.msg{padding:10px 14px;border-radius:6px;font-size:13px;margin-top:12px;display:none}
+.msg{padding:10px 14px;border-radius:6px;font-size:13px;margin-top:12px;display:none;line-height:1.6}
 .msg.success{display:block;background:#f0fdf4;color:var(--success);border:1px solid #bbf7d0}
 .msg.error{display:block;background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
 .checkbox-group{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .checkbox-group input{width:16px;height:16px}
 .done-wrapper{text-align:center;padding:20px 0}
 .done-title{font-size:26px;font-weight:700;margin-top:24px;color:var(--text)}
-.done-text{color:var(--text-secondary);margin-top:10px;font-size:14px}
+.done-text{color:var(--text-secondary);margin-top:10px;font-size:14px;line-height:1.8}
 .done-countdown{color:var(--text-secondary);margin-top:18px;font-size:13px}
 .done-btn-group{display:flex;gap:12px;justify-content:center;margin-top:28px}
 .done-hint{text-align:center;color:var(--text-secondary);font-size:13px;margin-top:16px}
-.warn-banner{margin-top:20px;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;text-align:left}
-.warn-banner h3{font-size:14px;color:#92400e;margin-bottom:6px;font-weight:600}
-.warn-banner p{font-size:13px;color:#78350f;margin-bottom:8px}
-.warn-banner code{display:block;padding:8px 12px;background:#1e293b;color:#e2e8f0;border-radius:4px;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;margin-top:6px}
 .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
 .info-row:last-child{border-bottom:none}
 .info-row .label{color:var(--text-secondary)}
 .info-row .value{font-weight:500}
 .spinner{width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* 安装完成动画：CSS 勾选 + 脉冲光环 */
 .checkmark-wrapper{position:relative;display:inline-block;width:96px;height:96px}
 .checkmark-circle{width:96px;height:96px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;position:relative;z-index:2;animation:scale-in .5s cubic-bezier(0.34,1.56,0.64,1) both}
 .checkmark-svg{width:48px;height:48px;stroke:#fff;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;fill:none}
@@ -72,7 +67,24 @@ input:focus{border-color:var(--primary)}
 @keyframes scale-in{0%{transform:scale(0)}100%{transform:scale(1)}}
 @keyframes draw-check{to{stroke-dashoffset:0}}
 @keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.5);opacity:0}}
-
+.progress-list{margin-top:20px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff}
+.progress-item{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--border)}
+.progress-item:last-child{border-bottom:none}
+.progress-icon{width:20px;flex-shrink:0;text-align:center;font-size:14px;line-height:20px}
+.progress-item.waiting .progress-icon{color:var(--muted)}
+.progress-item.running .progress-icon{color:var(--primary)}
+.progress-item.success .progress-icon{color:var(--success)}
+.progress-item.error .progress-icon{color:var(--danger)}
+.progress-item.skipped .progress-icon{color:var(--warning)}
+.progress-content{flex:1}
+.progress-title{font-size:14px;font-weight:600;color:var(--text)}
+.progress-message{font-size:12px;color:var(--text-secondary);margin-top:4px;line-height:1.6}
+.progress-status{font-size:12px;font-weight:500;flex-shrink:0}
+.progress-item.waiting .progress-status{color:var(--muted)}
+.progress-item.running .progress-status{color:var(--primary)}
+.progress-item.success .progress-status{color:var(--success)}
+.progress-item.error .progress-status{color:var(--danger)}
+.progress-item.skipped .progress-status{color:var(--warning)}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -83,7 +95,6 @@ input:focus{border-color:var(--primary)}
     <p id="headerSubtitle">系统安装向导</p>
   </div>
 
-  <!-- 已安装卡片：install.lock 存在时显示 -->
   <div class="card" id="installedCard" hidden>
     <div class="done-wrapper">
       <div class="checkmark-wrapper">
@@ -112,7 +123,6 @@ input:focus{border-color:var(--primary)}
     </div>
   </div>
 
-  <!-- 向导步骤容器 -->
   <div id="wizardContainer" hidden>
     <div class="steps">
       <div class="step" id="s1"></div>
@@ -122,7 +132,6 @@ input:focus{border-color:var(--primary)}
       <div class="step" id="s5"></div>
     </div>
 
-    <!-- Step 1: 环境检测 -->
     <div class="card" id="step1">
       <h2>1. 环境检测</h2>
       <ul class="check-list" id="envList"></ul>
@@ -133,13 +142,13 @@ input:focus{border-color:var(--primary)}
       </div>
     </div>
 
-    <!-- Step 2: 数据库配置 -->
     <div class="card" id="step2" hidden>
       <h2>2. 数据库配置</h2>
       <div class="form-row">
         <div class="form-group">
           <label>主机地址</label>
           <input type="text" id="db_host" value="127.0.0.1">
+          <div class="field-hint">连接目标：Compose MySQL 容器填 <code>mysql</code>；连接宿主 MySQL 填 <code>host.docker.internal</code> 或宿主机 IP；本地直跑填 <code>127.0.0.1</code>。</div>
         </div>
         <div class="form-group">
           <label>端口</label>
@@ -164,17 +173,17 @@ input:focus{border-color:var(--primary)}
       <div class="msg" id="dbMsg"></div>
       <div class="actions">
         <button class="btn btn-outline" onclick="goStep(1)">上一步</button>
-        <button class="btn btn-primary" id="dbNext" disabled onclick="goStep(3)">下一步</button>
+        <button class="btn btn-primary" id="dbNext" disabled onclick="handleDbNext()">下一步</button>
       </div>
     </div>
 
-    <!-- Step 3: Redis 配置 -->
     <div class="card" id="step3" hidden>
       <h2>3. Redis 配置</h2>
       <div class="form-row">
         <div class="form-group">
           <label>主机地址</label>
           <input type="text" id="redis_host" value="127.0.0.1">
+          <div class="field-hint">连接目标：Compose Redis 容器填 <code>redis</code>；连接宿主 Redis 填 <code>host.docker.internal</code> 或宿主机 IP；本地直跑填 <code>127.0.0.1</code>。</div>
         </div>
         <div class="form-group">
           <label>端口</label>
@@ -189,11 +198,10 @@ input:focus{border-color:var(--primary)}
       <div class="msg" id="redisMsg"></div>
       <div class="actions">
         <button class="btn btn-outline" onclick="goStep(2)">上一步</button>
-        <button class="btn btn-primary" id="redisNext" disabled onclick="goStep(4)">下一步</button>
+        <button class="btn btn-primary" id="redisNext" disabled onclick="handleRedisNext()">下一步</button>
       </div>
     </div>
 
-    <!-- Step 4: 管理员 -->
     <div class="card" id="step4" hidden>
       <h2>4. 管理员账号</h2>
       <div class="form-group">
@@ -223,9 +231,13 @@ input:focus{border-color:var(--primary)}
       </div>
     </div>
 
-    <!-- Step 5: 完成 -->
     <div class="card" id="step5" hidden>
-      <div class="done-wrapper">
+      <h2 id="installStateTitle">5. 正在安装</h2>
+      <p class="done-text" id="installStateText">正在按顺序执行安装步骤，进度会实时展示在下方。</p>
+      <div class="progress-list" id="progressList"></div>
+      <div class="msg" id="installMsg"></div>
+
+      <div class="done-wrapper" id="installSuccessBox" hidden>
         <div class="checkmark-wrapper">
           <div class="checkmark-circle">
             <svg class="checkmark-svg" viewBox="0 0 24 24">
@@ -234,23 +246,20 @@ input:focus{border-color:var(--primary)}
           </div>
           <div class="pulse-ring"></div>
         </div>
-        <div class="done-title">安装完成 🎉</div>
-        <p class="done-text">MallBase 已准备就绪，现在可以登录后台管理系统。</p>
+        <div class="done-title">安装完成</div>
+        <p class="done-text">配置文件、数据库结构、管理员账号和权限数据都已准备就绪。</p>
         <p class="done-countdown" id="redirectCountdown">5 秒后自动进入后台管理…</p>
       </div>
 
-      <!-- 权限同步失败告警（条件显示） -->
-      <div class="warn-banner" id="permWarn" hidden>
-        <h3>⚠ 权限数据同步失败</h3>
-        <p>安装已完成，但权限菜单数据未能自动写入，登录后可能看不到菜单。请在后端容器或服务器手动执行：</p>
-        <code>docker exec -it mallbase-dev php think sync:permissions</code>
-        <p style="margin-top:8px">原生部署环境请在 backend 目录执行：<code>php think sync:permissions</code></p>
-      </div>
-
-      <div class="done-btn-group">
+      <div class="done-btn-group" id="gotoAdminGroup" hidden>
         <a class="btn btn-primary btn-large" id="gotoAdminBtn" href="/admin/">立即进入后台管理</a>
       </div>
-      <p class="done-hint">使用刚才设置的管理员账号和密码登录</p>
+      <p class="done-hint" id="installDoneHint" hidden>使用刚才设置的管理员账号和密码登录</p>
+
+      <div class="actions" id="installRetryActions" hidden>
+        <button class="btn btn-outline" onclick="goStep(4)">返回上一步</button>
+        <button class="btn btn-primary" onclick="retryInstall()">重新执行安装</button>
+      </div>
     </div>
   </div>
 </div>
@@ -258,6 +267,22 @@ input:focus{border-color:var(--primary)}
 <script>
 const API = '/install/api';
 let currentStep = 1;
+let installCompleted = false;
+const installStepOrder = [
+  { step: 'db_test', title: '校验数据库连接' },
+  { step: 'redis_test', title: '校验 Redis 连接' },
+  { step: 'write_env', title: '写入配置文件' },
+  { step: 'create_db', title: '创建数据库' },
+  { step: 'import_sql', title: '导入表结构' },
+  { step: 'create_admin', title: '创建管理员' },
+  { step: 'import_demo', title: '导入演示数据' },
+  { step: 'sync_permissions', title: '同步权限数据' },
+  { step: 'write_lock', title: '写入安装锁' },
+];
+const validationState = {
+  db: { valid: false, lastFingerprint: '' },
+  redis: { valid: false, lastFingerprint: '' },
+};
 
 function goStep(n) {
   document.getElementById('step' + currentStep).hidden = true;
@@ -275,13 +300,22 @@ async function api(path, opts = {}) {
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
-  return res.json();
+
+  const json = await res.json();
+  json.httpOk = res.ok;
+  return json;
 }
 
 function showMsg(id, text, ok) {
   const el = document.getElementById(id);
   el.textContent = text;
   el.className = 'msg ' + (ok ? 'success' : 'error');
+}
+
+function hideMsg(id) {
+  const el = document.getElementById(id);
+  el.textContent = '';
+  el.className = 'msg';
 }
 
 function showInstalledCard(data) {
@@ -296,7 +330,56 @@ function showWizard() {
   document.getElementById('installedCard').hidden = true;
   document.getElementById('wizardContainer').hidden = false;
   document.getElementById('cors_origins').value = window.location.origin;
+  attachValidationWatchers();
   checkEnv();
+}
+
+function getDbPayload() {
+  return {
+    db_host: document.getElementById('db_host').value.trim(),
+    db_port: document.getElementById('db_port').value.trim(),
+    db_user: document.getElementById('db_user').value.trim(),
+    db_pass: document.getElementById('db_pass').value,
+    db_name: document.getElementById('db_name').value.trim(),
+  };
+}
+
+function getRedisPayload() {
+  return {
+    redis_host: document.getElementById('redis_host').value.trim(),
+    redis_port: document.getElementById('redis_port').value.trim(),
+    redis_password: document.getElementById('redis_password').value,
+  };
+}
+
+function getDbFingerprint() {
+  return JSON.stringify(getDbPayload());
+}
+
+function getRedisFingerprint() {
+  return JSON.stringify(getRedisPayload());
+}
+
+function invalidateValidation(type) {
+  validationState[type].valid = false;
+  validationState[type].lastFingerprint = '';
+
+  if (type === 'db') {
+    document.getElementById('dbNext').disabled = true;
+    hideMsg('dbMsg');
+  } else {
+    document.getElementById('redisNext').disabled = true;
+    hideMsg('redisMsg');
+  }
+}
+
+function attachValidationWatchers() {
+  ['db_host', 'db_port', 'db_user', 'db_pass', 'db_name'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', () => invalidateValidation('db'));
+  });
+  ['redis_host', 'redis_port', 'redis_password'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', () => invalidateValidation('redis'));
+  });
 }
 
 async function bootstrap() {
@@ -328,33 +411,165 @@ async function checkEnv() {
   if (r.data.pass) {
     document.getElementById('envNext').disabled = false;
   } else {
-    showMsg('envMsg', '环境检测未通过，请安装缺失的扩展或修复目录权限后刷新页面重试。', false);
+    showMsg('envMsg', '环境检测未通过，请安装缺失扩展或修复目录权限后刷新页面重试。', false);
   }
   goStep(1);
 }
 
 async function testDb() {
-  const body = {
-    db_host: document.getElementById('db_host').value,
-    db_port: document.getElementById('db_port').value,
-    db_user: document.getElementById('db_user').value,
-    db_pass: document.getElementById('db_pass').value,
-    db_name: document.getElementById('db_name').value,
-  };
+  const body = getDbPayload();
   const r = await api('/test-db', { method: 'POST', body });
+  validationState.db.valid = !!r.data.success;
+  validationState.db.lastFingerprint = validationState.db.valid ? getDbFingerprint() : '';
+  document.getElementById('dbNext').disabled = !validationState.db.valid;
   showMsg('dbMsg', r.data.message, r.data.success);
-  if (r.data.success) document.getElementById('dbNext').disabled = false;
+  return r.data.success;
 }
 
 async function testRedis() {
-  const body = {
-    redis_host: document.getElementById('redis_host').value,
-    redis_port: document.getElementById('redis_port').value,
-    redis_password: document.getElementById('redis_password').value,
-  };
+  const body = getRedisPayload();
   const r = await api('/test-redis', { method: 'POST', body });
+  validationState.redis.valid = !!r.data.success;
+  validationState.redis.lastFingerprint = validationState.redis.valid ? getRedisFingerprint() : '';
+  document.getElementById('redisNext').disabled = !validationState.redis.valid;
   showMsg('redisMsg', r.data.message, r.data.success);
-  if (r.data.success) document.getElementById('redisNext').disabled = false;
+  return r.data.success;
+}
+
+async function ensureDbValidated() {
+  if (validationState.db.valid && validationState.db.lastFingerprint === getDbFingerprint()) {
+    return true;
+  }
+  try {
+    return await testDb();
+  } catch (e) {
+    showMsg('dbMsg', e.message || '数据库校验失败', false);
+    return false;
+  }
+}
+
+async function ensureRedisValidated() {
+  if (validationState.redis.valid && validationState.redis.lastFingerprint === getRedisFingerprint()) {
+    return true;
+  }
+  try {
+    return await testRedis();
+  } catch (e) {
+    showMsg('redisMsg', e.message || 'Redis 校验失败', false);
+    return false;
+  }
+}
+
+async function handleDbNext() {
+  const ok = await ensureDbValidated();
+  if (ok) {
+    goStep(3);
+  }
+}
+
+async function handleRedisNext() {
+  const ok = await ensureRedisValidated();
+  if (ok) {
+    goStep(4);
+  }
+}
+
+function validateAdminFields() {
+  const user = document.getElementById('admin_user').value.trim();
+  const pass1 = document.getElementById('admin_pass').value;
+  const pass2 = document.getElementById('admin_pass2').value;
+
+  if (!user) {
+    return '请填写管理员用户名';
+  }
+  if (pass1.length < 6) {
+    return '管理员密码至少 6 位';
+  }
+  if (pass1 !== pass2) {
+    return '两次密码不一致';
+  }
+
+  return '';
+}
+
+function buildInstallPayload() {
+  const db = getDbPayload();
+  const redis = getRedisPayload();
+  return {
+    ...db,
+    ...redis,
+    admin_user: document.getElementById('admin_user').value.trim(),
+    admin_pass: document.getElementById('admin_pass').value,
+    import_demo: document.getElementById('import_demo').checked ? 1 : 0,
+    cors_origins: document.getElementById('cors_origins').value.trim() || '*',
+  };
+}
+
+function resetInstallUI() {
+  installCompleted = false;
+  document.getElementById('installStateTitle').textContent = '5. 正在安装';
+  document.getElementById('installStateText').textContent = '正在按顺序执行安装步骤，进度会实时展示在下方。';
+  document.getElementById('installSuccessBox').hidden = true;
+  document.getElementById('gotoAdminGroup').hidden = true;
+  document.getElementById('installDoneHint').hidden = true;
+  document.getElementById('installRetryActions').hidden = true;
+  hideMsg('installMsg');
+  renderProgressList();
+}
+
+function renderProgressList() {
+  const list = document.getElementById('progressList');
+  list.innerHTML = '';
+
+  installStepOrder.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'progress-item waiting';
+    row.id = 'progress-' + item.step;
+    row.innerHTML = '<div class="progress-icon">○</div>'
+      + '<div class="progress-content">'
+      + '<div class="progress-title">' + item.title + '</div>'
+      + '<div class="progress-message">等待执行</div>'
+      + '</div>'
+      + '<div class="progress-status">待执行</div>';
+    list.appendChild(row);
+  });
+}
+
+function statusText(status) {
+  const map = {
+    waiting: '待执行',
+    running: '进行中',
+    success: '已完成',
+    error: '失败',
+    skipped: '已跳过',
+  };
+  return map[status] || status;
+}
+
+function statusIcon(status) {
+  const map = {
+    waiting: '○',
+    running: '…',
+    success: '✓',
+    error: '✕',
+    skipped: '-',
+  };
+  return map[status] || '○';
+}
+
+function updateProgressStep(event) {
+  const row = document.getElementById('progress-' + event.step);
+  if (!row) {
+    return;
+  }
+
+  row.className = 'progress-item ' + event.status;
+  row.querySelector('.progress-icon').textContent = statusIcon(event.status);
+  row.querySelector('.progress-status').textContent = statusText(event.status);
+  row.querySelector('.progress-message').textContent = event.message || '';
+  if (event.title) {
+    row.querySelector('.progress-title').textContent = event.title;
+  }
 }
 
 function startRedirectCountdown(seconds) {
@@ -372,51 +587,138 @@ function startRedirectCountdown(seconds) {
   }, 1000);
 }
 
+function finishInstallSuccess(message) {
+  installCompleted = true;
+  document.getElementById('installStateTitle').textContent = '5. 安装完成';
+  document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成，现在可以进入后台管理。';
+  document.getElementById('installSuccessBox').hidden = false;
+  document.getElementById('gotoAdminGroup').hidden = false;
+  document.getElementById('installDoneHint').hidden = false;
+  startRedirectCountdown(5);
+}
+
+function finishInstallFailure(message) {
+  document.getElementById('installStateTitle').textContent = '5. 安装未完成';
+  document.getElementById('installStateText').textContent = '请根据失败步骤修正配置后重新执行安装。';
+  document.getElementById('installRetryActions').hidden = false;
+  showMsg('installMsg', message, false);
+}
+
+function handleStreamEvent(eventName, payload) {
+  if (eventName === 'progress') {
+    updateProgressStep(payload);
+    return;
+  }
+
+  if (eventName === 'complete') {
+    if (payload.success) {
+      finishInstallSuccess(payload.message || '安装完成');
+    } else {
+      finishInstallFailure(payload.message || '安装失败');
+    }
+  }
+}
+
+async function consumeInstallStream(response) {
+  if (!response.body) {
+    throw new Error('浏览器不支持安装进度流');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() || '';
+
+    chunks.forEach((chunk) => {
+      let eventName = 'message';
+      const dataLines = [];
+
+      chunk.split('\n').forEach((line) => {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim());
+        }
+      });
+
+      if (dataLines.length === 0) {
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(dataLines.join('\n'));
+        handleStreamEvent(eventName, payload);
+      } catch (e) {
+        finishInstallFailure('安装进度解析失败，请刷新页面后重试');
+      }
+    });
+  }
+}
+
 async function doInstall() {
-  const pass1 = document.getElementById('admin_pass').value;
-  const pass2 = document.getElementById('admin_pass2').value;
-  if (!document.getElementById('admin_user').value) {
-    return showMsg('adminMsg', '请填写管理员用户名', false);
+  const adminError = validateAdminFields();
+  if (adminError) {
+    showMsg('adminMsg', adminError, false);
+    return;
   }
-  if (pass1.length < 6) {
-    return showMsg('adminMsg', '密码至少 6 位', false);
+
+  hideMsg('adminMsg');
+
+  if (!await ensureDbValidated()) {
+    goStep(2);
+    return;
   }
-  if (pass1 !== pass2) {
-    return showMsg('adminMsg', '两次密码不一致', false);
+
+  if (!await ensureRedisValidated()) {
+    goStep(3);
+    return;
   }
 
   const btn = document.getElementById('installBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> 安装中...';
 
-  const body = {
-    db_host: document.getElementById('db_host').value,
-    db_port: document.getElementById('db_port').value,
-    db_user: document.getElementById('db_user').value,
-    db_pass: document.getElementById('db_pass').value,
-    db_name: document.getElementById('db_name').value,
-    redis_host: document.getElementById('redis_host').value,
-    redis_port: document.getElementById('redis_port').value,
-    redis_password: document.getElementById('redis_password').value,
-    admin_user: document.getElementById('admin_user').value,
-    admin_pass: pass1,
-    import_demo: document.getElementById('import_demo').checked ? 1 : 0,
-    cors_origins: document.getElementById('cors_origins').value || '*',
-  };
+  const body = buildInstallPayload();
 
-  const r = await api('/execute', { method: 'POST', body });
+  goStep(5);
+  resetInstallUI();
 
-  if (r.data.success) {
-    if (r.data.permissions_synced === false) {
-      document.getElementById('permWarn').hidden = false;
+  try {
+    const response = await fetch(API + '/execute-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error('安装请求失败，请稍后重试');
     }
-    goStep(5);
-    startRedirectCountdown(5);
-  } else {
+
+    await consumeInstallStream(response);
+
+    if (!installCompleted) {
+      btn.disabled = false;
+      btn.textContent = '开始安装';
+    }
+  } catch (e) {
     btn.disabled = false;
     btn.textContent = '开始安装';
-    showMsg('adminMsg', '安装失败: ' + r.data.message, false);
+    finishInstallFailure(e.message || '安装请求失败');
   }
+}
+
+function retryInstall() {
+  goStep(4);
+  hideMsg('adminMsg');
 }
 
 bootstrap();

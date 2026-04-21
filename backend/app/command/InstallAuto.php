@@ -88,10 +88,6 @@ class InstallAuto extends Command
             return 1;
         }
 
-        if (!empty($result['permissions_sync_error'])) {
-            $output->writeln('<comment>[install:auto] 权限同步警告: ' . $result['permissions_sync_error'] . '</comment>');
-        }
-
         $output->writeln('<info>[install:auto] done</info>');
         return 0;
     }

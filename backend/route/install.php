@@ -20,6 +20,7 @@ Route::group('install', function () {
         Route::post('test-db', 'testDb');
         Route::post('test-redis', 'testRedis');
         Route::post('execute', 'execute');
+        Route::post('execute-stream', 'executeStream');
     })->prefix('install.InstallController/');
 
 });

@@ -8,10 +8,27 @@ use PDO;
 use PDOException;
 use Redis;
 use RedisException;
+use think\facade\Config;
 use think\facade\Console;
+use think\facade\Db;
 
 class InstallService
 {
+    /**
+     * @var array<string, string>
+     */
+    private array $stepTitles = [
+        'db_test'          => '校验数据库连接',
+        'redis_test'       => '校验 Redis 连接',
+        'write_env'        => '写入配置文件',
+        'create_db'        => '创建数据库',
+        'import_sql'       => '导入表结构',
+        'create_admin'     => '创建管理员',
+        'import_demo'      => '导入演示数据',
+        'sync_permissions' => '同步权限数据',
+        'write_lock'       => '写入安装锁',
+    ];
+
     public function isInstalled(): bool
     {
         return file_exists($this->lockFilePath());
@@ -23,10 +40,12 @@ class InstallService
         if (!file_exists($path)) {
             return null;
         }
+
         $raw = file_get_contents($path);
         if ($raw === false || $raw === '') {
             return null;
         }
+
         $data = json_decode($raw, true);
         return is_array($data) ? $data : null;
     }
@@ -124,20 +143,21 @@ class InstallService
             $dbName = $config['name'];
             $stmt = $pdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = " . $pdo->quote($dbName));
             $dbExists = $stmt->fetchColumn() !== false;
-
             $version = $pdo->query('SELECT VERSION()')->fetchColumn();
+
             $pdo = null;
 
             return [
                 'success'   => true,
                 'version'   => $version,
-                'db_exists'  => $dbExists,
+                'db_exists' => $dbExists,
                 'message'   => $dbExists ? '连接成功，数据库已存在' : '连接成功，数据库不存在（将自动创建）',
             ];
         } catch (PDOException $e) {
             return [
                 'success' => false,
-                'message' => '连接失败: ' . $e->getMessage(),
+                'message' => $this->normalizeDatabaseError($e->getMessage()),
+                'detail'  => $e->getMessage(),
             ];
         }
     }
@@ -152,12 +172,12 @@ class InstallService
             $redis = new Redis();
             $connected = $redis->connect(
                 $config['host'],
-                (int)($config['port'] ?? 6379),
+                (int) ($config['port'] ?? 6379),
                 3.0
             );
 
             if (!$connected) {
-                return ['success' => false, 'message' => '连接失败'];
+                return ['success' => false, 'message' => 'Redis 连接失败，请确认主机、端口和网络可达'];
             }
 
             $password = $config['password'] ?? '';
@@ -165,7 +185,7 @@ class InstallService
                 $redis->auth($password);
             }
 
-            $pong = $redis->ping();
+            $redis->ping();
             $info = $redis->info('server');
             $redis->close();
 
@@ -177,7 +197,8 @@ class InstallService
         } catch (RedisException $e) {
             return [
                 'success' => false,
-                'message' => '连接失败: ' . $e->getMessage(),
+                'message' => $this->normalizeRedisError($e->getMessage()),
+                'detail'  => $e->getMessage(),
             ];
         }
     }
@@ -192,162 +213,286 @@ class InstallService
     {
         $get = static function (string $name): string {
             $value = getenv($name);
-            return $value === false ? '' : trim((string)$value);
+            return $value === false ? '' : trim((string) $value);
         };
 
         return [
             'db_host'        => $get('DB_HOST'),
-            'db_port'        => $get('DB_PORT') !== '' ? (int)$get('DB_PORT') : 3306,
+            'db_port'        => $get('DB_PORT') !== '' ? (int) $get('DB_PORT') : 3306,
             'db_user'        => $get('DB_USER'),
             'db_pass'        => $get('DB_PASS'),
             'db_name'        => $get('DB_NAME'),
             'redis_host'     => $get('REDIS_HOST'),
-            'redis_port'     => $get('REDIS_PORT') !== '' ? (int)$get('REDIS_PORT') : 6379,
+            'redis_port'     => $get('REDIS_PORT') !== '' ? (int) $get('REDIS_PORT') : 6379,
             'redis_password' => $get('REDIS_PASSWORD'),
             'admin_user'     => $get('ADMIN_USER') !== '' ? $get('ADMIN_USER') : 'admin',
             'admin_pass'     => $get('ADMIN_PASS') !== '' ? $get('ADMIN_PASS') : 'admin123',
             'import_demo'    => $get('INSTALL_DEMO') === '1',
+            'cors_origins'   => $get('CORS_ALLOWED_ORIGINS') !== '' ? $get('CORS_ALLOWED_ORIGINS') : '*',
         ];
     }
 
-    public function execute(array $params): array
+    public function execute(array $params, ?callable $progress = null): array
     {
+        $steps = [];
+        $emit = function (string $step, string $status, string $message, array $extra = []) use (&$steps, $progress): void {
+            $event = array_merge([
+                'step'    => $step,
+                'title'   => $this->stepTitles[$step] ?? $step,
+                'status'  => $status,
+                'message' => $message,
+            ], $extra);
+
+            if ($status !== 'running') {
+                $steps[$step] = $event;
+            }
+
+            if ($progress !== null) {
+                $progress($event);
+            }
+        };
+
         $dbConfig = [
-            'host' => $params['db_host'],
-            'port' => $params['db_port'] ?? 3306,
-            'user' => $params['db_user'],
-            'pass' => $params['db_pass'],
-            'name' => $params['db_name'],
+            'host' => trim((string) ($params['db_host'] ?? '')),
+            'port' => (int) ($params['db_port'] ?? 3306),
+            'user' => trim((string) ($params['db_user'] ?? '')),
+            'pass' => (string) ($params['db_pass'] ?? ''),
+            'name' => trim((string) ($params['db_name'] ?? '')),
         ];
 
         $redisConfig = [
-            'host'     => $params['redis_host'],
-            'port'     => $params['redis_port'] ?? 6379,
-            'password' => $params['redis_password'] ?? '',
+            'host'     => trim((string) ($params['redis_host'] ?? '')),
+            'port'     => (int) ($params['redis_port'] ?? 6379),
+            'password' => (string) ($params['redis_password'] ?? ''),
         ];
 
+        $adminUser = trim((string) ($params['admin_user'] ?? ''));
+        $adminPass = (string) ($params['admin_pass'] ?? '');
+        $importDemo = !empty($params['import_demo']);
+        $corsOrigins = trim((string) ($params['cors_origins'] ?? '*'));
+        $jwtSecret = trim((string) ($params['jwt_secret'] ?? ''));
+        if ($jwtSecret === '') {
+            $jwtSecret = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
+        }
+
+        $emit('db_test', 'running', '正在校验数据库连接…');
         $dbTest = $this->testDatabase($dbConfig);
         if (!$dbTest['success']) {
-            return ['success' => false, 'step' => 'db_connect', 'message' => $dbTest['message']];
+            $emit('db_test', 'error', $dbTest['message'], ['detail' => $dbTest['detail'] ?? null]);
+            return $this->buildFailureResponse('db_test', $dbTest['message'], $steps, $dbTest['detail'] ?? null);
         }
+        $emit('db_test', 'success', $dbTest['message'], ['db_exists' => $dbTest['db_exists'] ?? false]);
 
+        $emit('redis_test', 'running', '正在校验 Redis 连接…');
         $redisTest = $this->testRedis($redisConfig);
         if (!$redisTest['success']) {
-            return ['success' => false, 'step' => 'redis_connect', 'message' => $redisTest['message']];
+            $emit('redis_test', 'error', $redisTest['message'], ['detail' => $redisTest['detail'] ?? null]);
+            return $this->buildFailureResponse('redis_test', $redisTest['message'], $steps, $redisTest['detail'] ?? null);
         }
+        $emit('redis_test', 'success', $redisTest['message']);
 
-        $jwtSecret = base64_encode(random_bytes(48));
-        $corsOrigins = $params['cors_origins'] ?? '*';
-
-        if (!getenv('DB_HOST')) {
-            $this->writeEnvFile($dbConfig, $redisConfig, $jwtSecret, $corsOrigins);
+        $emit('write_env', 'running', '正在写入 backend/.env…');
+        try {
+            $envData = [
+                'DB_TYPE'              => 'mysql',
+                'DB_HOST'              => $dbConfig['host'],
+                'DB_NAME'              => $dbConfig['name'],
+                'DB_USER'              => $dbConfig['user'],
+                'DB_PASS'              => $dbConfig['pass'],
+                'DB_PORT'              => (string) $dbConfig['port'],
+                'DB_CHARSET'           => 'utf8mb4',
+                'REDIS_HOST'           => $redisConfig['host'],
+                'REDIS_PORT'           => (string) $redisConfig['port'],
+                'REDIS_PASSWORD'       => $redisConfig['password'],
+                'CACHE_DRIVER'         => 'redis',
+                'JWT_SECRET'           => $jwtSecret,
+                'CORS_ALLOWED_ORIGINS' => $corsOrigins !== '' ? $corsOrigins : '*',
+                'ADMIN_USER'           => $adminUser,
+                'ADMIN_PASS'           => $adminPass,
+                'INSTALL_DEMO'         => $importDemo ? '1' : '0',
+            ];
+            $this->writeEnvFile($envData);
+            $this->applyRuntimeConfig($envData);
+        } catch (\Throwable $e) {
+            $emit('write_env', 'error', '写入配置文件失败：' . $e->getMessage());
+            return $this->buildFailureResponse('write_env', '写入配置文件失败：' . $e->getMessage(), $steps);
         }
+        $emit('write_env', 'success', '配置文件已写入并已应用到当前安装进程');
 
         try {
+            $emit('create_db', 'running', '正在创建数据库…');
             $pdo = $this->createDatabase($dbConfig);
+            $emit('create_db', 'success', '数据库已就绪');
         } catch (PDOException $e) {
-            return ['success' => false, 'step' => 'create_db', 'message' => $e->getMessage()];
+            $message = '创建数据库失败：' . $this->normalizeDatabaseError($e->getMessage());
+            $emit('create_db', 'error', $message, ['detail' => $e->getMessage()]);
+            return $this->buildFailureResponse('create_db', $message, $steps, $e->getMessage());
         }
 
         try {
+            $emit('import_sql', 'running', '正在导入表结构…');
             $this->importSqlFiles($pdo);
+            $emit('import_sql', 'success', '表结构导入完成');
         } catch (\Throwable $e) {
-            return ['success' => false, 'step' => 'import_sql', 'message' => $e->getMessage()];
+            $emit('import_sql', 'error', '导入表结构失败：' . $e->getMessage());
+            return $this->buildFailureResponse('import_sql', '导入表结构失败：' . $e->getMessage(), $steps);
         }
 
         try {
-            $this->createSuperAdmin($pdo, $params['admin_user'], $params['admin_pass']);
+            $emit('create_admin', 'running', '正在创建管理员账号…');
+            $this->createSuperAdmin($pdo, $adminUser, $adminPass);
+            $emit('create_admin', 'success', '管理员账号已创建');
         } catch (\Throwable $e) {
-            return ['success' => false, 'step' => 'create_admin', 'message' => $e->getMessage()];
+            $emit('create_admin', 'error', '创建管理员失败：' . $e->getMessage());
+            return $this->buildFailureResponse('create_admin', '创建管理员失败：' . $e->getMessage(), $steps);
         }
 
-        if (!empty($params['import_demo'])) {
+        if ($importDemo) {
             try {
+                $emit('import_demo', 'running', '正在导入演示数据…');
                 $this->importDemoData($pdo);
+                $emit('import_demo', 'success', '演示数据导入完成');
             } catch (\Throwable $e) {
-                // 演示数据导入失败不阻断安装
+                $emit('import_demo', 'error', '导入演示数据失败：' . $e->getMessage());
+                return $this->buildFailureResponse('import_demo', '导入演示数据失败：' . $e->getMessage(), $steps);
             }
+        } else {
+            $emit('import_demo', 'skipped', '已跳过演示数据导入');
         }
 
         $pdo = null;
 
-        $permissionsSynced = true;
-        $permissionsSyncError = null;
         try {
+            $emit('sync_permissions', 'running', '正在同步权限与菜单数据…');
             Console::call('sync:permissions');
+            $emit('sync_permissions', 'success', '权限与菜单数据已同步');
         } catch (\Throwable $e) {
-            $permissionsSynced = false;
-            $permissionsSyncError = $e->getMessage();
+            $message = '权限同步失败：' . $e->getMessage();
+            $emit('sync_permissions', 'error', $message);
+            return $this->buildFailureResponse('sync_permissions', $message, $steps);
         }
 
-        $this->writeLockFile();
+        try {
+            $emit('write_lock', 'running', '正在写入安装锁…');
+            $this->writeLockFile();
+            $emit('write_lock', 'success', '安装锁写入完成');
+        } catch (\Throwable $e) {
+            $emit('write_lock', 'error', '写入安装锁失败：' . $e->getMessage());
+            return $this->buildFailureResponse('write_lock', '写入安装锁失败：' . $e->getMessage(), $steps);
+        }
 
-        $response = [
-            'success'            => true,
-            'message'            => '安装完成',
-            'permissions_synced' => $permissionsSynced,
+        $result = [
+            'success'  => true,
+            'step'     => 'write_lock',
+            'message'  => '安装完成',
+            'steps'    => array_values($steps),
+            'redirect' => true,
         ];
-        if (!$permissionsSynced) {
-            $response['permissions_sync_error'] = $permissionsSyncError;
+
+        if ($progress !== null) {
+            $progress([
+                'event'   => 'complete',
+                'success' => true,
+                'message' => '安装完成',
+                'result'  => $result,
+            ]);
         }
-        return $response;
+
+        return $result;
     }
 
-    private function writeEnvFile(array $db, array $redis, string $jwtSecret, string $corsOrigins = '*'): void
+    private function buildFailureResponse(string $step, string $message, array $steps, ?string $detail = null): array
+    {
+        return [
+            'success'  => false,
+            'step'     => $step,
+            'message'  => $message,
+            'detail'   => $detail,
+            'steps'    => array_values($steps),
+            'redirect' => false,
+        ];
+    }
+
+    /**
+     * @param array<string, string> $envData
+     */
+    private function writeEnvFile(array $envData): void
     {
         $envPath = app()->getRootPath() . '.env';
+        $templatePath = app()->getRootPath() . '.example.env';
+        $baseContent = '';
 
-        $content = <<<ENV
-APP_DEBUG = false
-CRON_ENABLE = false
+        if (is_file($envPath)) {
+            $baseContent = (string) file_get_contents($envPath);
+        } elseif (is_file($templatePath)) {
+            $baseContent = (string) file_get_contents($templatePath);
+        }
 
-DB_TYPE = mysql
-DB_HOST = {$db['host']}
-DB_NAME = {$db['name']}
-DB_USER = {$db['user']}
-DB_PASS = {$db['pass']}
-DB_PORT = {$db['port']}
-DB_CHARSET = utf8mb4
-DB_PREFIX = mb_
+        if ($baseContent === '') {
+            throw new \RuntimeException('找不到可写入的环境配置模板');
+        }
 
-DEFAULT_LANG = zh-cn
+        foreach ($envData as $key => $value) {
+            $quoted = $this->formatEnvValue($value);
+            $pattern = '/^' . preg_quote($key, '/') . '\s*=.*$/m';
+            if (preg_match($pattern, $baseContent) === 1) {
+                $baseContent = (string) preg_replace($pattern, $key . '=' . $quoted, $baseContent, 1);
+            } else {
+                $baseContent = rtrim($baseContent, "\n") . PHP_EOL . $key . '=' . $quoted . PHP_EOL;
+            }
+        }
 
-CACHE_DRIVER = redis
-CACHE_PREFIX =
-CACHE_EXPIRE = 0
-CACHE_TAG_PREFIX = tag:
+        file_put_contents($envPath, $baseContent);
+    }
 
-REDIS_HOST = {$redis['host']}
-REDIS_PORT = {$redis['port']}
-REDIS_PASSWORD = {$redis['password']}
-REDIS_TIMEOUT = 0
-REDIS_PERSISTENT = false
-REDIS_CACHE_DB = 0
+    /**
+     * @param array<string, string> $envData
+     */
+    private function applyRuntimeConfig(array $envData): void
+    {
+        foreach ($envData as $key => $value) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
 
-JWT_SECRET = {$jwtSecret}
+        $database = Config::get('database', []);
+        $database['default'] = 'mysql';
+        $database['connections']['mysql'] = array_merge($database['connections']['mysql'] ?? [], [
+            'type'     => $envData['DB_TYPE'] ?? 'mysql',
+            'hostname' => $envData['DB_HOST'] ?? '127.0.0.1',
+            'database' => $envData['DB_NAME'] ?? '',
+            'username' => $envData['DB_USER'] ?? 'root',
+            'password' => $envData['DB_PASS'] ?? '',
+            'hostport' => $envData['DB_PORT'] ?? '3306',
+            'charset'  => $envData['DB_CHARSET'] ?? 'utf8mb4',
+            'prefix'   => $envData['DB_PREFIX'] ?? 'mb_',
+        ]);
+        Config::set($database, 'database');
 
-SWOOLE_HTTP_HOST = 0.0.0.0
-SWOOLE_HTTP_PORT = 8080
-SWOOLE_WORKER_NUM = 0
-SWOOLE_MAX_REQUEST = 2000
-SWOOLE_RELOAD_ASYNC = true
-SWOOLE_MAX_WAIT_TIME = 60
-SWOOLE_HEARTBEAT_IDLE_TIME = 120
-SWOOLE_HEARTBEAT_CHECK_INTERVAL = 60
-SWOOLE_POOL_MAX_WAIT_TIME = 5
-SWOOLE_DB_POOL_MAX_ACTIVE = 3
-SWOOLE_CACHE_POOL_MAX_ACTIVE = 3
-SWOOLE_REDIS_POOL_MAX_ACTIVE = 3
+        $cache = Config::get('cache', []);
+        $cache['default'] = $envData['CACHE_DRIVER'] ?? 'redis';
+        $cache['stores']['redis'] = array_merge($cache['stores']['redis'] ?? [], [
+            'type'       => 'redis',
+            'host'       => $envData['REDIS_HOST'] ?? '127.0.0.1',
+            'port'       => (int) ($envData['REDIS_PORT'] ?? 6379),
+            'password'   => $envData['REDIS_PASSWORD'] ?? '',
+            'select'     => (int) ($envData['REDIS_CACHE_DB'] ?? 0),
+            'timeout'    => (int) ($envData['REDIS_TIMEOUT'] ?? 0),
+            'persistent' => filter_var($envData['REDIS_PERSISTENT'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'prefix'     => $envData['CACHE_PREFIX'] ?? '',
+            'expire'     => (int) ($envData['CACHE_EXPIRE'] ?? 0),
+            'tag_prefix' => $envData['CACHE_TAG_PREFIX'] ?? 'tag:',
+            'serialize'  => [],
+        ]);
+        Config::set($cache, 'cache');
 
-CORS_ALLOWED_ORIGINS = {$corsOrigins}
-CORS_ALLOW_METHODS = GET,POST,PUT,DELETE,OPTIONS
-CORS_ALLOW_HEADERS = Authorization,Content-Type,X-Requested-With
+        $jwt = Config::get('jwt', []);
+        $jwt['secret'] = $envData['JWT_SECRET'] ?? '';
+        Config::set($jwt, 'jwt');
 
-LOG_SINGLE = false
-LOG_MAX_FILES = 30
-ENV;
-
-        file_put_contents($envPath, $content);
+        Db::setConfig(Config::get('database'));
+        Db::connect(null, true);
     }
 
     private function createDatabase(array $config): PDO
@@ -368,17 +513,12 @@ ENV;
     private function importSqlFiles(PDO $pdo): void
     {
         $sqlDir = $this->installDataPath('schema');
-
         $files = glob($sqlDir . DIRECTORY_SEPARATOR . '*.sql');
         if ($files === false || $files === []) {
             throw new \RuntimeException('schema 目录下未找到任何 .sql 文件: ' . $sqlDir);
         }
         sort($files);
 
-        // schema SQL 均使用 DROP TABLE IF EXISTS + CREATE TABLE，可安全重入。
-        // 不再根据"已存在 mb_* 表"提前返回——否则上一次安装在中途失败会残留
-        // 部分表，重试时会被误判为已完成并跳过导入，最终写出 install.lock
-        // 却只有半套 schema。
         foreach ($files as $filePath) {
             $sql = file_get_contents($filePath);
             if ($sql === false || trim($sql) === '') {
@@ -393,8 +533,6 @@ ENV;
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $now = date('Y-m-d H:i:s');
 
-        // password_changed_at 显式置 NULL：登录时据此判断是否强制首次改密。
-        // ON DUPLICATE 分支也把它重置为 NULL，保证重跑安装能回到"初始默认密码待改"状态。
         $stmt = $pdo->prepare(
             "INSERT INTO `mb_admin` (`id`, `username`, `nickname`, `password`, `avatar`, `status`, `password_changed_at`, `create_time`, `update_time`)
              VALUES (1, :username, :nickname, :password, '', 1, NULL, :create_time, :update_time)
@@ -416,19 +554,22 @@ ENV;
     private function importDemoData(PDO $pdo): void
     {
         $demoDir = $this->installDataPath('demo');
-
         if (!is_dir($demoDir)) {
             return;
         }
 
         $files = glob($demoDir . DIRECTORY_SEPARATOR . '*.sql');
+        if ($files === false || $files === []) {
+            return;
+        }
         sort($files);
 
         foreach ($files as $file) {
             $sql = file_get_contents($file);
-            if (!empty(trim($sql))) {
-                $pdo->exec($sql);
+            if ($sql === false || trim($sql) === '') {
+                continue;
             }
+            $pdo->exec($sql);
         }
     }
 
@@ -450,7 +591,7 @@ ENV;
     private function installDataPath(string $subdir): string
     {
         $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
-        $deployPath  = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
+        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
             . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'data'
             . DIRECTORY_SEPARATOR . $subdir;
         if (is_dir($deployPath)) {
@@ -459,5 +600,64 @@ ENV;
 
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'data'
             . DIRECTORY_SEPARATOR . $subdir;
+    }
+
+    private function normalizeDatabaseError(string $message): string
+    {
+        $lower = strtolower($message);
+
+        if (str_contains($lower, 'dns lookup resolve failed') || str_contains($lower, 'php_network_getaddresses')) {
+            return '数据库主机无法解析，请检查主机地址是否填写正确';
+        }
+        if (str_contains($lower, 'host') && str_contains($lower, 'is not allowed to connect')) {
+            return '数据库已拒绝当前来源主机，请检查 MySQL 用户授权或白名单';
+        }
+        if (str_contains($lower, 'access denied')) {
+            return '数据库用户名或密码错误，请重新检查账号密码';
+        }
+        if (str_contains($lower, 'connection refused')) {
+            return '数据库连接被拒绝，请确认数据库服务已启动且端口可达';
+        }
+        if (str_contains($lower, 'timed out')) {
+            return '数据库连接超时，请检查网络、防火墙或安全组设置';
+        }
+
+        return '数据库连接失败：' . $message;
+    }
+
+    private function normalizeRedisError(string $message): string
+    {
+        $lower = strtolower($message);
+
+        if (str_contains($lower, 'php_network_getaddresses')) {
+            return 'Redis 主机无法解析，请检查主机地址是否填写正确';
+        }
+        if (str_contains($lower, 'connection refused')) {
+            return 'Redis 连接被拒绝，请确认 Redis 已启动并允许当前连接来源';
+        }
+        if (str_contains($lower, 'timed out')) {
+            return 'Redis 连接超时，请检查网络、防火墙或安全组设置';
+        }
+        if (str_contains($lower, 'noauth') || str_contains($lower, 'authentication required')) {
+            return 'Redis 需要密码认证，请填写正确的 Redis 密码';
+        }
+        if (str_contains($lower, 'protected mode')) {
+            return 'Redis 当前处于保护模式，请检查 bind/protected-mode 或改用本机可达地址';
+        }
+
+        return 'Redis 连接失败：' . $message;
+    }
+
+    private function formatEnvValue(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        if (preg_match('/\s|#|=|,|"|\'/', $value) === 1) {
+            return '"' . addcslashes($value, "\"\\") . '"';
+        }
+
+        return $value;
     }
 }
