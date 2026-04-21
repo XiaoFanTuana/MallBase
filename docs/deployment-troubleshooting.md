@@ -1,0 +1,220 @@
+# 安装与部署故障排查
+
+本页收录安装、部署、前端静态资源与 Docker 运行时的常见问题。  
+如果是方式三首次启动时序与密码错位问题，优先再看专题文档 [docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md)。
+
+## 安装向导与 `install.lock`
+
+### `/install` 页面报 500 或白屏
+
+原因：
+
+- 已经安装过，`deploy/install/install.lock` 已存在
+- 浏览器缓存了旧页面
+
+处理：
+
+```bash
+rm -f deploy/install/install.lock
+docker compose -f docker-compose.dev.yml restart backend
+docker compose restart
+```
+
+如果只是页面缓存问题，先强制刷新浏览器。
+
+### 安装完成后页面仍像没生效
+
+原因：
+
+- Swoole 是常驻进程，`.env` 更新后没有重启
+
+处理：
+
+```bash
+docker compose -f docker-compose.dev.yml restart backend
+docker compose restart
+```
+
+## Docker 启动与依赖服务
+
+### `install-auto` 容器执行失败
+
+先看日志：
+
+```bash
+docker logs mallbase-install-auto
+docker logs mallbase-ensure-env
+```
+
+常见原因：
+
+- 缺少关键 env 变量
+- MySQL 账号密码不匹配
+- SQL 导入失败
+
+修复后重跑：
+
+```bash
+docker compose -f docker-compose.dev.yml rm -f install-auto
+docker compose -f docker-compose.dev.yml up -d install-auto
+```
+
+### `frontend-build` 看起来像卡住
+
+原因：
+
+- 首次 `pnpm install` 和打包本身耗时较长
+
+处理：
+
+```bash
+docker logs mallbase-frontend-build
+```
+
+脚本每 15 秒会输出一次“进行中，请稍候”，有日志就说明没卡死。
+
+## MySQL / Redis 连接
+
+### `Connection refused` 连不上 MySQL
+
+原因：
+
+- 在容器里把 `DB_HOST` 写成了 `127.0.0.1`
+- `127.0.0.1` 在容器里只代表容器自身
+
+处理：
+
+- 方式三：改成 `mysql`
+- 方式二：改成 `host.docker.internal` 或宿主机实际 IP
+
+### `Access denied for user`
+
+原因：
+
+- 根 `.env` 的 `DB_PASS` 改了
+- 但旧 `data/mysql` 里的真实业务账号密码没变
+
+处理：
+
+```bash
+grep '^DB_PASS=' .env
+docker compose -f docker-compose.dev.yml --profile tools up rotate-db-password
+```
+
+如果不需要保留旧数据，可按全量清理流程重来。
+
+### Docker 容器里如何连接宿主机 MySQL / Redis
+
+| 平台 | 地址 |
+|------|------|
+| Docker Desktop (Mac/Win) | `host.docker.internal` |
+| Linux | `172.17.0.1` 或宿主机实际 IP |
+
+## 前端静态资源与 `/admin`
+
+### `/admin/` 404 或白屏
+
+原因：
+
+- `backend/public/admin` 或 Nginx 静态目录没有正确产物
+
+处理：
+
+```bash
+docker compose -f docker-compose.dev.yml --profile build up frontend-build
+ls backend/public/admin/index.html
+```
+
+如果是生产环境，还要确认服务器静态目录和 Nginx 配置一致，详见 [nginx-reverse-proxy.md](./nginx-reverse-proxy.md)。
+
+### 上传后还是旧页面
+
+原因：
+
+- 上传到了错误目录
+- 浏览器缓存了旧资源
+- `_app.config.js` 仍是旧配置
+
+处理：
+
+- 核对服务器静态目录
+- 清缓存后重试
+- 检查 `_app.config.js`
+
+如果你使用上传脚本，参见 [upload-public-admin.md](./upload-public-admin.md)。
+
+### 前端构建内存不足
+
+处理：
+
+```bash
+export NODE_OPTIONS=--max-old-space-size=4096
+pnpm run build --filter=@vben/web-antd
+```
+
+## 权限菜单与首次改密
+
+### 打开 `/admin/` 不跳改密页
+
+原因：
+
+- 旧环境数据库中 `mb_admin.password_changed_at` 已有值
+
+处理：
+
+```bash
+docker exec -it mallbase-mysql sh -c 'mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" -e "UPDATE mb_admin SET password_changed_at=NULL WHERE id=1"'
+```
+
+### 登录后菜单是空的
+
+原因：
+
+- 权限数据未同步
+
+处理：
+
+```bash
+docker exec -it mallbase-dev php think sync:permissions
+```
+
+## 端口、CORS、缓存与重启
+
+### 改了端口后不生效
+
+原因：
+
+- 只改了一份 `.env`
+- 没有重建容器
+
+处理：
+
+```bash
+grep '^SWOOLE_HTTP_PORT=' .env backend/.env
+docker compose -f docker-compose.dev.yml down
+docker compose -f docker-compose.dev.yml up -d
+```
+
+### 修改前端 API 地址后页面请求还是旧值
+
+生产构建场景可以直接编辑：
+
+```bash
+vim /var/www/mallbase/admin/_app.config.js
+```
+
+修改后刷新浏览器即可。
+
+### 验证 CORS 是否正确
+
+```bash
+curl -i -X OPTIONS 'http://127.0.0.1:8080/' \
+  -H 'Origin: https://mall.example.com' \
+  -H 'Access-Control-Request-Method: GET'
+```
+
+### Swoole 进程杀不掉
+
+```bash
+lsof -ti :8080 | xargs kill -9
+```

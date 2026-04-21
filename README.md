@@ -60,7 +60,13 @@ mall-base/
 │   └── upload-public-admin.sh      # 打包并上传后台静态资源
 │
 ├── docs/                           # 文档
-│   ├── install.md                  # 安装指南
+│   ├── install.md                  # 安装与部署入口
+│   ├── install-manual.md           # 方式一：手动安装（无 Docker）
+│   ├── install-docker-backend-only.md # 方式二：Docker 开发（仅后端）
+│   ├── install-docker-fullstack.md # 方式三：Docker 开发（全套）
+│   ├── install-docker-production.md # 方式四：Docker 生产
+│   ├── deployment-commands.md      # 安装与部署命令集合
+│   ├── deployment-troubleshooting.md # 安装与部署故障排查
 │   ├── env-files.md                # 环境文件职责与 Docker 全套模式配置说明
 │   ├── nginx-reverse-proxy.md      # Nginx 反向代理配置说明
 │   ├── upload-public-admin.md      # 后台静态资源上传脚本说明
@@ -116,7 +122,13 @@ docker compose restart
 
 | 文档 | 说明 |
 |------|------|
-| [安装指南](docs/install.md) | Docker / 原生部署、安装向导、配置修改 |
+| [安装与部署入口](docs/install.md) | 环境要求、安装方式总览、阅读顺序与专题入口 |
+| [方式一：手动安装](docs/install-manual.md) | 无 Docker 场景的完整部署步骤 |
+| [方式二：Docker 开发（仅后端）](docs/install-docker-backend-only.md) | 宿主机 MySQL/Redis + 后端容器的完整步骤 |
+| [方式三：Docker 开发（全套）](docs/install-docker-fullstack.md) | 后端 + MySQL + Redis + 前端自动打包的完整步骤 |
+| [方式四：Docker 生产](docs/install-docker-production.md) | 单后端容器 + 宿主机 Nginx 的完整部署步骤 |
+| [安装与部署命令集合](docs/deployment-commands.md) | 按用途整理的独立命令集合 |
+| [安装与部署故障排查](docs/deployment-troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
 | [环境文件说明](docs/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
 | [Nginx 反向代理配置说明](docs/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
 | [后台静态资源上传脚本](docs/upload-public-admin.md) | 本地打包 `backend/public/admin` 并上传到服务器目录 |
