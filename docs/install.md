@@ -326,12 +326,21 @@ cp backend/.example.env backend/.env
 ### 2. 启动后端容器
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d backend
+docker compose -f docker-compose.dev.yml up -d --no-deps backend
 ```
 
-### 3. 安装 Composer 依赖
+> 这里要显式加 `--no-deps`。当前 `backend` 服务在 `docker-compose.dev.yml` 里声明了 `mysql`、`redis`、`install-auto` 等依赖；如果不加这个参数，Compose 会把“全套模式”的依赖服务也一起拉起，就不是“仅后端容器”了。
 
-首次启动后需要安装依赖（因为 vendor 目录走的是 Docker volume）：
+### 3. 初始化 `vendor`（在容器内执行 Composer）
+
+这里**不需要在宿主机单独安装 Composer**。`mallbase-dev` 镜像在 `deploy/docker/Dockerfile` 里已经内置了 Composer，下面这条命令是直接在容器里执行。
+
+之所以首次启动后还要跑一次 `composer install`，是因为开发模式把：
+
+- `./backend` 挂载到了容器内的 `/app`
+- `/app/vendor` 又单独挂成了 Docker named volume
+
+这样做可以让源码实时同步，但也意味着镜像构建阶段装好的 `/app/vendor` 不会直接出现在这个全新的 volume 里，所以第一次要把依赖安装进 volume：
 
 ```bash
 docker exec mallbase-dev composer install
@@ -354,10 +363,32 @@ docker compose -f docker-compose.dev.yml restart backend
 ```bash
 cd mall-base/frontend/admin
 pnpm install
-pnpm run dev --filter=@vben/web-antd
+pnpm run dev:antd
 ```
 
 前端开发服务器默认运行在 `http://localhost:5666`。
+
+> 方式二的默认推荐流程仍然是**宿主机运行前端 dev server**。这样最直接，也和 `frontend/admin/apps/web-antd/.env.development` 里默认的 `VITE_GLOB_API_URL=http://127.0.0.1:8080/admin/api` 一致。
+
+如果你想把前端 dev server 也放进容器里跑，当前 `docker-compose.dev.yml` **没有内置 `frontend-dev` 服务**，只有一次性 `frontend-build` 打包容器。可以临时起一个 Node 容器：
+
+```bash
+docker run --rm -it \
+  -p 5666:5666 \
+  -v "$PWD/frontend/admin:/app" \
+  -v mallbase-pnpm-store:/root/.local/share/pnpm/store \
+  -w /app \
+  node:20-alpine sh
+```
+```bash
+# 进入容器后执行
+corepack enable
+corepack prepare pnpm@10.28.2 --activate
+pnpm install
+pnpm run dev:antd -- --host 0.0.0.0
+```
+
+这样浏览器仍然访问 `http://localhost:5666`，但 dev server 实际运行在容器里。
 
 ### 修改代码
 
@@ -497,6 +528,33 @@ grep -E '^(DB_PASS|JWT_SECRET|ADMIN_USER|ADMIN_PASS|INSTALL_DEMO)=' backend/.env
 ```bash
 # 在项目根目录执行：单独跑 frontend-build 容器
 docker compose -f docker-compose.dev.yml --profile build up frontend-build
+```
+
+`frontend-build` 是**一次性打包容器**，作用是把 `@vben/web-antd` 构建成静态文件并同步到 `backend/public/admin/`，它不是常驻的前端开发容器：
+
+- 它没有 `5666:5666` 这样的 dev 端口映射
+- 默认命令是 `sh /frontend-build.sh`，执行完会自动退出
+- 适合“我要重新出一份静态资源”，不适合“HMR 实时开发”
+
+所以方式三里如果你问“怎么在容器里面跑 `pnpm run dev:antd`”，答案是：**当前 compose 默认没提供这条现成流程**。推荐二选一：
+
+1. 继续按官方默认方式，在宿主机 `frontend/admin` 下执行 `pnpm run dev:antd`
+2. 临时起一个 Node 容器来跑 dev server：
+
+```bash
+docker run --rm -it \
+  -p 5666:5666 \
+  -v "$PWD/frontend/admin:/app" \
+  -v mallbase-pnpm-store:/root/.local/share/pnpm/store \
+  -w /app \
+  node:20-alpine sh
+```
+```bash
+# 进入容器后执行
+corepack enable
+corepack prepare pnpm@10.28.2 --activate
+pnpm install
+pnpm run dev:antd -- --host 0.0.0.0
 ```
 
 ### 7. 从本地客户端连接容器内的 MySQL / Redis
@@ -740,15 +798,9 @@ CORS_ALLOWED_ORIGINS=https://mall.example.com
 
 > **⚠️ 安全红线**：`backend/.example.env` 里的 `DB_PASS` / `JWT_SECRET` 占位符为 `please-change-or-leave-for-random`，生产环境必须手动替换成强随机值，**否则等于把密码写在仓库里**。
 
-### 2. 构建并启动后端容器
+### 2. 先构建前端静态资源
 
-```bash
-docker compose up -d --build
-```
-
-### 3. 构建前端
-
-在**本地开发机**或 **CI** 上构建（不在服务器上构建）：
+前端要在**本地开发机**或 **CI** 上构建，推荐放在 `docker compose up -d --build` 之前完成：
 
 ```bash
 cd mall-base/frontend/admin
@@ -759,12 +811,22 @@ pnpm run build --filter=@vben/web-antd
 > 构建前确认 `.env.production`：`VITE_BASE=/admin/`、`VITE_GLOB_API_URL=/admin/api`。
 > 部署后如需修改 API 地址，可直接编辑 `/var/www/mallbase/admin/_app.config.js`，无需重新构建。
 
-### 4. 部署前端文件到服务器
+这是因为生产模式的后端镜像只会复制 `backend/` 目录，`docker-compose.yml` 也只挂载了 `runtime` 和 `public/uploads` 两个 volume，并**不会把 `frontend/admin` 源码映射进容器**。所以前端构建不能指望在 `docker compose up -d --build` 之后临时去容器里执行，它本来就不在这个生产容器里。
+
+### 3. 部署前端文件到服务器
 
 ```bash
 # 将构建产物上传到服务器
 scp -r frontend/admin/apps/web-antd/dist/* user@server:/var/www/mallbase/admin/
 ```
+
+### 4. 构建并启动后端容器
+
+```bash
+docker compose up -d --build
+```
+
+如果这次只改了后端代码或 `backend/.env`，而前端代码没有变化，可以直接执行这一步，不需要重复构建前端。
 
 ### 5. 配置宿主机 Nginx
 
@@ -780,6 +842,8 @@ sudo vim /etc/nginx/sites-available/mallbase.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+反向代理路径拆分和常见坑位，详见 [nginx-reverse-proxy.md](./nginx-reverse-proxy.md)。
 
 ### 6. 访问安装向导
 

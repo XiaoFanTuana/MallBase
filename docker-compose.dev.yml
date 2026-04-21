@@ -15,8 +15,9 @@
 #   backend/public/admin：
 #     docker compose -f docker-compose.dev.yml --profile build up -d
 #
-# 仅后端：docker compose -f docker-compose.dev.yml up -d backend
+# 仅后端：docker compose -f docker-compose.dev.yml up -d --no-deps backend
 #         （需自备 MySQL + Redis；建议 DB_HOST=host.docker.internal）
+#         若不加 --no-deps，会把 mysql / redis / install-auto 一并拉起
 # ==========================================
 
 services:

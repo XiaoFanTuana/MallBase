@@ -61,6 +61,7 @@ mall-base/
 ├── docs/                           # 文档
 │   ├── install.md                  # 安装指南
 │   ├── env-files.md                # 环境文件职责与 Docker 全套模式配置说明
+│   ├── nginx-reverse-proxy.md      # Nginx 反向代理配置说明
 │   ├── freight-template-roadmap.md # 运费模板路线图
 │   ├── claude-code-guide.md        # Claude Code 使用指南
 │   ├── issues/                     # 问题记录
@@ -115,6 +116,7 @@ docker compose restart
 |------|------|
 | [安装指南](docs/install.md) | Docker / 原生部署、安装向导、配置修改 |
 | [环境文件说明](docs/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
+| [Nginx 反向代理配置说明](docs/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
 | [Docker 首装问题记录](docs/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
