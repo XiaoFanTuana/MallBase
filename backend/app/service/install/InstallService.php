@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace app\service\install;
 
+use mall_base\base\BaseModel;
+use mall_base\base\BaseService;
 use PDO;
 use PDOException;
 use Redis;
@@ -12,7 +14,11 @@ use think\facade\Config;
 use think\facade\Console;
 use think\facade\Db;
 
-class InstallService
+/**
+ * 安装服务
+ * @extends BaseService<BaseModel>
+ */
+class InstallService extends BaseService
 {
     /**
      * @var array<string, string>
@@ -28,6 +34,8 @@ class InstallService
         'sync_permissions' => '同步权限数据',
         'write_lock'       => '写入安装锁',
     ];
+
+    protected string $modelClass = BaseModel::class;
 
     public function isInstalled(): bool
     {
@@ -50,6 +58,58 @@ class InstallService
         return is_array($data) ? $data : null;
     }
 
+    public function getInstallStatus(array $entries = []): array
+    {
+        $lockInfo = $this->getLockInfo() ?? [];
+
+        return [
+            'installed' => $this->isInstalled(),
+            'installed_at' => $lockInfo['installed_at'] ?? null,
+            'release' => $this->getReleaseInfo(),
+            'entries' => [
+                'admin_url' => $entries['admin_url'] ?? null,
+                'client_url' => $entries['client_url'] ?? null,
+            ],
+            'meta' => $this->getInstallPageMeta(),
+        ];
+    }
+
+    public function getReleaseInfo(): ?array
+    {
+        $path = $this->releaseFilePath();
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $raw = file_get_contents($path);
+        if ($raw === false || trim($raw) === '') {
+            return null;
+        }
+
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            return null;
+        }
+
+        $version = trim((string) ($data['version'] ?? ''));
+        if ($version === '') {
+            return null;
+        }
+
+        $notes = [];
+        foreach (($data['notes'] ?? []) as $note) {
+            if (is_string($note) && trim($note) !== '') {
+                $notes[] = trim($note);
+            }
+        }
+
+        return [
+            'version' => $version,
+            'released_at' => trim((string) ($data['released_at'] ?? '')) ?: null,
+            'notes' => $notes,
+        ];
+    }
+
     public function getInstallPageMeta(): array
     {
         $envValues = $this->readEnvFile();
@@ -59,14 +119,18 @@ class InstallService
         $swoolePort = (int) ($envValues['SWOOLE_HTTP_PORT'] ?? 8080);
 
         return [
-            'project_root' => $projectRoot,
-            'backend_root' => $backendRoot,
             'runtime'      => [
+                'cron_enable' => $this->envFlagText($envValues['CRON_ENABLE'] ?? null),
                 'swoole_host' => $swooleHost,
                 'swoole_port' => $swoolePort,
+                'db_connection' => 'mysql',
                 'db_host'     => trim((string) ($envValues['DB_HOST'] ?? '')),
+                'db_port'     => (int) ($envValues['DB_PORT'] ?? 3306),
                 'db_name'     => trim((string) ($envValues['DB_NAME'] ?? '')),
+                'db_user'     => trim((string) ($envValues['DB_USER'] ?? '')),
+                'redis_driver' => 'redis',
                 'redis_host'  => trim((string) ($envValues['REDIS_HOST'] ?? '')),
+                'redis_port'  => (int) ($envValues['REDIS_PORT'] ?? 6379),
                 'redis_db'    => (int) ($envValues['REDIS_CACHE_DB'] ?? 0),
             ],
             'restart_commands' => [
@@ -75,6 +139,13 @@ class InstallService
                 'manual' => "cd {$projectRoot}\nlsof -ti :{$swoolePort} | xargs -r kill -9\ncd {$backendRoot}\nphp think swoole",
             ],
         ];
+    }
+
+    private function envFlagText(mixed $value): string
+    {
+        $text = strtolower(trim((string) $value));
+
+        return in_array($text, ['1', 'true', 'on', 'yes'], true) ? 'true' : 'false';
     }
 
     public function checkEnvironment(): array
@@ -477,12 +548,25 @@ class InstallService
         return $result;
     }
 
-    public function checkAdminReady(): array
+    public function checkEntryReady(string $target = 'admin'): array
     {
+        $target = $this->normalizeEntryTarget($target);
+        $entryMeta = $this->entryTargetMeta($target);
+
         if (!$this->isInstalled()) {
             return [
                 'ready'   => false,
                 'message' => '系统尚未安装完成，请先完成安装流程',
+                'target'  => $target,
+            ];
+        }
+
+        if (!$entryMeta['exists']) {
+            return [
+                'ready'   => false,
+                'message' => sprintf('未检测到%s构建产物，请先确认 %s 已存在', $entryMeta['label'], $entryMeta['path']),
+                'target'  => $target,
+                'path'    => $entryMeta['path'],
             ];
         }
 
@@ -493,20 +577,57 @@ class InstallService
         if ($fileMarker === '') {
             return [
                 'ready'   => false,
-                'message' => '未检测到运行态标记，请先重启 Swoole 后再进入后台管理',
+                'message' => sprintf('未检测到运行态标记，请先重启 Swoole 后再进入%s', $entryMeta['label']),
+                'target'  => $target,
             ];
         }
 
         if ($runtimeMarker === '' || !hash_equals($fileMarker, $runtimeMarker)) {
             return [
                 'ready'   => false,
-                'message' => '检测到 Swoole 尚未重启，当前运行进程还没有加载最新配置，请先重启 Swoole 后再进入后台管理',
+                'message' => sprintf('检测到 Swoole 尚未重启，当前运行进程还没有加载最新配置，请先重启 Swoole 后再进入%s', $entryMeta['label']),
+                'target'  => $target,
             ];
         }
 
         return [
             'ready'   => true,
-            'message' => '已检测到最新运行态配置，可以进入后台管理',
+            'message' => sprintf('已检测到最新运行态配置，可以进入%s', $entryMeta['label']),
+            'target'  => $target,
+            'path'    => $entryMeta['path'],
+        ];
+    }
+
+    private function normalizeEntryTarget(string $target): string
+    {
+        $target = strtolower(trim($target));
+
+        return in_array($target, ['admin', 'client'], true) ? $target : 'admin';
+    }
+
+    /**
+     * @return array{label:string,path:string,exists:bool}
+     */
+    private function entryTargetMeta(string $target): array
+    {
+        $publicRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'public';
+
+        if ($target === 'client') {
+            $path = $publicRoot . DIRECTORY_SEPARATOR . 'index.php';
+
+            return [
+                'label'  => '客户端',
+                'path'   => $path,
+                'exists' => is_file($path),
+            ];
+        }
+
+        $path = $publicRoot . DIRECTORY_SEPARATOR . 'admin';
+
+        return [
+            'label'  => '后台管理',
+            'path'   => $path,
+            'exists' => is_dir($path),
         ];
     }
 
@@ -693,7 +814,6 @@ class InstallService
     {
         $content = json_encode([
             'installed_at' => date('Y-m-d H:i:s'),
-            'version'      => '1.0.0',
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         file_put_contents($this->lockFilePath(), $content);
@@ -701,7 +821,21 @@ class InstallService
 
     private function lockFilePath(): string
     {
+        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
+        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
+            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+        if (is_dir(dirname($deployPath))) {
+            return $deployPath;
+        }
+
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'install.lock';
+    }
+
+    private function releaseFilePath(): string
+    {
+        $backendRoot = rtrim(root_path(), DIRECTORY_SEPARATOR);
+
+        return dirname($backendRoot) . DIRECTORY_SEPARATOR . '.version';
     }
 
     private function installDataPath(string $subdir): string

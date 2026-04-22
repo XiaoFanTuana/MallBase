@@ -63,6 +63,7 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - ./backend:/app
+      - ./.version:/.version:ro
       - ./deploy/install:/app/install
     command: php think install:auto
     restart: "no"
@@ -90,6 +91,7 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - ./backend:/app
+      - ./.version:/.version:ro
       # 安装目录（包含 schema/demo 数据与 install.lock；宿主落盘到 deploy/install）
       - ./deploy/install:/app/install
     depends_on:

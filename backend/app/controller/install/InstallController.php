@@ -5,106 +5,100 @@ declare(strict_types=1);
 namespace app\controller\install;
 
 use app\service\install\InstallService;
+use mall_base\base\BaseController;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
-use think\Request;
 use think\Response;
 use think\swoole\response\Iterator as IteratorResponse;
 
-class InstallController
+/**
+ * 安装控制器
+ * @extends BaseController<InstallService>
+ */
+class InstallController extends BaseController
 {
-    protected InstallService $service;
-
-    public function __construct()
-    {
-        $this->service = new InstallService();
-    }
+    protected string $serviceClass = InstallService::class;
 
     public function check(): Response
     {
-        $result = $this->service->checkEnvironment();
-        return json(['code' => 200, 'data' => $result, 'message' => 'ok']);
+        return $this->success($this->service()->checkEnvironment(), '获取成功');
     }
 
     public function formDefaults(): Response
     {
-        $result = $this->service->getFormDefaults();
-        return json(['code' => 200, 'data' => $result, 'message' => 'ok']);
+        return $this->success($this->service()->getFormDefaults(), '获取成功');
     }
 
     public function status(): Response
     {
-        $installed = $this->service->isInstalled();
-        $data = [
-            'installed'    => $installed,
-            'installed_at' => null,
-            'version'      => null,
-            'meta'         => $this->service->getInstallPageMeta(),
-        ];
-        if ($installed) {
-            $info = $this->service->getLockInfo() ?? [];
-            $data['installed_at'] = $info['installed_at'] ?? null;
-            $data['version']      = $info['version'] ?? null;
-        }
-        return json(['code' => 200, 'data' => $data, 'message' => 'ok']);
+        return $this->success($this->service()->getInstallStatus($this->buildEntryUrls()), '获取成功');
     }
 
     public function adminReady(): Response
     {
-        $result = $this->service->checkAdminReady();
-        $code = $result['ready'] ? 200 : 400;
+        $target = (string) $this->request->get('target', 'admin');
+        $result = $this->service()->checkEntryReady($target);
+        if ($result['ready']) {
+            return $this->success($result, $result['message']);
+        }
 
-        return json(['code' => $code, 'data' => $result, 'message' => $result['message']]);
+        return $this->error($result['message'], 400, $result);
     }
 
-    public function testDb(Request $request): Response
+    public function testDb(): Response
     {
         $config = [
-            'host' => $request->post('db_host', '127.0.0.1'),
-            'port' => $request->post('db_port', 3306),
-            'user' => $request->post('db_user', 'root'),
-            'pass' => $request->post('db_pass', ''),
-            'name' => $request->post('db_name', 'mallbase'),
+            'host' => $this->request->post('db_host', '127.0.0.1'),
+            'port' => $this->request->post('db_port', 3306),
+            'user' => $this->request->post('db_user', 'root'),
+            'pass' => $this->request->post('db_pass', ''),
+            'name' => $this->request->post('db_name', 'mallbase'),
         ];
 
-        $result = $this->service->testDatabase($config);
-        $code = $result['success'] ? 200 : 400;
+        $result = $this->service()->testDatabase($config);
+        if ($result['success']) {
+            return $this->success($result, $result['message']);
+        }
 
-        return json(['code' => $code, 'data' => $result, 'message' => $result['message']]);
+        return $this->error($result['message'], 400, $result);
     }
 
-    public function testRedis(Request $request): Response
+    public function testRedis(): Response
     {
         $config = [
-            'host'     => $request->post('redis_host', '127.0.0.1'),
-            'port'     => $request->post('redis_port', 6379),
-            'db'       => $request->post('redis_db', 0),
-            'password' => $request->post('redis_password', ''),
+            'host'     => $this->request->post('redis_host', '127.0.0.1'),
+            'port'     => $this->request->post('redis_port', 6379),
+            'db'       => $this->request->post('redis_db', 0),
+            'password' => $this->request->post('redis_password', ''),
         ];
 
-        $result = $this->service->testRedis($config);
-        $code = $result['success'] ? 200 : 400;
+        $result = $this->service()->testRedis($config);
+        if ($result['success']) {
+            return $this->success($result, $result['message']);
+        }
 
-        return json(['code' => $code, 'data' => $result, 'message' => $result['message']]);
+        return $this->error($result['message'], 400, $result);
     }
 
-    public function execute(Request $request): Response
+    public function execute(): Response
     {
-        $params = $request->post();
+        $params = $this->request->post();
         $validation = $this->validateInstallParams($params);
         if ($validation !== null) {
             return $validation;
         }
 
-        $result = $this->service->execute($params);
-        $code = $result['success'] ? 200 : 400;
+        $result = $this->service()->execute($params);
+        if ($result['success']) {
+            return $this->success($result, $result['message']);
+        }
 
-        return json(['code' => $code, 'data' => $result, 'message' => $result['message']]);
+        return $this->error($result['message'], 400, $result);
     }
 
-    public function executeStream(Request $request)
+    public function executeStream()
     {
-        $params = $request->post();
+        $params = $this->request->post();
         $validation = $this->validateInstallInput($params);
         if (!$validation['success']) {
             return $this->buildStreamResponse(function (callable $emit) use ($validation): void {
@@ -124,7 +118,7 @@ class InstallController
 
         return $this->buildStreamResponse(function (callable $emit) use ($params): void {
             try {
-                $result = $this->service->execute($params, function (array $event) use ($emit): void {
+                $result = $this->service()->execute($params, function (array $event) use ($emit): void {
                     $name = $event['event'] ?? 'progress';
                     unset($event['event']);
                     $emit($name, $event);
@@ -160,7 +154,7 @@ class InstallController
             return null;
         }
 
-        return json(['code' => 400, 'message' => $validation['message'], 'data' => null]);
+        return $this->error($validation['message']);
     }
 
     private function validateInstallInput(array $params): array
@@ -183,6 +177,22 @@ class InstallController
         return ['success' => true, 'message' => 'ok'];
     }
 
+    private function buildEntryUrls(): array
+    {
+        $baseUrl = rtrim((string) $this->request->domain(), '/');
+        if ($baseUrl === '' && method_exists($this->request, 'host')) {
+            $host = (string) $this->request->host();
+            if ($host !== '') {
+                $baseUrl = $this->request->scheme() . '://' . $host;
+            }
+        }
+
+        return [
+            'admin_url'  => $baseUrl !== '' ? $baseUrl . '/admin' : '/admin',
+            'client_url' => $baseUrl !== '' ? $baseUrl : '/',
+        ];
+    }
+
     private function buildStreamResponse(callable $producer): Response
     {
         if (!class_exists(IteratorResponse::class) || !class_exists(Channel::class) || !class_exists(Coroutine::class)) {
@@ -190,7 +200,8 @@ class InstallController
                 'code'    => 500,
                 'message' => '当前环境不支持流式安装响应',
                 'data'    => null,
-            ]);
+                'timestamp' => time(),
+            ], 500);
         }
 
         $channel = new Channel(32);
