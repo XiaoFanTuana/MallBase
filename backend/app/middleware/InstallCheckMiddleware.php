@@ -15,6 +15,7 @@ class InstallCheckMiddleware
      */
     private const INSTALLED_WHITELIST = [
         'install/api/status',
+        'install/api/admin-ready',
     ];
 
     public function handle(Request $request, Closure $next): Response
