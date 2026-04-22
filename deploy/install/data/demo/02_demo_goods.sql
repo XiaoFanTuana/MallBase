@@ -43,7 +43,7 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 (2, '白沙银,512G', 7999.00, 8999.00, 6500.00, 35, 'HW-M60P-WH-512');
 
 -- ---- 商品 3：小米14（多规格）----
-INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `sort`) VALUES
+INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
 (3, 5, 3, '小米14', '徕卡光学，骁龙8 Gen3', '/uploads/demo/xiaomi14.jpg', 2,
  '[{"spec_name":"颜色","values":["黑色","白色","岩石青"]},{"spec_name":"内存","values":["256G","512G"]}]',
  '<p>小米14，搭载第三代骁龙8，徕卡光学镜头，小米澎湃 OS。</p>',
