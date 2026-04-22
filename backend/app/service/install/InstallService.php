@@ -538,7 +538,6 @@ class InstallService
         $jwt['secret'] = $envData['JWT_SECRET'] ?? '';
         Config::set($jwt, 'jwt');
 
-        Db::setConfig(Config::get('database'));
         Db::connect(null, true);
     }
 
