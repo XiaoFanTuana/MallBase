@@ -503,6 +503,8 @@ class InstallService
             $_SERVER[$key] = $value;
         }
 
+        app()->env->set($envData);
+
         $database = Config::get('database', []);
         $database['default'] = 'mysql';
         $database['connections']['mysql'] = array_merge($database['connections']['mysql'] ?? [], [
@@ -538,6 +540,7 @@ class InstallService
         $jwt['secret'] = $envData['JWT_SECRET'] ?? '';
         Config::set($jwt, 'jwt');
 
+        app()->delete('think\\DbManager');
         Db::connect(null, true);
     }
 
