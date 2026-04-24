@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\service\client;
 
+use app\common\enum\RegisterType;
 use app\model\user\User;
 use app\model\user\UserGroup;
 use app\model\user\UserGroupRelation;
@@ -12,6 +13,8 @@ use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
+use mall_base\sms\SmsScene;
+use mall_base\sms\SmsService;
 use think\facade\Request;
 
 /**
@@ -67,11 +70,10 @@ class UserService extends BaseService
     }
 
     /**
-     * 用户登录
+     * 用户登录(手机号 + 密码)
      */
     public function login(string $account, string $password): array
     {
-        // 仅支持手机号登录(邮箱仅保留给后台管理员创建用户档案)
         $user = $this->model()
             ->where('mobile', $account)
             ->where('status', 1)
@@ -80,30 +82,129 @@ class UserService extends BaseService
         if (!$user) {
             throw new BusinessException('账号不存在或已禁用');
         }
-
         if (!$user->checkPassword($password)) {
             throw new BusinessException('密码错误');
         }
 
-        // 更新登录信息
+        return $this->finishLogin($user, $account);
+    }
+
+    /**
+     * 用户登录(用户名 + 密码)
+     *
+     * 用户名可在注册时填,或在个人中心补设。username 列 UNIQUE,可空,
+     * 与 mobile/wechat 登录互不冲突
+     */
+    public function loginByUsername(string $username, string $password): array
+    {
+        $username = trim($username);
+        if ($username === '') {
+            throw new BusinessException('请输入用户名');
+        }
+
+        $user = $this->model()
+            ->where('username', $username)
+            ->where('status', 1)
+            ->find();
+        if (!$user) {
+            throw new BusinessException('账号不存在或已禁用');
+        }
+        if (!$user->checkPassword($password)) {
+            throw new BusinessException('密码错误');
+        }
+
+        return $this->finishLogin($user, $username);
+    }
+
+    /**
+     * 用户登录(手机号 + 短信验证码)
+     *
+     * 行为:
+     *  - 手机号已存在 → 直接登录
+     *  - 手机号不存在 → 自动创建账号,register_type=h5(纯网页注册路径),
+     *    密码留空(后续个人中心可补设)
+     */
+    public function loginBySms(string $mobile, string $smsCode): array
+    {
+        $sms = app()->make(SmsService::class);
+        $sms->verifyCode($mobile, SmsScene::LOGIN, $smsCode);
+
+        $user = $this->model()
+            ->where('mobile', $mobile)
+            ->find();
+
+        if (!$user) {
+            $user = $this->model();
+            $user->save([
+                'mobile'        => $mobile,
+                'register_type' => RegisterType::H5,
+                'register_ip'   => Request::ip(),
+                'nickname'      => $this->generateNickname(RegisterType::H5, $mobile),
+                'status'        => 1,
+            ]);
+        } elseif ((int) $user->status !== 1) {
+            throw new BusinessException('账号已禁用');
+        }
+
+        return $this->finishLogin($user, $mobile);
+    }
+
+    /**
+     * 用户名注册(账号密码,无 SMS)
+     *
+     * 仅注册一个 username + password 账号,不要求 mobile,适合不愿暴露手机号的场景
+     */
+    public function registerByUsername(string $username, string $password, ?string $nickname = null): array
+    {
+        $username = trim($username);
+        if ($username === '' || !preg_match('/^[a-zA-Z][\w\-]{3,29}$/', $username)) {
+            throw new BusinessException('用户名需为 4-30 位字母/数字/下划线/横杠,且以字母开头');
+        }
+        if (mb_strlen($password) < 6) {
+            throw new BusinessException('密码至少 6 位');
+        }
+
+        $exists = $this->model()->where('username', $username)->find();
+        if ($exists !== null) {
+            throw new BusinessException('该用户名已被使用');
+        }
+
+        $user = $this->model();
+        $user->save([
+            'username'      => $username,
+            'password'      => $password,
+            'nickname'      => $nickname !== null && $nickname !== '' ? mb_substr($nickname, 0, 50) : $username,
+            'register_type' => RegisterType::H5,
+            'register_ip'   => Request::ip(),
+            'status'        => 1,
+        ]);
+
+        return $this->finishLogin($user, $username);
+    }
+
+    /**
+     * 完成登录:回填登录信息 + 签发 JWT,集中处理避免各登录路径复制粘贴
+     *
+     * @return array<string, mixed>
+     */
+    private function finishLogin(User $user, string $account): array
+    {
         $user->last_login_time = date('Y-m-d H:i:s');
-        $user->last_login_ip = Request::ip();
+        $user->last_login_ip   = Request::ip();
         $user->save();
 
-        // 生成 JWT Token
         $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
-            'user_id' => $user->id,
-            'account' => $account,
+            'user_id'       => $user->id,
+            'account'       => $account,
             'register_type' => $user->register_type,
         ]);
 
-        // 存储 refresh_token 到 Redis
         $jwtCacheService = app()->make(JwtCacheService::class);
         $jwtCacheService->storeRefreshToken(
             $token['refresh_token'],
             $user->id,
-            $jwtService->getRefreshExpire()
+            $jwtService->getRefreshExpire(),
         );
 
         return $token;

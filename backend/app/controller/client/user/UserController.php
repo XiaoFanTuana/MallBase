@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace app\controller\client\user;
 
+use app\service\client\SmsAuthService;
 use app\service\client\UserService;
 use app\service\client\WechatService;
 use app\validate\client\user\UserValidate;
 use mall_base\base\BaseController;
+use mall_base\sms\SmsScene;
 
 /**
  * 前台用户控制器
@@ -37,14 +39,14 @@ class UserController extends BaseController
     }
 
     /**
-     * 用户登录
+     * 用户登录(手机号 + 密码)
      */
     public function login()
     {
         $data = $this->request->param(['account', 'password']);
 
         if (empty($data['account'])) {
-            return $this->error('请输入手机号或邮箱');
+            return $this->error('请输入手机号');
         }
 
         if (empty($data['password'])) {
@@ -53,6 +55,84 @@ class UserController extends BaseController
 
         $result = $this->service()->login($data['account'], $data['password']);
         return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 用户登录(用户名 + 密码)
+     */
+    public function loginByUsername()
+    {
+        $data = $this->request->param(['username', 'password']);
+
+        if (empty($data['username'])) {
+            return $this->error('请输入用户名');
+        }
+        if (empty($data['password'])) {
+            return $this->error('请输入密码');
+        }
+
+        $result = $this->service()->loginByUsername($data['username'], $data['password']);
+        return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 用户登录(手机号 + 短信验证码)
+     */
+    public function loginBySms()
+    {
+        $data = $this->request->param(['mobile', 'code']);
+
+        if (empty($data['mobile'])) {
+            return $this->error('请输入手机号');
+        }
+        if (empty($data['code'])) {
+            return $this->error('请输入验证码');
+        }
+
+        $result = $this->service()->loginBySms($data['mobile'], $data['code']);
+        return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 用户名注册(账号密码,无 SMS)
+     */
+    public function registerByUsername()
+    {
+        $data = $this->request->param(['username', 'password', 'nickname']);
+
+        if (empty($data['username']) || empty($data['password'])) {
+            return $this->error('请输入用户名和密码');
+        }
+
+        $result = $this->service()->registerByUsername(
+            $data['username'],
+            $data['password'],
+            $data['nickname'] ?? null,
+        );
+        return $this->success($result, '注册成功');
+    }
+
+    /**
+     * 发送短信验证码
+     *
+     * 请求参数:
+     *  - mobile: 手机号
+     *  - scene:  场景(login/register/reset_password/bind_mobile/wechat_official_bind)
+     */
+    public function sendSmsCode()
+    {
+        $mobile = (string) $this->request->param('mobile', '');
+        $scene = (string) $this->request->param('scene', SmsScene::LOGIN);
+
+        if ($mobile === '') {
+            return $this->error('请输入手机号');
+        }
+
+        /** @var SmsAuthService $smsAuth */
+        $smsAuth = app(SmsAuthService::class);
+        $smsAuth->send($mobile, $scene, $this->request->ip());
+
+        return $this->success(null, '验证码已发送');
     }
 
     /**
@@ -255,66 +335,95 @@ class UserController extends BaseController
     public function wechatLogin()
     {
         $code = $this->request->param('code');
-
         if (empty($code)) {
             return $this->error('code 不能为空');
         }
 
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
-        $result = $wechatService->login($code);
-
+        $result = $wechatService->miniappLogin((string) $code);
         return $this->success($result, '登录成功');
     }
 
     /**
-     * 微信小程序绑定手机号
+     * 微信小程序"手动绑定手机号"(force_mobile=false 场景)
+     *
+     * 请求参数:openid + mobile + code(SMS 验证码,scene=bind_mobile)
      */
     public function bindMobile()
     {
-        $openid = $this->request->param('openid');
-        $mobile = $this->request->param('mobile');
-        $nickname = $this->request->param('nickname', '');
-        $avatar = $this->request->param('avatar', '');
+        $openid  = (string) $this->request->param('openid', '');
+        $mobile  = (string) $this->request->param('mobile', '');
+        $smsCode = (string) $this->request->param('code', '');
 
-        if (empty($openid)) {
-            return $this->error('openid 不能为空');
+        if ($openid === '' || $mobile === '' || $smsCode === '') {
+            return $this->error('参数不完整');
         }
-
-        if (empty($mobile)) {
-            return $this->error('手机号不能为空');
-        }
-
-        // 验证手机号格式
         if (!preg_match('/^1[3-9]\d{9}$/', $mobile)) {
             return $this->error('手机号格式不正确');
         }
 
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
-        $result = $wechatService->bindMobile($openid, $mobile, $nickname, $avatar);
-
+        $result = $wechatService->miniappBindMobileManual($openid, $mobile, $smsCode);
         return $this->success($result, '绑定成功');
     }
 
     /**
-     * 解密手机号（微信小程序）
+     * 微信小程序"获取手机号"绑定(force_mobile=true 场景)
+     *
+     * 请求参数:openid + phone_code(button open-type=getPhoneNumber 触发后前端拿到的 code)
      */
-    public function decryptPhoneNumber()
+    public function bindMobileByPhoneCode()
     {
-        $openid = $this->request->param('openid');
-        $sessionKey = $this->request->param('session_key');
-        $encryptedData = $this->request->param('encryptedData');
-        $iv = $this->request->param('iv');
+        $openid    = (string) $this->request->param('openid', '');
+        $phoneCode = (string) $this->request->param('phone_code', '');
 
-        if (empty($openid) || empty($sessionKey) || empty($encryptedData) || empty($iv)) {
+        if ($openid === '' || $phoneCode === '') {
             return $this->error('参数不完整');
         }
 
         /** @var WechatService $wechatService */
         $wechatService = app(WechatService::class);
-        $phoneNumber = $wechatService->decryptPhoneNumber($sessionKey, $encryptedData, $iv);
+        $result = $wechatService->miniappBindMobileByPhoneCode($openid, $phoneCode);
+        return $this->success($result, '绑定成功');
+    }
 
-        return $this->success(['phoneNumber' => $phoneNumber], '解密成功');
+    /**
+     * 微信公众号 OAuth 登录
+     */
+    public function wechatOfficialLogin()
+    {
+        $code = (string) $this->request->param('code', '');
+        if ($code === '') {
+            return $this->error('code 不能为空');
+        }
+
+        /** @var WechatService $wechatService */
+        $wechatService = app(WechatService::class);
+        $result = $wechatService->officialLogin($code);
+        return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 微信公众号 OAuth 后绑定手机号(走短信验证码)
+     */
+    public function wechatOfficialBindMobile()
+    {
+        $openid  = (string) $this->request->param('openid', '');
+        $mobile  = (string) $this->request->param('mobile', '');
+        $smsCode = (string) $this->request->param('code', '');
+
+        if ($openid === '' || $mobile === '' || $smsCode === '') {
+            return $this->error('参数不完整');
+        }
+        if (!preg_match('/^1[3-9]\d{9}$/', $mobile)) {
+            return $this->error('手机号格式不正确');
+        }
+
+        /** @var WechatService $wechatService */
+        $wechatService = app(WechatService::class);
+        $result = $wechatService->officialBindMobile($openid, $mobile, $smsCode);
+        return $this->success($result, '绑定成功');
     }
 }
