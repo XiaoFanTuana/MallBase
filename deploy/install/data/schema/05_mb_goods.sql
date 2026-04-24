@@ -121,7 +121,7 @@ DROP TABLE IF EXISTS `mb_goods_spec_template`;
 CREATE TABLE `mb_goods_spec_template` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '模板ID',
   `name` varchar(100) NOT NULL COMMENT '模板名称',
-  `detail` json NOT NULL COMMENT '规格详情 JSON: [{spec_name, values:[...]}]',
+  `detail` json NOT NULL COMMENT '规格详情 JSON: [{name, add_pic, values:[{value, pic}]}]',
   `sort` int(11) DEFAULT 0 COMMENT '排序（数字越小越靠前）',
   `status` tinyint(1) DEFAULT 1 COMMENT '状态（0禁用，1启用）',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

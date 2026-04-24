@@ -48,3 +48,150 @@ CREATE TABLE `mb_setting` (
   UNIQUE KEY `uk_group_code` (`group_id`, `code`),
   KEY `idx_group_id` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设置项表';
+
+-- ============================================
+-- 系统设置 - 默认分组与设置项 seed
+-- permission_id 全部为 0，安装末尾由 SettingService::rebuildAllPermissions() 统一同步
+-- 所有 name/remark/placeholder 均中文；code 保持英文作为内部 URL 与键
+-- ID 从 100 段起，避免与未来新增分组冲突
+-- ============================================
+
+-- 一级分组：系统设置（目录）
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(100, 0, 0, '系统设置', 'SystemSetting', 'lucide:settings-2', '站点基础信息、上传、支付、微信与客户端等全局配置', 10, 'category', 1);
+
+-- 二级分组：系统配置（选项卡）及其子页面
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(101, 100, 0, '系统配置', 'SystemConfig', 'lucide:sliders', '站点名称、域名、后台品牌与版权等系统级配置', 10, 'tab', 1),
+(1011, 101, 0, '基础', 'SystemBasic', NULL, '站点名称、域名、Logo、登录页品牌等基础信息', 10, 'page', 1),
+(1012, 101, 0, '系统版权', 'SystemCopyright', NULL, '后台与客户端页脚展示的版权与备案信息', 20, 'page', 1);
+
+-- 二级分组：上传配置（选项卡）及其子页面
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(102, 100, 0, '上传配置', 'UploadConfig', 'lucide:upload-cloud', '上传驱动、MIME 白名单与各云存储参数', 20, 'tab', 1),
+(1021, 102, 0, '基础', 'UploadBasic', NULL, '默认上传驱动与允许的文件 MIME 类型', 10, 'page', 1),
+(1022, 102, 0, '本地存储', 'UploadLocal', NULL, '本地存储目录、URL 前缀与访问域名', 20, 'page', 1),
+(1023, 102, 0, '阿里云OSS', 'UploadOss', NULL, '阿里云 OSS Bucket、Endpoint 与访问凭证', 30, 'page', 1),
+(1024, 102, 0, '腾讯云COS', 'UploadCos', NULL, '腾讯云 COS Bucket、Region 与访问凭证', 40, 'page', 1);
+
+-- 二级分组：微信配置（选项卡）及其子页面
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(103, 100, 0, '微信配置', 'WechatConfig', 'lucide:message-circle', '微信小程序与公众号接入参数', 30, 'tab', 1),
+(1031, 103, 0, '微信小程序', 'WechatMiniProgram', NULL, '小程序 AppID、AppSecret 与授权品牌资源', 10, 'page', 1),
+(1032, 103, 0, '微信公众号', 'WechatOffiAccount', NULL, '公众号 AppID、AppSecret 与消息加解密参数', 20, 'page', 1);
+
+-- 二级分组：支付配置（选项卡）及其子页面
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(104, 100, 0, '支付配置', 'PaymentConfig', 'lucide:credit-card', '微信支付与支付宝等支付渠道参数', 40, 'tab', 1),
+(1041, 104, 0, '基础', 'PaymentBasic', NULL, '各支付渠道的启用状态总开关', 10, 'page', 1),
+(1042, 104, 0, '微信支付V3', 'PaymentWechat', NULL, '微信支付 V3 商户号、APIv3 密钥与证书参数', 20, 'page', 1),
+(1043, 104, 0, '支付宝', 'PaymentAlipay', NULL, '支付宝 RSA2 证书模式接入参数', 30, 'page', 1);
+
+-- 二级分组：客户端配置（单页面）
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(105, 100, 0, '客户端配置', 'ClientConfig', 'lucide:smartphone', 'App/H5 客户端品牌、启动屏、分享与协议等配置', 50, 'page', 1);
+
+-- 设置项：1011 SystemBasic 基础
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1011, '站点名称', 'site_name', 'Mall Base', 'input', NULL, '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
+(1011, '站点口号', 'site_slogan', '让每个商家都有独立店铺', 'input', NULL, NULL, NULL, NULL, 20),
+(1011, '站点域名', 'site_url', '', 'input', NULL, '[{"type":"required","message":"不能为空"}]', NULL, '安装时由系统自动写入', 30),
+(1011, '默认头像', 'default_avatar', '/static/admin/avatar-default.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 256×256 PNG 透明，<50KB', 40),
+(1011, '后台 Logo', 'admin_logo', '/static/admin/logo.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 200×200 PNG 透明背景，<100KB。后台侧边栏顶部和登录页顶部显示', 50),
+(1011, '浏览器图标', 'admin_favicon', '/static/admin/favicon.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 64×64 ICO/PNG，<32KB', 60),
+(1011, '登录页装饰图', 'admin_slogan_image', '/static/admin/slogan.png', 'image', NULL, NULL, NULL, '登录页左侧展示区装饰图，推荐 1:1 或 5:4，建议 400×400 PNG 透明，<200KB。留空则使用默认 SVG', 70),
+(1011, '登录页主标题', 'admin_login_title', '开箱即用的开源商城中后台', 'input', NULL, NULL, NULL, '登录页左侧展示区的主标题', 80),
+(1011, '登录页副标题', 'admin_login_subtitle', '三层架构 · Swoole 高性能 · 工程化前端模板', 'input', NULL, NULL, NULL, '登录页左侧展示区的描述文字', 90),
+(1011, '登录框欢迎语', 'admin_login_welcome', '欢迎回来 👋🏻', 'input', NULL, NULL, NULL, '登录表单顶部欢迎语', 100),
+(1011, '登录框副标题', 'admin_login_welcome_desc', '请输入您的账户信息以开始管理您的项目', 'input', NULL, NULL, NULL, '登录表单欢迎语下方的副标题', 110);
+
+-- 设置项：1012 SystemCopyright 系统版权（后台与 Client 共用）
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1012, '启用版权', 'copyright_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后后台/Client 页脚不显示版权信息', 10),
+(1012, '公司名称', 'copyright_company', 'Mall Base Team', 'input', NULL, NULL, NULL, NULL, 20),
+(1012, '公司主页', 'copyright_company_url', '', 'input', NULL, NULL, NULL, NULL, 30),
+(1012, '版权年份', 'copyright_date', '© {year}', 'input', NULL, NULL, NULL, '支持 {year} 占位符自动替换为当前年', 40),
+(1012, 'ICP 备案号', 'copyright_icp', '', 'input', NULL, NULL, '例：京ICP备12345678号', '大陆站点页脚必须显示', 50),
+(1012, 'ICP 备案链接', 'copyright_icp_url', 'https://beian.miit.gov.cn', 'input', NULL, NULL, NULL, NULL, 60),
+(1012, '公安备案号', 'copyright_psb', '', 'input', NULL, NULL, '例：京公网安备11010802012345号', NULL, 70),
+(1012, '公安备案链接', 'copyright_psb_url', '', 'input', NULL, NULL, NULL, NULL, 80);
+
+-- 设置项：1021 UploadBasic 上传基础
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1021, '默认上传驱动', 'upload_driver', 'local', 'select', '[{"label":"本地存储","value":"local"},{"label":"阿里云 OSS","value":"oss"},{"label":"腾讯云 COS","value":"cos"}]', '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
+(1021, '图片 MIME 白名单', 'mime_image', 'image/jpeg,image/png,image/gif,image/webp', 'textarea', NULL, NULL, NULL, '以英文逗号分隔', 20),
+(1021, '文档压缩 MIME 白名单', 'mime_document', 'application/pdf,application/zip,application/x-rar-compressed,application/msword,application/vnd.ms-excel', 'textarea', NULL, NULL, NULL, NULL, 30),
+(1021, '视频 MIME 白名单', 'mime_video', 'video/mp4,video/webm,video/quicktime', 'textarea', NULL, NULL, NULL, NULL, 40);
+
+-- 设置项：1022 UploadLocal 本地存储
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1022, 'URL 前缀', 'local_url_prefix', '/uploads', 'input', NULL, NULL, NULL, '以 / 开头，对应 public 目录下子路径', 10),
+(1022, '存储根路径', 'local_root_path', 'uploads', 'input', NULL, NULL, NULL, '相对 public 目录的物理路径', 20),
+(1022, '访问域名', 'local_base_url', '', 'input', NULL, NULL, '留空则自动使用 site_url', '访问图片时拼接的完整域名，留空读 site_url', 30);
+
+-- 设置项：1023 UploadOss 阿里云OSS（启用该驱动必须填写）
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1023, 'AccessKeyId', 'oss_access_key_id', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 10),
+(1023, 'AccessKeySecret', 'oss_access_key_secret', '', 'password', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 20),
+(1023, 'Bucket', 'oss_bucket', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 30),
+(1023, 'Endpoint', 'oss_endpoint', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'oss-cn-hangzhou.aliyuncs.com', NULL, 40),
+(1023, '访问域名', 'oss_url_prefix', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'https://xxx.oss-cn-hangzhou.aliyuncs.com', NULL, 50);
+
+-- 设置项：1024 UploadCos 腾讯云COS（启用该驱动必须填写）
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1024, 'SecretId', 'cos_secret_id', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 10),
+(1024, 'SecretKey', 'cos_secret_key', '', 'password', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 20),
+(1024, 'Bucket', 'cos_bucket', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'appid-bucketname', NULL, 30),
+(1024, 'Region', 'cos_region', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', 'ap-shanghai', NULL, 40),
+(1024, '访问域名', 'cos_url_prefix', '', 'input', NULL, '[{"type":"required","message":"启用该驱动必须填写"}]', NULL, NULL, 50);
+
+-- 设置项：1031 WechatMiniProgram 微信小程序
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1031, '小程序 AppID', 'wechat_mini_appid', '', 'input', NULL, NULL, NULL, NULL, 10),
+(1031, '小程序 AppSecret', 'wechat_mini_secret', '', 'password', NULL, NULL, NULL, NULL, 20),
+(1031, '小程序名称', 'wechat_mini_name', '', 'input', NULL, NULL, NULL, '显示在授权登录弹窗、分享场景', 30),
+(1031, '小程序授权页 Logo', 'wechat_mini_auth_logo', '', 'image', NULL, NULL, NULL, '授权登录弹窗展示的品牌 logo，推荐 1:1，建议 144×144 PNG，<50KB', 40),
+(1031, '发货管理', 'wechat_mini_shipping_enabled', '0', 'switch', NULL, NULL, NULL, '部分类目需要，开启后对接发货接口', 50);
+
+-- 设置项：1032 WechatOffiAccount 微信公众号
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1032, '公众号 AppID', 'wechat_offi_appid', '', 'input', NULL, NULL, NULL, NULL, 10),
+(1032, '公众号 AppSecret', 'wechat_offi_secret', '', 'password', NULL, NULL, NULL, NULL, 20),
+(1032, 'Token', 'wechat_offi_token', '', 'input', NULL, NULL, NULL, '接入微信服务器验证用', 30),
+(1032, 'EncodingAESKey', 'wechat_offi_aes_key', '', 'password', NULL, NULL, NULL, NULL, 40);
+
+-- 设置项：1041 PaymentBasic 支付基础（总开关）
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1041, '微信支付状态', 'payment_wechat_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 10),
+(1041, '支付宝状态', 'payment_alipay_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 20);
+
+-- 设置项：1042 PaymentWechat 微信支付V3
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1042, '商户号 MCHID', 'pay_wechat_mchid', '', 'input', NULL, NULL, NULL, NULL, 10),
+(1042, 'APIv3 密钥', 'pay_wechat_api_v3_key', '', 'password', NULL, NULL, NULL, '32 位，商户平台-账户中心-API 安全处设置', 20),
+(1042, '商户证书序列号', 'pay_wechat_cert_serial_no', '', 'input', NULL, NULL, NULL, NULL, 30),
+(1042, '商户 API 私钥', 'pay_wechat_private_key', '', 'textarea', NULL, NULL, NULL, '粘贴 apiclient_key.pem 完整内容', 40),
+(1042, 'V3 平台公钥', 'pay_wechat_platform_public_key', '', 'textarea', NULL, NULL, NULL, '对应微信新版公钥管理', 50),
+(1042, '平台公钥 ID', 'pay_wechat_platform_public_key_id', '', 'input', NULL, NULL, NULL, NULL, 60);
+
+-- 设置项：1043 PaymentAlipay 支付宝（RSA2 证书模式）
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1043, '应用 AppID', 'pay_alipay_app_id', '', 'input', NULL, NULL, NULL, NULL, 10),
+(1043, '签名算法', 'pay_alipay_sign_type', 'RSA2', 'select', '[{"label":"RSA2","value":"RSA2"}]', NULL, NULL, NULL, 20),
+(1043, '应用私钥', 'pay_alipay_app_private_key', '', 'textarea', NULL, NULL, NULL, 'PEM 格式', 30),
+(1043, '应用公钥证书', 'pay_alipay_app_cert_public_key', '', 'file', NULL, NULL, NULL, '上传 appCertPublicKey_xxx.crt', 40),
+(1043, '支付宝公钥证书', 'pay_alipay_alipay_cert_public_key', '', 'file', NULL, NULL, NULL, '上传 alipayCertPublicKey_RSA2.crt', 50),
+(1043, '支付宝根证书', 'pay_alipay_alipay_root_cert', '', 'file', NULL, NULL, NULL, '上传 alipayRootCert.crt', 60),
+(1043, '网关地址', 'pay_alipay_gateway', 'https://openapi.alipay.com/gateway.do', 'input', NULL, NULL, NULL, NULL, 70);
+
+-- 设置项：105 ClientConfig 客户端配置
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(105, '客户端站点名称', 'client_site_name', 'Mall Base', 'input', NULL, NULL, NULL, NULL, 10),
+(105, '客户端图标', 'client_logo', '/static/client/logo.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 512×512 PNG 透明，<200KB', 20),
+(105, '启动屏图', 'client_launch_image', '/static/client/launch.png', 'image', NULL, NULL, NULL, 'App 启动全屏图，推荐 9:16，建议 1080×2340 JPG，<500KB', 30),
+(105, '首页轮播图', 'client_home_banners', '', 'images', NULL, NULL, NULL, '推荐 16:9 或 2:1，建议 750×360 JPG/PNG，单张<300KB', 40),
+(105, '分享默认标题', 'client_share_title', '', 'input', NULL, NULL, NULL, NULL, 50),
+(105, '分享默认简介', 'client_share_desc', '', 'input', NULL, NULL, NULL, NULL, 60),
+(105, '分享默认封面', 'client_share_cover', '/static/client/share-cover.png', 'image', NULL, NULL, NULL, '推荐 5:4，建议 500×400 PNG/JPG，<200KB', 70),
+(105, '用户协议', 'client_agreement', '', 'editor', NULL, NULL, NULL, NULL, 80),
+(105, '隐私政策', 'client_privacy', '', 'editor', NULL, NULL, NULL, NULL, 90);
