@@ -58,15 +58,10 @@ return [
             'path' => 'admin',
             'alias' => '后台管理',
         ],
-        'index' => [
+        'client' => [
             'is_folder' => true,
-            'path' => 'index',
-            'alias' => '前台',
-        ],
-        'app' => [
-            'is_folder' => false,
-            'path' => 'app',
-            'alias' => '测试',
+            'path' => 'client',
+            'alias' => '客户端',
         ],
     ],
 

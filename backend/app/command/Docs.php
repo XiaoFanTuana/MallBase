@@ -192,17 +192,12 @@ class Docs extends Command
 //                continue;
 //            }
 
-            $option = $route['option'];
-
-//            // 跳过没有 _alias 或 _desc 的路由
-            if (!isset($option['_alias'])) {
-                continue;
-            }
+            $option = $route['option'] ?? [];
 
             // 解析控制器和方法
             $controllerClass = '';
             $routeValue = $route['route'];
-            $prefix = $route['option']['prefix'] ?? '';
+            $prefix = $option['prefix'] ?? '';
             $appAlias = $appAlias ?: $appName;
 
             // 方法名
@@ -218,11 +213,19 @@ class Docs extends Command
                 $controllerClass = 'app\\controller\\' . str_replace(['.', '/'], '\\', $prefix);
             }
 
+            // 解析路由规则中的 :paramName / <paramName> 占位符，作为 path 参数白名单
+            // 透传到反射阶段，命中即强制 source=path，修正 GET 接口默认归到 query 的问题
+            $pathParamNames = $this->extractPathParamsFromRule((string) $route['rule']);
+
             // 获取参数
             $params = [];
             if ($this->enableReflection && !empty($controllerClass) && !empty($action)) {
-                $params = $this->getMethodParams($controllerClass, $action, $route['method']);
+                $params = $this->getMethodParams($controllerClass, $action, $route['method'], $pathParamNames);
             }
+
+            // 兜底：路由占位符命中但反射没识别出来时（比如控制器方法体没用 $request->route()），
+            // 也把这些参数作为 path 参数补进来，保证 OpenAPI 路径完整
+            $params = $this->backfillPathParams($params, $pathParamNames);
 
             // 从 option 中获取参数（优先级更高）
             if (isset($option['_params']) && is_array($option['_params'])) {
@@ -237,6 +240,11 @@ class Docs extends Command
             if (!str_starts_with($rule, $appName . '/')) {
                 $rule = $appName . '/' . $rule;
             }
+
+            // 别名兜底：未配置 _alias 时使用 action 名（如 wechatLogin），
+            // 保证未做精细化标注的路由（如 client 模块）也能进入文档；
+            // 后续可通过补 _alias 美化中文名
+            $alias = $option['_alias'] ?? ($action !== '' ? $action : $rule);
 
             // 分组名：从控制器类名中提取模块名
             if (isset($option['_group_name'])) {
@@ -276,7 +284,7 @@ class Docs extends Command
             $docs['apps'][$appName]['groups'][$groupName]['routes'][] = [
                 'method' => strtoupper($route['method']),
                 'path' => $path,
-                'alias' => $option['_alias'] ?? $rule,
+                'alias' => $alias,
                 'description' => $option['_desc'] ?? '',
                 'controller' => $controllerClass,
                 'action' => $action,
@@ -289,8 +297,10 @@ class Docs extends Command
 
     /**
      * 通过反射获取控制器方法的参数信息
+     *
+     * @param array<int, string> $pathParamNames 路由规则中的 path 占位符名（用于强制 source=path）
      */
-    protected function getMethodParams(string $controllerClass, string $action, string $httpMethod): array
+    protected function getMethodParams(string $controllerClass, string $action, string $httpMethod, array $pathParamNames = []): array
     {
         $params = [];
 
@@ -311,7 +321,7 @@ class Docs extends Command
             $docComment = $method->getDocComment();
 
             if ($docComment) {
-                $parsedParams = $this->parseDocParams($docComment, $httpMethod);
+                $parsedParams = $this->parseDocParams($docComment, $httpMethod, $pathParamNames);
                 if (!empty($parsedParams)) {
                     $params = $parsedParams;
                 }
@@ -319,7 +329,7 @@ class Docs extends Command
 
             // 如果 PHPDoc 没有参数，分析方法体中的 getParam/getPost/getGet 调用
             if (empty($params)) {
-                $bodyParams = $this->extractParamsFromMethodBody($method, $httpMethod);
+                $bodyParams = $this->extractParamsFromMethodBody($method, $httpMethod, $pathParamNames);
                 if (!empty($bodyParams)) {
                     $params = $bodyParams;
                 }
@@ -333,9 +343,82 @@ class Docs extends Command
     }
 
     /**
-     * 从方法体中提取参数
+     * 从路由规则中提取 path 占位符名
+     *
+     * 支持 ThinkPHP 路由的两种占位语法：
+     *  - 冒号式：`info/:id`、`update/:id`
+     *  - 尖括号式：`info/<id>`（部分项目风格）
+     *
+     * @return array<int, string>
      */
-    protected function extractParamsFromMethodBody(\ReflectionMethod $method, string $httpMethod): array
+    protected function extractPathParamsFromRule(string $rule): array
+    {
+        $names = [];
+        if (preg_match_all('/:([A-Za-z_][A-Za-z0-9_]*)/', $rule, $m1)) {
+            $names = array_merge($names, $m1[1]);
+        }
+        if (preg_match_all('/<([A-Za-z_][A-Za-z0-9_]*)>/', $rule, $m2)) {
+            $names = array_merge($names, $m2[1]);
+        }
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * 兜底补齐 path 参数：路由占位符里有，但反射阶段没识别出来的，
+     * 直接以 int 类型补进 params['path']，保证 OpenAPI 路径参数完整
+     *
+     * @param array $params
+     * @param array<int, string> $pathParamNames
+     */
+    protected function backfillPathParams(array $params, array $pathParamNames): array
+    {
+        if ($pathParamNames === []) {
+            return $params;
+        }
+
+        $existing = $params['path'] ?? [];
+
+        // 同时把误归到 query / body 的 path 占位符迁移过来
+        foreach (['query', 'body'] as $wrongSource) {
+            if (!isset($params[$wrongSource]) || !is_array($params[$wrongSource])) {
+                continue;
+            }
+            foreach ($params[$wrongSource] as $name => $meta) {
+                if (in_array($name, $pathParamNames, true)) {
+                    $existing[$name] = ['type' => 'int', 'required' => true, 'default' => null, 'desc' => ''] + (array) $meta;
+                    $existing[$name]['required'] = true;
+                    unset($params[$wrongSource][$name]);
+                }
+            }
+            if ($params[$wrongSource] === []) {
+                unset($params[$wrongSource]);
+            }
+        }
+
+        // 占位符还没出现的，按 int+required 兜底
+        foreach ($pathParamNames as $name) {
+            if (!isset($existing[$name])) {
+                $existing[$name] = [
+                    'type' => 'int',
+                    'required' => true,
+                    'default' => null,
+                    'desc' => '',
+                ];
+            }
+        }
+
+        if ($existing !== []) {
+            $params['path'] = $existing;
+        }
+        return $params;
+    }
+
+    /**
+     * 从方法体中提取参数
+     *
+     * @param array<int, string> $pathParamNames 路由规则中的 path 占位符名（命中即强制 source=path）
+     */
+    protected function extractParamsFromMethodBody(\ReflectionMethod $method, string $httpMethod, array $pathParamNames = []): array
     {
         $params = [];
 
@@ -382,6 +465,11 @@ class Docs extends Command
 
             [$name, $type] = $this->parseField($raw, $typeMap);
             $source = $sourceMap[$methodName];
+
+            // 路由占位符命中：强制走 path
+            if (in_array($name, $pathParamNames, true)) {
+                $source = 'path';
+            }
 
             $required = $default === null;
             if ($source === 'path') $required = true;
@@ -441,6 +529,10 @@ class Docs extends Command
                 [$name, $type] = $this->parseField($raw, $typeMap);
 
                 $source = $sourceMap[$methodName];
+                // 路由占位符命中：强制走 path
+                if (in_array($name, $pathParamNames, true)) {
+                    $source = 'path';
+                }
                 $required = $default === null;
 
                 if ($source === 'path') {
@@ -463,8 +555,10 @@ class Docs extends Command
 
     /**
      * 解析 PHPDoc 注释中的 @param 标签
+     *
+     * @param array<int, string> $pathParamNames 路由规则中的 path 占位符名（命中即强制 source=path）
      */
-    protected function parseDocParams(string $docComment, string $httpMethod): array
+    protected function parseDocParams(string $docComment, string $httpMethod, array $pathParamNames = []): array
     {
         $params = [];
 
@@ -508,6 +602,11 @@ class Docs extends Command
             } else {
                 // fallback：按 HTTP Method 推断
                 $source = in_array($httpMethod, ['get', 'delete']) ? 'query' : 'body';
+            }
+
+            // 路由占位符命中：强制走 path（优先级最高，覆盖 source=xxx 显式声明）
+            if (in_array($name, $pathParamNames, true)) {
+                $source = 'path';
             }
             // 描述（把规则全部剥掉，剩下就是描述）
             $description = trim(
@@ -593,23 +692,24 @@ class Docs extends Command
      */
     protected function buildPathWithParams(string $path, array $params): string
     {
+        // 先将 ThinkPHP 风格的占位符（:id 与 <id>）统一规范化为 OpenAPI 风格 {id}
+        $path = $this->normalizePlaceholders('/' . ltrim($path, '/'));
+
         // 直接取 path 参数组
         $pathParams = $params['path'] ?? [];
 
-        // 没有 path 参数，直接返回原路径
+        // 没有 path 参数，直接返回规范化后的原路径
         if (!$pathParams) {
-            return '/' . ltrim($path, '/');
+            return $path;
         }
 
-        // 去掉已有的 {...}
-        $path = rtrim('/' . ltrim($path, '/'), '/');
+        $path = rtrim($path, '/');
 
         // 已存在的占位符，避免重复拼
         preg_match_all('/\{(\w+)\}/', $path, $exists);
         $exists = $exists[1] ?? [];
 
         foreach ($pathParams as $name => $meta) {
-
             // OpenAPI 规定：path 参数必须 required
             if (in_array($name, $exists, true)) {
                 continue;
@@ -618,6 +718,17 @@ class Docs extends Command
             $path .= '/{' . $name . '}';
         }
 
+        return $path;
+    }
+
+    /**
+     * 把路由规则中的 `:name` / `<name>` 占位符统一规范化为 OpenAPI 风格的 `{name}`
+     */
+    protected function normalizePlaceholders(string $path): string
+    {
+        // ThinkPHP getRuleList 已把 :name 转成 <name>，但 include 直接读到的也可能是 :name
+        $path = preg_replace('/:([A-Za-z_][A-Za-z0-9_]*)/', '{$1}', $path) ?? $path;
+        $path = preg_replace('/<([A-Za-z_][A-Za-z0-9_]*)>/', '{$1}', $path) ?? $path;
         return $path;
     }
 
