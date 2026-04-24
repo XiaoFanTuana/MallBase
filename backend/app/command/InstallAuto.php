@@ -10,23 +10,23 @@ use think\console\Input;
 use think\console\Output;
 
 /**
- * Docker 全套零向导自动安装命令
+ * 可选 CLI 安装入口命令
  *
  * 使用场景：
- * - 方式三 Docker 开发（全套）/ 方式四 Docker 生产（全套）
- * - 由 compose init 容器 install-auto 调用
+ * - 无人值守安装或本地手动执行
+ * - 复用统一 InstallService 主流程，不单独维护第二套安装逻辑
  *
  * 幂等保证：
  * - install.lock 存在则直接退出 0，不重复执行安装
  *
  * 参数来源：
  * - 全部从进程 env 读取，不接受命令行参数
- * - 所需变量由 ensure-env 脚本写入 backend/.env 后，通过 env_file 注入容器
+ * - 所需变量通常由 ensure-env 脚本写入 backend/.env，再由 ThinkPHP 运行时读取
  *
  * 使用示例：
  * ```bash
- * # 在 install-auto 容器内由 compose 自动执行
- * php think install:auto
+ * # 已启动 backend 容器后手动执行
+ * docker exec mallbase-dev php think install:auto
  * ```
  */
 class InstallAuto extends Command
@@ -34,7 +34,7 @@ class InstallAuto extends Command
     protected function configure(): void
     {
         $this->setName('install:auto')
-            ->setDescription('使用 env 中的连接信息自动执行安装（方式三/四 Docker 全套零向导）');
+            ->setDescription('使用 env 中的连接信息调用统一安装主流程（可选 CLI 安装入口）');
     }
 
     protected function execute(Input $input, Output $output): int

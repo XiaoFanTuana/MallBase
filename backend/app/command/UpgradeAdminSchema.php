@@ -10,7 +10,7 @@ use think\console\Output;
 use think\facade\Db;
 
 /**
- * 为已装环境补齐 mb_admin.password_changed_at 列
+ * 历史兼容修复：为已装环境补齐 mb_admin.password_changed_at 列
  *
  * 使用场景：
  * - 在 password_changed_at 列引入前已完成 install 的环境
@@ -61,7 +61,7 @@ class UpgradeAdminSchema extends Command
     protected function configure(): void
     {
         $this->setName('upgrade:admin-schema')
-            ->setDescription('为已装环境补齐 mb_admin.password_changed_at 列（幂等 + 重试安全 + 基于哈希判定）');
+            ->setDescription('历史兼容修复：补齐 mb_admin.password_changed_at 列（幂等 + 重试安全 + 基于哈希判定）');
     }
 
     protected function execute(Input $input, Output $output): int
