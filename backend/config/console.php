@@ -9,6 +9,7 @@ use app\command\OrderExpireCommand;
 use app\command\SyncPermissions;
 use app\command\SyncSettingPermissions;
 use app\command\UpgradeAdminSchema;
+use app\command\UpgradeUserRegisterType;
 
 return [
     // 指令定义
@@ -20,5 +21,6 @@ return [
         'order:expire' => OrderExpireCommand::class,
         'install:auto' => InstallAuto::class,
         'upgrade:admin-schema' => UpgradeAdminSchema::class,
+        'upgrade:user-register-type' => UpgradeUserRegisterType::class,
     ],
 ];

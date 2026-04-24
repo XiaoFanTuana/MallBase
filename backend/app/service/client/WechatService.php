@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\service\client;
 
+use app\common\enum\RegisterType;
 use app\model\user\User;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -67,7 +68,7 @@ class WechatService extends BaseService
         $token = $jwtService->encode([
             'user_id' => $user->id,
             'account' => $user->wx_openid,
-            'register_type' => 'wechat',
+            'register_type' => RegisterType::WECHAT_MINIAPP,
         ]);
 
         // 5. 存储 refresh_token 到 Redis
@@ -124,7 +125,7 @@ class WechatService extends BaseService
         $updateData = [
             'mobile' => $mobile,
             'nickname' => $nickname ?: $this->generateNickname('mobile', $mobile),
-            'register_type' => 'wechat',
+            'register_type' => RegisterType::WECHAT_MINIAPP,
         ];
 
         if ($avatar) {
@@ -138,7 +139,7 @@ class WechatService extends BaseService
         $token = $jwtService->encode([
             'user_id' => $user->id,
             'account' => $mobile,
-            'register_type' => 'wechat',
+            'register_type' => RegisterType::WECHAT_MINIAPP,
         ]);
 
         // 5. 存储 refresh_token 到 Redis

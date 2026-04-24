@@ -38,7 +38,7 @@ CREATE TABLE `mb_user` (
 
   -- 状态管理
   `status` tinyint(1) DEFAULT 1 COMMENT '状态（0禁用，1启用）',
-  `register_type` varchar(20) DEFAULT 'mobile' COMMENT '注册类型（mobile手机/wechat微信）',
+  `register_type` varchar(20) DEFAULT 'mobile' COMMENT '注册来源（mobile手机/email邮箱/wechat_miniapp微信小程序/wechat_official微信公众号/h5网页）',
   `register_ip` varchar(45) DEFAULT NULL COMMENT '注册IP',
 
   -- 通用字段
