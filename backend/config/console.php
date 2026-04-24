@@ -10,6 +10,7 @@ use app\command\SyncPermissions;
 use app\command\SyncSettingPermissions;
 use app\command\UpgradeAdminSchema;
 use app\command\UpgradeUserRegisterType;
+use app\command\UpgradeUserWechatSchema;
 
 return [
     // 指令定义
@@ -22,5 +23,6 @@ return [
         'install:auto' => InstallAuto::class,
         'upgrade:admin-schema' => UpgradeAdminSchema::class,
         'upgrade:user-register-type' => UpgradeUserRegisterType::class,
+        'upgrade:user-wechat-schema' => UpgradeUserWechatSchema::class,
     ],
 ];

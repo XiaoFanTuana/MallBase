@@ -36,7 +36,7 @@ class WechatService extends BaseService
 
         // 2. 查找用户
         $user = $this->model()
-            ->where('wx_openid', $wxData['openid'])
+            ->where('wx_miniapp_openid', $wxData['openid'])
             ->where('status', 1)
             ->find();
 
@@ -67,7 +67,7 @@ class WechatService extends BaseService
         $jwtService = app()->make(JwtService::class);
         $token = $jwtService->encode([
             'user_id' => $user->id,
-            'account' => $user->wx_openid,
+            'account' => $user->wx_miniapp_openid,
             'register_type' => RegisterType::WECHAT_MINIAPP,
         ]);
 

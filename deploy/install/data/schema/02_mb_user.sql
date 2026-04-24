@@ -11,16 +11,18 @@ DROP TABLE IF EXISTS `mb_user`;
 CREATE TABLE `mb_user` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '用户ID',
   -- 核心账号信息
+  `username` varchar(60) DEFAULT NULL COMMENT '用户名（账号密码登录使用，可选）',
   `mobile` varchar(20) DEFAULT NULL COMMENT '手机号',
-  `email` varchar(100) DEFAULT NULL COMMENT '邮箱',
+  `email` varchar(100) DEFAULT NULL COMMENT '邮箱（仅后台 admin 可填，C 端注册不再写入）',
   `password` varchar(255) DEFAULT NULL COMMENT '密码（加密）',
   `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
   `avatar` varchar(255) DEFAULT NULL COMMENT '头像URL',
 
-  -- 微信小程序相关字段
-  `wx_openid` varchar(100) DEFAULT NULL COMMENT '微信小程序 openid',
-  `wx_unionid` varchar(100) DEFAULT NULL COMMENT '微信 unionid（跨平台）',
-  `session_key` varchar(100) DEFAULT NULL COMMENT '微信会话密钥',
+  -- 微信相关字段（多端独立 openid，unionid 跨主体共享）
+  `wx_miniapp_openid` varchar(100) DEFAULT NULL COMMENT '微信小程序 openid',
+  `wx_official_openid` varchar(100) DEFAULT NULL COMMENT '微信公众号 openid',
+  `wx_unionid` varchar(100) DEFAULT NULL COMMENT '微信 unionid（开放平台主体下跨 AppID 共享）',
+  `session_key` varchar(100) DEFAULT NULL COMMENT '微信小程序会话密钥',
 
   -- 个人资料
   `real_name` varchar(50) DEFAULT NULL COMMENT '真实姓名',
@@ -38,7 +40,7 @@ CREATE TABLE `mb_user` (
 
   -- 状态管理
   `status` tinyint(1) DEFAULT 1 COMMENT '状态（0禁用，1启用）',
-  `register_type` varchar(20) DEFAULT 'mobile' COMMENT '注册来源（mobile手机/email邮箱/wechat_miniapp微信小程序/wechat_official微信公众号/h5网页）',
+  `register_type` varchar(20) DEFAULT 'mobile' COMMENT '注册来源（mobile手机/wechat_miniapp微信小程序/wechat_official微信公众号/h5网页）',
   `register_ip` varchar(45) DEFAULT NULL COMMENT '注册IP',
 
   -- 通用字段
@@ -47,12 +49,14 @@ CREATE TABLE `mb_user` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `delete_time` int(11) unsigned DEFAULT NULL COMMENT '删除时间（软删除）',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`),
   UNIQUE KEY `uk_mobile` (`mobile`),
+  UNIQUE KEY `uk_wx_miniapp_openid` (`wx_miniapp_openid`),
+  UNIQUE KEY `uk_wx_official_openid` (`wx_official_openid`),
   KEY `idx_email` (`email`),
+  KEY `idx_wx_unionid` (`wx_unionid`),
   KEY `idx_status` (`status`),
-  KEY `idx_mobile` (`mobile`),
-  KEY `idx_delete_time` (`delete_time`),
-  UNIQUE KEY `uk_wx_openid` (`wx_openid`)
+  KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='前台用户表';
 
 -- -----------------------------

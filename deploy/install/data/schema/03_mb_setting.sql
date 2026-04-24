@@ -76,9 +76,10 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 
 -- 二级分组：微信配置（选项卡）及其子页面
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
-(103, 100, 0, '微信配置', 'WechatConfig', 'lucide:message-circle', '微信小程序与公众号接入参数', 30, 'tab', 1),
+(103, 100, 0, '微信配置', 'WechatConfig', 'lucide:message-circle', '微信小程序、公众号与开放平台接入参数', 30, 'tab', 1),
 (1031, 103, 0, '微信小程序', 'WechatMiniProgram', NULL, '小程序 AppID、AppSecret 与授权品牌资源', 10, 'page', 1),
-(1032, 103, 0, '微信公众号', 'WechatOffiAccount', NULL, '公众号 AppID、AppSecret 与消息加解密参数', 20, 'page', 1);
+(1032, 103, 0, '微信公众号', 'WechatOffiAccount', NULL, '公众号 AppID、AppSecret 与消息加解密参数', 20, 'page', 1),
+(1033, 103, 0, '微信开放平台', 'WechatOpenPlatform', NULL, '开放平台主体绑定标记，用于跨小程序/公众号 unionid 互通', 30, 'page', 1);
 
 -- 二级分组：支付配置（选项卡）及其子页面
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
@@ -151,14 +152,24 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1031, '小程序 AppSecret', 'wechat_mini_secret', '', 'password', NULL, NULL, NULL, NULL, 20),
 (1031, '小程序名称', 'wechat_mini_name', '', 'input', NULL, NULL, NULL, '显示在授权登录弹窗、分享场景', 30),
 (1031, '小程序授权页 Logo', 'wechat_mini_auth_logo', '', 'image', NULL, NULL, NULL, '授权登录弹窗展示的品牌 logo，推荐 1:1，建议 144×144 PNG，<50KB', 40),
-(1031, '发货管理', 'wechat_mini_shipping_enabled', '0', 'switch', NULL, NULL, NULL, '部分类目需要，开启后对接发货接口', 50);
+(1031, '发货管理', 'wechat_mini_shipping_enabled', '0', 'switch', NULL, NULL, NULL, '部分类目需要，开启后对接发货接口', 50),
+(1031, '强制获取手机号', 'wechat_mini_force_mobile', '0', 'switch', NULL, NULL, NULL, '开启后小程序首次登录必须授权手机号（getPhoneNumber），用于跨端账号合并；关闭后走"绑定手机号"中间步骤', 60),
+(1031, '强制获取头像昵称', 'wechat_mini_force_userinfo', '0', 'switch', NULL, NULL, NULL, '开启后必须用户主动选取头像与昵称（chooseAvatar + nickname 输入框）；关闭后允许默认昵称', 70);
 
 -- 设置项：1032 WechatOffiAccount 微信公众号
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1032, '公众号 AppID', 'wechat_offi_appid', '', 'input', NULL, NULL, NULL, NULL, 10),
 (1032, '公众号 AppSecret', 'wechat_offi_secret', '', 'password', NULL, NULL, NULL, NULL, 20),
 (1032, 'Token', 'wechat_offi_token', '', 'input', NULL, NULL, NULL, '接入微信服务器验证用', 30),
-(1032, 'EncodingAESKey', 'wechat_offi_aes_key', '', 'password', NULL, NULL, NULL, NULL, 40);
+(1032, 'EncodingAESKey', 'wechat_offi_aes_key', '', 'password', NULL, NULL, NULL, NULL, 40),
+(1032, '必须绑定手机号', 'wechat_offi_force_mobile_bind', '0', 'switch', NULL, NULL, NULL, '开启后公众号 OAuth 注册的用户必须走短信验证码绑定手机号（公众号 OAuth 本身无法直接获取手机号）', 50),
+(1032, '强制获取头像昵称', 'wechat_offi_force_userinfo', '0', 'switch', NULL, NULL, NULL, '开启后 OAuth scope 使用 snsapi_userinfo 强制获取头像/昵称；关闭后使用 snsapi_base 仅取 openid', 60);
+
+-- 设置项：1033 WechatOpenPlatform 微信开放平台
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1033, '开放平台 AppID', 'wechat_open_appid', '', 'input', NULL, NULL, NULL, '占位字段，本期不调用开放平台 API；接入 PC 扫码或移动 APP 时使用', 10),
+(1033, '开放平台 AppSecret', 'wechat_open_secret', '', 'password', NULL, NULL, NULL, '占位字段，配合 AppID 同时填写', 20),
+(1033, '已绑定开放平台主体', 'wechat_open_bound', '0', 'switch', NULL, NULL, NULL, '若小程序与公众号已绑定到同一开放平台主体，开启此项以信任 unionid 进行跨端账号合并；未绑定时关闭，避免 unionid 误用', 30);
 
 -- 设置项：1041 PaymentBasic 支付基础（总开关）
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
