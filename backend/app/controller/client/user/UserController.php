@@ -24,22 +24,15 @@ class UserController extends BaseController
      */
     public function register()
     {
-        $data = $this->request->param(['mobile', 'email', 'password', 'nickname']);
+        $data = $this->request->param(['mobile', 'password', 'nickname']);
 
-        // 验证参数
-        if (!empty($data['mobile'])) {
-            $this->validate($data, UserValidate::class . '.register');
-            $registerType = 'mobile';
-            $account = $data['mobile'];
-        } elseif (!empty($data['email'])) {
-            $this->validate($data, UserValidate::class . '.registerByEmail');
-            $registerType = 'email';
-            $account = $data['email'];
-        } else {
-            return $this->error('请输入手机号或邮箱');
+        if (empty($data['mobile'])) {
+            return $this->error('请输入手机号');
         }
 
-        $result = $this->service()->register($account, $data['password'], $registerType);
+        $this->validate($data, UserValidate::class . '.register');
+
+        $result = $this->service()->register($data['mobile'], $data['password'], 'mobile');
         return $this->success($result, '注册成功');
     }
 

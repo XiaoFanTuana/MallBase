@@ -12,7 +12,6 @@ namespace app\common\enum;
  *
  * 取值约定：
  *  - mobile           手机号注册（来自移动设备，非微信生态）
- *  - email            邮箱注册（兼容历史数据）
  *  - wechat_miniapp   微信小程序登录注册
  *  - wechat_official  微信公众号 OAuth 注册
  *  - h5              纯网页（非微信内嵌）注册
@@ -25,9 +24,6 @@ final class RegisterType
 {
     /** 手机号注册（移动设备） */
     public const MOBILE = 'mobile';
-
-    /** 邮箱注册 */
-    public const EMAIL = 'email';
 
     /** 微信小程序 */
     public const WECHAT_MINIAPP = 'wechat_miniapp';
@@ -47,7 +43,6 @@ final class RegisterType
 
     private const TEXTS = [
         self::MOBILE          => '手机号',
-        self::EMAIL           => '邮箱',
         self::WECHAT_MINIAPP  => '微信小程序',
         self::WECHAT_OFFICIAL => '微信公众号',
         self::H5              => '网页',

@@ -30,17 +30,16 @@ class UserService extends BaseService
      */
     public function register(string $account, string $password, string $registerType): array
     {
-        // 检查账号是否已存在
-        $field = $registerType === 'mobile' ? 'mobile' : 'email';
-        $exists = $this->model()->where($field, $account)->find();
+        // C 端注册仅开放手机号路径,邮箱仅保留给后台管理员创建用户
+        $exists = $this->model()->where('mobile', $account)->find();
         if ($exists) {
-            throw new BusinessException('该' . ($registerType === 'mobile' ? '手机号' : '邮箱') . '已被注册');
+            throw new BusinessException('该手机号已被注册');
         }
 
         // 创建用户
         $user = $this->model();
         $user->save([
-            $field => $account,
+            'mobile' => $account,
             'password' => $password,
             'register_type' => $registerType,
             'register_ip' => Request::ip(),
@@ -72,10 +71,9 @@ class UserService extends BaseService
      */
     public function login(string $account, string $password): array
     {
-        // 通过手机号或邮箱查找用户
+        // 仅支持手机号登录(邮箱仅保留给后台管理员创建用户档案)
         $user = $this->model()
             ->where('mobile', $account)
-            ->whereOr('email', $account)
             ->where('status', 1)
             ->find();
 

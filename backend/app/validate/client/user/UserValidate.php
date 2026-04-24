@@ -22,9 +22,8 @@ class UserValidate extends Validate
     ];
 
     protected $scene = [
-        'register' => ['mobile', 'password', 'nickname'], // 手机号注册
-        'registerByEmail' => ['email', 'password', 'nickname'], // 邮箱注册
-        'create' => ['mobile', 'email', 'password', 'nickname', 'status'],
+        'register' => ['mobile', 'password', 'nickname'], // C 端只开放手机号注册
+        'create' => ['mobile', 'email', 'password', 'nickname', 'status'], // 后台 admin 创建仍允许 email
         'update' => ['mobile', 'email', 'nickname', 'real_name', 'gender', 'birthday', 'status'],
     ];
 }
