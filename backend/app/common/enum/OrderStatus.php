@@ -11,7 +11,7 @@ namespace app\common\enum;
  *  - 数值以 10 为间隔，便于后续在中间插入新状态
  *  - 流转白名单 TRANSITIONS 声明合法路径，由 OrderStatusMachine 校验
  */
-final class OrderStatus
+class OrderStatus
 {
     /** 待支付 */
     public const PENDING_PAY = 0;

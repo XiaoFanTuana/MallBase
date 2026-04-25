@@ -20,7 +20,7 @@ namespace app\common\enum;
  *  - legacy 'wechat' 经 upgrade:user-register-type 迁移命令统一升级为 'wechat_miniapp'
  *    （历史阶段微信注册仅来自小程序，迁移语义安全）
  */
-final class RegisterType
+class RegisterType
 {
     /** 手机号注册（移动设备） */
     public const MOBILE = 'mobile';

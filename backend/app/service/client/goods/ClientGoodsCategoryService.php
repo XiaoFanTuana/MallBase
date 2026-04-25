@@ -14,7 +14,7 @@ use mall_base\base\BaseService;
  *
  * @extends BaseService<GoodsCategory>
  */
-final class ClientGoodsCategoryService extends BaseService
+class ClientGoodsCategoryService extends BaseService
 {
     protected string $modelClass = GoodsCategory::class;
 

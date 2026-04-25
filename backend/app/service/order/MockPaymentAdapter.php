@@ -14,7 +14,7 @@ namespace app\service\order;
  *
  * @see PaymentAdapter
  */
-final class MockPaymentAdapter implements PaymentAdapter
+class MockPaymentAdapter implements PaymentAdapter
 {
     public function refund(string $tradeNo, string $amount): bool
     {

@@ -17,7 +17,7 @@ use mall_base\exception\BusinessException;
  *
  * @extends BaseService<Goods>
  */
-final class ClientGoodsService extends BaseService
+class ClientGoodsService extends BaseService
 {
     protected string $modelClass = Goods::class;
 

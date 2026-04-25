@@ -15,7 +15,7 @@ namespace app\service\dto;
  * - matchedRuleId：命中规则主键；未命中为 null
  * - matchedLevel：命中层级（1省 2市 3区 4街道）；未命中为 null
  */
-final class FreightCalculationResult
+class FreightCalculationResult
 {
     /**
      * @param 'rule'|'default'|'free' $source

@@ -8,7 +8,7 @@ namespace app\common\enum;
  *
  * 用于 mb_order_log.operator_type，标识状态变更是谁触发的
  */
-final class OperatorType
+class OperatorType
 {
     /** 系统（定时任务、回调等） */
     public const SYSTEM = 0;

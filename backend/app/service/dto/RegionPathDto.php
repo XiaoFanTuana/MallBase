@@ -10,7 +10,7 @@ namespace app\service\dto;
  * 用于承载运费计算时需要的地址上下文：从省到街道四级 ID 均为必填，
  * 便于匹配规则时按层级（街道 > 区 > 市 > 省）依次回退。
  */
-final class RegionPathDto
+class RegionPathDto
 {
     public function __construct(
         public readonly int $provinceId,

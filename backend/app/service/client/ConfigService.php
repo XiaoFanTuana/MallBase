@@ -19,7 +19,7 @@ use mall_base\base\BaseService;
  *
  * @extends BaseService<BaseModel>
  */
-final class ConfigService extends BaseService
+class ConfigService extends BaseService
 {
     protected string $modelClass = BaseModel::class;
 

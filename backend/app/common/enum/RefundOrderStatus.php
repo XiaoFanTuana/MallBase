@@ -11,7 +11,7 @@ namespace app\common\enum;
  *  - 终态为 COMPLETED / REJECTED / CLOSED
  *  - MVP 仅建模，主体逻辑后续实现
  */
-final class RefundOrderStatus
+class RefundOrderStatus
 {
     /** 待审核 */
     public const PENDING = 0;

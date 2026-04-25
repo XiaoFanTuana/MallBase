@@ -23,7 +23,7 @@ use mall_base\base\BaseService;
  *
  * @extends BaseService<SettingGroup>
  */
-final class SystemSettingService extends BaseService
+class SystemSettingService extends BaseService
 {
     protected string $modelClass = SettingGroup::class;
 

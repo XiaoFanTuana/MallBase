@@ -14,7 +14,7 @@ use mall_base\base\BaseController;
  *
  * @extends BaseController<ConfigService>
  */
-final class ConfigController extends BaseController
+class ConfigController extends BaseController
 {
     protected string $serviceClass = ConfigService::class;
 

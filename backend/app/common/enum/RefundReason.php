@@ -11,7 +11,7 @@ namespace app\common\enum;
  *  - 前端下拉仅展示本枚举范围，后端 Validate 同样用 in: 规则收敛
  *  - MVP 仅覆盖最典型四类原因；新增时务必同步更新 TEXTS 与 options()
  */
-final class RefundReason
+class RefundReason
 {
     /** 订单下错了（买家误操作） */
     public const MISTAKEN_ORDER = 'MISTAKEN_ORDER';

@@ -19,7 +19,7 @@ use mall_base\exception\BusinessException;
  *    后台改完即时生效;不读 .env / config/wechat.php
  *  - 缺少 AppID/AppSecret 时立刻抛 BusinessException,不让 SDK 用空字符串去发请求
  */
-final class WechatAppFactory
+class WechatAppFactory
 {
     public function __construct(
         private readonly SystemSettingService $settings,
