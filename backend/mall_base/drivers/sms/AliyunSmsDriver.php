@@ -38,28 +38,10 @@ class AliyunSmsDriver extends BaseSmsDriver
             return false;
         }
 
-        try {
-            // TODO: 接入阿里云 SDK
-            // $client = new Dysmsapi(...);
-            // $request = new SendSmsRequest([
-            //     'phoneNumbers'  => $phone,
-            //     'signName'      => $this->signName,
-            //     'templateCode'  => $templateCode,
-            //     'templateParam' => json_encode(array_merge(['code' => $code], $extra)),
-            // ]);
-            // $response = $client->sendSms($request);
-            // if ($response->body->code !== 'OK') {
-            //     $this->setError($response->body->message ?? '短信发送失败');
-            //     return false;
-            // }
-
-            $this->log("发送短信验证码: {$phone}, scene: {$scene}, template: {$templateCode}");
-            return true;
-
-        } catch (\Exception $e) {
-            $this->setError('发送失败: ' . $e->getMessage());
-            return false;
-        }
+        // TODO: 接入阿里云 SDK (composer require alibabacloud/dysmsapi-20170525)
+        // 接入前使用 mock 驱动,切到 aliyun 必须先完成下方 SDK 调用
+        $this->setError('阿里云短信 SDK 尚未接入,请先使用 mock 驱动或完成 SDK 集成');
+        return false;
     }
 
     public function send(string $phone, string $code): bool
@@ -74,12 +56,7 @@ class AliyunSmsDriver extends BaseSmsDriver
             return false;
         }
 
-        try {
-            $this->log("发送短信通知: {$phone}, params: " . json_encode($params));
-            return true;
-        } catch (\Exception $e) {
-            $this->setError('发送失败: ' . $e->getMessage());
-            return false;
-        }
+        $this->setError('阿里云短信 SDK 尚未接入,请先使用 mock 驱动或完成 SDK 集成');
+        return false;
     }
 }
