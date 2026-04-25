@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace mall_base\sms;
+namespace app\service\sms;
 
 /**
  * 短信验证码场景
@@ -12,7 +12,7 @@ namespace mall_base\sms;
  *  - 频控按场景独立计算
  *  - 验证码 Redis key 按场景分桶
  */
-final class SmsScene
+class SmsScene
 {
     /** 登录验证码 */
     public const LOGIN = 'login';

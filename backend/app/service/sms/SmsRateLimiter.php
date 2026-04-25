@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace mall_base\sms;
+namespace app\service\sms;
+
+use mall_base\exception\SmsException;
 
 /**
  * 短信频控
@@ -18,7 +20,7 @@ namespace mall_base\sms;
  *  - 通过 SmsCache 抽象,默认实现转发到 think\facade\Cache(项目默认 Redis)
  *  - key 格式:sms:rl:<scope>:<key>:<window>,过期由后端 TTL 自动回收
  */
-final class SmsRateLimiter
+class SmsRateLimiter
 {
     private const KEY_PREFIX = 'sms:rl:';
 

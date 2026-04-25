@@ -30,8 +30,19 @@ use mall_base\base\BaseDriver;
 abstract class BaseSmsDriver extends BaseDriver
 {
     /**
-     * 发送短信验证码
-     * 
+     * 发送场景验证码
+     *
+     * @param string $phone 手机号
+     * @param string $scene 场景(login / register / reset_password 等)
+     * @param string $code  6 位验证码
+     * @param array  $extra 渠道扩展参数
+     * @return bool
+     */
+    abstract public function sendCode(string $phone, string $scene, string $code, array $extra = []): bool;
+
+    /**
+     * 发送短信验证码(默认场景)
+     *
      * @param string $phone 手机号
      * @param string $code 验证码
      * @return bool
@@ -40,7 +51,7 @@ abstract class BaseSmsDriver extends BaseDriver
 
     /**
      * 发送短信通知
-     * 
+     *
      * @param string $phone 手机号
      * @param array $params 短信参数
      * @return bool

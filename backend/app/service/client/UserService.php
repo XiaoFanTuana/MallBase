@@ -13,8 +13,8 @@ use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
 use mall_base\service\JwtService;
-use mall_base\sms\SmsScene;
-use mall_base\sms\SmsService;
+use app\service\sms\SmsScene;
+use app\service\sms\SmsService;
 use think\facade\Request;
 
 /**

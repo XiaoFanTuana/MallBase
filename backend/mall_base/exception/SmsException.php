@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace mall_base\sms;
-
-use mall_base\exception\BusinessException;
+namespace mall_base\exception;
 
 /**
  * 短信发送相关异常

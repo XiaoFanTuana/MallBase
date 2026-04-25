@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace mall_base\sms;
+namespace app\service\sms;
 
 /**
  * SMS 子系统使用的最小缓存契约

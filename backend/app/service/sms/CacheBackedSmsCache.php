@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace mall_base\sms;
+namespace app\service\sms;
 
 use think\facade\Cache;
 
 /**
  * SmsCache 默认实现:转发到 think\facade\Cache(项目默认 Redis)
  */
-final class CacheBackedSmsCache implements SmsCache
+class CacheBackedSmsCache implements SmsCache
 {
     public function has(string $key): bool
     {

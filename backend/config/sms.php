@@ -4,14 +4,14 @@
  * 短信验证码配置
  *
  * 通过 SMS_DRIVER 切换渠道,默认 mock。
- * 切换到 aliyun 时需先在 AliyunSmsAdapter 内完成 SDK 接入(本期为骨架)。
+ * 切换到 aliyun 时需先在 AliyunSmsDriver 内完成 SDK 接入(本期为骨架)。
  */
 return [
     /**
      * 当前使用的短信渠道
      *
      * 可选值:mock / aliyun
-     * 容器在 app/provider.php 中根据该值绑定 SmsAdapter 实现
+     * 容器在 app/provider.php 中根据该值通过 DriverManager 获取对应驱动
      */
     'driver' => env('SMS_DRIVER', 'mock'),
 

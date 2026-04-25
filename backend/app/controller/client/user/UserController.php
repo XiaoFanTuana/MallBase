@@ -8,7 +8,7 @@ use app\service\client\UserService;
 use app\service\client\WechatService;
 use app\validate\client\user\UserValidate;
 use mall_base\base\BaseController;
-use mall_base\sms\SmsScene;
+use app\service\sms\SmsScene;
 
 /**
  * 前台用户控制器

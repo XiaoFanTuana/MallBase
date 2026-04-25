@@ -24,6 +24,7 @@
 - `thinkPHP/goods-image-main-sync`
 - `thinkPHP/goods-media-contract`
 - `thinkPHP/backend-test-baseline`
+- `thinkPHP/mall-base-boundary`
 
 ### 2.2 Vben Admin
 
@@ -232,6 +233,7 @@
 - 架构检查：
   - `thinkPHP/architecture-layering`
   - `thinkPHP/service-stateless-swoole`
+  - `thinkPHP/mall-base-boundary`
 - 事务与数据一致性：
   - `thinkPHP/validate-then-transact`
 - 列表与分页规范：

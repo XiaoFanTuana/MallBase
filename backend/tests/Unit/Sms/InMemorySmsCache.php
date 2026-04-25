@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Sms;
 
-use mall_base\sms\SmsCache;
+use app\service\sms\SmsCache;
 
 /**
  * 内存型 SmsCache 实现,仅用于单元测试

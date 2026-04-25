@@ -1,127 +1,85 @@
 <?php
 
+declare(strict_types=1);
+
 namespace mall_base\drivers\sms;
 
 /**
  * 阿里云短信驱动
- * 
- * 功能说明：
- * - 实现阿里云短信发送功能
- * - 继承 BaseSmsDriver，实现具体平台的短信发送逻辑
- * 
- * 使用示例：
- * ```php
- * $config = [
- *     'access_key_id' => 'your_access_key_id',
- *     'access_key_secret' => 'your_access_key_secret',
- *     'sign_name' => 'your_sign_name',
- *     'template_code' => 'your_template_code',
- * ];
- * 
- * $sms = new AliyunSmsDriver($config);
- * $sms->send('13800138000', '123456');
- * ```
+ *
+ * 接入时需要:
+ *  1. composer require alibabacloud/dysmsapi-20170525
+ *  2. 在 config/sms.php 的 aliyun 节补充 access_key_id / access_key_secret / sign_name / templates
+ *  3. 实现 sendCode() 中的 SDK 调用
  */
 class AliyunSmsDriver extends BaseSmsDriver
 {
-    /**
-     * 阿里云签名
-     * @var string
-     */
-    protected string $signName;
+    protected string $signName = '';
 
-    /**
-     * 模板代码
-     * @var string
-     */
-    protected string $templateCode;
+    /** @var array<string, string> scene => template_code */
+    protected array $templates = [];
 
-    /**
-     * 初始化
-     */
     protected function init(): void
     {
         $this->signName = $this->getConfig('sign_name', '');
-        $this->templateCode = $this->getConfig('template_code', '');
+        $this->templates = (array) $this->getConfig('templates', []);
     }
 
-    /**
-     * 发送短信验证码
-     * 
-     * @param string $phone 手机号
-     * @param string $code 验证码
-     * @return bool
-     */
+    public function sendCode(string $phone, string $scene, string $code, array $extra = []): bool
+    {
+        if (!$this->validatePhone($phone)) {
+            $this->setError('手机号格式不正确');
+            return false;
+        }
+
+        $templateCode = $this->templates[$scene] ?? '';
+        if ($templateCode === '') {
+            $this->setError("场景 [{$scene}] 未配置阿里云短信模板");
+            return false;
+        }
+
+        try {
+            // TODO: 接入阿里云 SDK
+            // $client = new Dysmsapi(...);
+            // $request = new SendSmsRequest([
+            //     'phoneNumbers'  => $phone,
+            //     'signName'      => $this->signName,
+            //     'templateCode'  => $templateCode,
+            //     'templateParam' => json_encode(array_merge(['code' => $code], $extra)),
+            // ]);
+            // $response = $client->sendSms($request);
+            // if ($response->body->code !== 'OK') {
+            //     $this->setError($response->body->message ?? '短信发送失败');
+            //     return false;
+            // }
+
+            $this->log("发送短信验证码: {$phone}, scene: {$scene}, template: {$templateCode}");
+            return true;
+
+        } catch (\Exception $e) {
+            $this->setError('发送失败: ' . $e->getMessage());
+            return false;
+        }
+    }
+
     public function send(string $phone, string $code): bool
     {
-        // 验证手机号
-        if (!$this->validatePhone($phone)) {
-            $this->setError('手机号格式不正确');
-            return false;
-        }
-
-        try {
-            // 这里调用阿里云短信 API
-            // $result = $this->request($phone, ['code' => $code]);
-            
-            // 示例代码，实际使用时需要替换为真实的 API 调用
-            $this->log("发送短信验证码: {$phone}, code: {$code}");
-            
-            // 模拟成功
-            return true;
-            
-        } catch (\Exception $e) {
-            $this->setError('发送失败: ' . $e->getMessage());
-            return false;
-        }
+        return $this->sendCode($phone, 'login', $code);
     }
 
-    /**
-     * 发送短信通知
-     * 
-     * @param string $phone 手机号
-     * @param array $params 短信参数
-     * @return bool
-     */
     public function sendNotice(string $phone, array $params): bool
     {
-        // 验证手机号
         if (!$this->validatePhone($phone)) {
             $this->setError('手机号格式不正确');
             return false;
         }
 
         try {
-            // 这里调用阿里云短信 API
-            // $result = $this->request($phone, $params);
-            
-            // 示例代码，实际使用时需要替换为真实的 API 调用
             $this->log("发送短信通知: {$phone}, params: " . json_encode($params));
-            
-            // 模拟成功
             return true;
-            
         } catch (\Exception $e) {
             $this->setError('发送失败: ' . $e->getMessage());
             return false;
         }
-    }
-
-    /**
-     * 调用阿里云短信 API
-     * 
-     * @param string $phone 手机号
-     * @param array $params 模板参数
-     * @return array
-     */
-    protected function request(string $phone, array $params): array
-    {
-        // 实际使用时需要实现阿里云 API 调用逻辑
-        // 可以使用阿里云 SDK 或直接调用 API
-        
-        return [
-            'code' => 'OK',
-            'message' => 'OK',
-        ];
     }
 }

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Sms;
 
-use mall_base\sms\MockSmsAdapter;
-use mall_base\sms\SmsException;
-use mall_base\sms\SmsRateLimiter;
-use mall_base\sms\SmsScene;
-use mall_base\sms\SmsService;
+use app\service\sms\SmsRateLimiter;
+use app\service\sms\SmsScene;
+use app\service\sms\SmsService;
+use mall_base\drivers\sms\MockSmsDriver;
+use mall_base\exception\SmsException;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -116,7 +116,7 @@ final class SmsServiceTest extends TestCase
             ipMinuteLimit: 3,
         );
         return new SmsService(
-            adapter: new MockSmsAdapter(),
+            driver: new MockSmsDriver(),
             rateLimiter: $rateLimiter,
             cache: $this->cache,
             codeTtl: 300,

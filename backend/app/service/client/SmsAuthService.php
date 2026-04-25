@@ -7,8 +7,8 @@ namespace app\service\client;
 use app\model\user\User;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use mall_base\sms\SmsScene;
-use mall_base\sms\SmsService;
+use app\service\sms\SmsScene;
+use app\service\sms\SmsService;
 
 /**
  * 客户端短信验证码业务编排
@@ -23,7 +23,7 @@ use mall_base\sms\SmsService;
  *
  * @extends BaseService<User>
  */
-final class SmsAuthService extends BaseService
+class SmsAuthService extends BaseService
 {
     protected string $modelClass = User::class;
 

@@ -16,3 +16,4 @@
 12. `goods-sku-unified-sales-unit`：商品统一售卖单元必须落 SKU
 13. `build-list-query-only`：列表查询统一使用 Service::buildListQuery
 14. `region-snapshot-invalid-on-change`：地区业务双存快照，更新后标记失效不自动迁移
+15. `mall-base-boundary`：mall_base 框架边界，禁止在框架底层放业务逻辑

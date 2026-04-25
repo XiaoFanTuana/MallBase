@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
-namespace mall_base\sms;
+namespace app\service\sms;
+
+use mall_base\drivers\sms\BaseSmsDriver;
+use mall_base\exception\SmsException;
 
 /**
  * 短信验证码服务(业务入口)
@@ -10,27 +13,20 @@ namespace mall_base\sms;
  * 职责:
  *  - 生成 6 位数字验证码
  *  - 走频控
- *  - 调适配器发送
- *  - 验证码存 SmsCache(独立于适配器,方便 mock 模式联调)
+ *  - 调驱动发送
+ *  - 验证码存 SmsCache(独立于驱动,方便 mock 模式联调)
  *  - 提供 verifyCode(mobile, scene, code) 业务校验接口
  *
  * 验证码生命周期:
  *  - 写入 5 分钟 TTL(可由构造参数 codeTtl 覆盖)
  *  - 验证成功后立即删除,防止重放
- *
- * 业务调用示例:
- *  ```php
- *  $sms = app()->make(SmsService::class);
- *  $sms->sendCode($mobile, SmsScene::LOGIN, request()->ip());
- *  $sms->verifyCode($mobile, SmsScene::LOGIN, $userInputCode);
- *  ```
  */
-final class SmsService
+class SmsService
 {
     private const CODE_KEY_PREFIX = 'sms:code:';
 
     public function __construct(
-        private readonly SmsAdapter $adapter,
+        private readonly BaseSmsDriver $driver,
         private readonly SmsRateLimiter $rateLimiter,
         private readonly SmsCache $cache,
         private readonly int $codeTtl = 300,
@@ -51,9 +47,10 @@ final class SmsService
 
         $code = $this->generateCode();
 
-        $this->adapter->send($mobile, $scene, $code, $extra);
+        if (!$this->driver->sendCode($mobile, $scene, $code, $extra)) {
+            throw new SmsException($this->driver->getError() ?: '短信发送失败');
+        }
 
-        // 发送成功才记录频控 + 写入 cache,否则用户因渠道异常拿不到码也不会被 60s 锁住
         $this->rateLimiter->record($mobile, $ip);
         $this->cache->set($this->codeKey($mobile, $scene), $code, $this->codeTtl);
     }
