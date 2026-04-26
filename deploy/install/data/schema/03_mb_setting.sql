@@ -92,6 +92,12 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
 (105, 100, 0, '客户端配置', 'ClientConfig', 'lucide:smartphone', 'App/H5 客户端品牌、启动屏、分享与协议等配置', 50, 'page', 1);
 
+-- 二级分组：短信配置（选项卡）及其子页面
+INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
+(106, 100, 0, '短信配置', 'SmsConfig', 'lucide:message-square', '短信驱动、频控阈值与阿里云短信参数', 60, 'tab', 1),
+(1061, 106, 0, '基础', 'SmsBasic', NULL, '短信驱动选择、验证码有效期与频控阈值', 10, 'page', 1),
+(1062, 106, 0, '阿里云短信', 'SmsAliyun', NULL, '阿里云短信 AccessKey、签名与模板 ID', 20, 'page', 1);
+
 -- 设置项：1011 SystemBasic 基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1011, '站点名称', 'site_name', 'Mall Base', 'input', NULL, '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
@@ -122,7 +128,16 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1021, '默认上传驱动', 'upload_driver', 'local', 'select', '[{"label":"本地存储","value":"local"},{"label":"阿里云 OSS","value":"oss"},{"label":"腾讯云 COS","value":"cos"}]', '[{"type":"required","message":"不能为空"}]', NULL, NULL, 10),
 (1021, '图片 MIME 白名单', 'mime_image', 'image/jpeg,image/png,image/gif,image/webp', 'textarea', NULL, NULL, NULL, '以英文逗号分隔', 20),
 (1021, '文档压缩 MIME 白名单', 'mime_document', 'application/pdf,application/zip,application/x-rar-compressed,application/msword,application/vnd.ms-excel', 'textarea', NULL, NULL, NULL, NULL, 30),
-(1021, '视频 MIME 白名单', 'mime_video', 'video/mp4,video/webm,video/quicktime', 'textarea', NULL, NULL, NULL, NULL, 40);
+(1021, '视频 MIME 白名单', 'mime_video', 'video/mp4,video/webm,video/quicktime', 'textarea', NULL, NULL, NULL, NULL, 40),
+(1021, '单图最大体积(MB)', 'upload_image_max_size', '2', 'number', NULL, NULL, NULL, NULL, 50),
+(1021, '多图单张最大体积(MB)', 'upload_images_max_size', '5', 'number', NULL, NULL, NULL, NULL, 60),
+(1021, '多图最大张数', 'upload_images_max_count', '9', 'number', NULL, NULL, NULL, NULL, 70),
+(1021, '单文件最大体积(MB)', 'upload_file_max_size', '10', 'number', NULL, NULL, NULL, NULL, 80),
+(1021, '多文件单个最大体积(MB)', 'upload_files_max_size', '10', 'number', NULL, NULL, NULL, NULL, 90),
+(1021, '多文件最大个数', 'upload_files_max_count', '5', 'number', NULL, NULL, NULL, NULL, 100),
+(1021, '单视频最大体积(MB)', 'upload_video_max_size', '200', 'number', NULL, NULL, NULL, NULL, 110),
+(1021, '多视频单个最大体积(MB)', 'upload_videos_max_size', '200', 'number', NULL, NULL, NULL, NULL, 120),
+(1021, '多视频最大个数', 'upload_videos_max_count', '5', 'number', NULL, NULL, NULL, NULL, 130);
 
 -- 设置项：1022 UploadLocal 本地存储
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
@@ -194,6 +209,24 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1043, '支付宝公钥证书', 'pay_alipay_alipay_cert_public_key', '', 'file', NULL, NULL, NULL, '上传 alipayCertPublicKey_RSA2.crt', 50),
 (1043, '支付宝根证书', 'pay_alipay_alipay_root_cert', '', 'file', NULL, NULL, NULL, '上传 alipayRootCert.crt', 60),
 (1043, '网关地址', 'pay_alipay_gateway', 'https://openapi.alipay.com/gateway.do', 'input', NULL, NULL, NULL, NULL, 70);
+
+-- 设置项：1061 SmsBasic 短信基础
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1061, '短信驱动', 'sms_driver', 'mock', 'select', '[{"label":"模拟（开发用）","value":"mock"},{"label":"阿里云短信","value":"aliyun"}]', '[{"type":"required","message":"不能为空"}]', NULL, 'mock 模式验证码仅打印日志', 10),
+(1061, '验证码有效期(秒)', 'sms_code_ttl', '300', 'number', NULL, NULL, NULL, NULL, 20),
+(1061, '同号码24h上限', 'sms_rate_mobile_daily', '5', 'number', NULL, NULL, NULL, NULL, 30),
+(1061, '同IP每分钟上限', 'sms_rate_ip_minute', '3', 'number', NULL, NULL, NULL, NULL, 40);
+
+-- 设置项：1062 SmsAliyun 阿里云短信
+INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
+(1062, 'AccessKeyId', 'sms_aliyun_access_key_id', '', 'input', NULL, NULL, NULL, NULL, 10),
+(1062, 'AccessKeySecret', 'sms_aliyun_access_key_secret', '', 'password', NULL, NULL, NULL, NULL, 20),
+(1062, '签名名称', 'sms_aliyun_sign_name', '', 'input', NULL, NULL, NULL, '在阿里云短信服务审核通过的签名', 30),
+(1062, '登录模板ID', 'sms_aliyun_tpl_login', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 40),
+(1062, '注册模板ID', 'sms_aliyun_tpl_register', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 50),
+(1062, '重置密码模板ID', 'sms_aliyun_tpl_reset_password', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 60),
+(1062, '绑定手机号模板ID', 'sms_aliyun_tpl_bind_mobile', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 70),
+(1062, '公众号绑定模板ID', 'sms_aliyun_tpl_wechat_official_bind', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 80);
 
 -- 设置项：105 ClientConfig 客户端配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
