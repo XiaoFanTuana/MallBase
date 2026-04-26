@@ -8,8 +8,6 @@
 # Docker dev data（MySQL / Redis 宿主挂载目录，仅项目根的 /data/）
 /data/
 
-# Frontend build artifacts
-backend/public/admin/
 
 # Environment files（两份独立 .env，内含敏感信息，均不入库）
 .env
