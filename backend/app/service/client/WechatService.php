@@ -406,7 +406,7 @@ class WechatService extends BaseService
             return $this->factory->miniApp()->getUtils()->codeToSession($code);
         } catch (HttpException $e) {
             Logger::instance()->error('小程序 codeToSession 失败', ['error' => $e->getMessage()]);
-            throw new BusinessException('微信登录失败,请稍后再试');
+            throw new BusinessException($this->wechatApiErrorMessage($e->getMessage(), '微信登录失败,请稍后再试'));
         }
     }
 
@@ -420,8 +420,38 @@ class WechatService extends BaseService
             return (string) ($resp['phone_info']['purePhoneNumber'] ?? '');
         } catch (HttpException $e) {
             Logger::instance()->error('小程序 getPhoneNumber 失败', ['error' => $e->getMessage()]);
-            throw new BusinessException('获取手机号失败,请稍后再试');
+            throw new BusinessException($this->wechatApiErrorMessage($e->getMessage(), '获取手机号失败,请稍后再试'));
         }
+    }
+
+    private function wechatApiErrorMessage(string $message, string $fallback): string
+    {
+        if (!preg_match('/\{.*\}/', $message, $matches)) {
+            return $fallback;
+        }
+
+        $payload = json_decode($matches[0], true);
+        if (!is_array($payload)) {
+            return $fallback;
+        }
+
+        $errcode = isset($payload['errcode']) ? (int) $payload['errcode'] : 0;
+        if ($errcode === 0) {
+            return $fallback;
+        }
+
+        $text = match ($errcode) {
+            -1 => '微信服务繁忙,请稍后重试',
+            40013 => '小程序 AppID 配置不正确或与当前小程序不一致',
+            40029, 40163 => '登录 code 无效或已过期,请重新打开小程序后重试',
+            40125 => '小程序 AppSecret 配置不正确',
+            41002 => '小程序 AppID 配置缺失',
+            41004 => '小程序 AppSecret 配置缺失',
+            45011 => '微信接口调用过于频繁,请稍后重试',
+            default => $fallback,
+        };
+
+        return sprintf('%s(errcode:%d)', $text, $errcode);
     }
 
     /**
