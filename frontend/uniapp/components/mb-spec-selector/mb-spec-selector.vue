@@ -1,6 +1,6 @@
 <template>
-  <view v-if="visible" class="mb-spec" @tap.self="close">
-    <view class="mb-spec__panel" :class="{ 'mb-spec__panel--show': show }">
+  <view v-if="visible" class="mb-spec" @tap="close">
+    <view class="mb-spec__panel" :class="{ 'mb-spec__panel--show': show }" @tap.stop>
       <!-- header -->
       <view class="mb-spec__header">
         <image
@@ -14,7 +14,7 @@
           <text class="mb-spec__stock">库存 {{ currentStock }}</text>
           <text v-if="selectedSpecText" class="mb-spec__selected">已选：{{ selectedSpecText }}</text>
         </view>
-        <view class="mb-spec__close" @tap="close">
+        <view class="mb-spec__close" @tap.stop="close">
           <text class="mb-spec__close-icon">✕</text>
         </view>
       </view>
@@ -32,7 +32,7 @@
                 'mb-spec__tag--active': selectedSpecs[group.name] === val,
                 'mb-spec__tag--disabled': isSpecDisabled(group.name, val),
               }"
-              @tap="selectSpec(group.name, val)"
+              @tap.stop="selectSpec(group.name, val)"
             >
               <text class="mb-spec__tag-text">{{ val }}</text>
             </view>
@@ -42,17 +42,21 @@
         <!-- quantity -->
         <view class="mb-spec__quantity">
           <text class="mb-spec__quantity-label">数量</text>
-          <mb-quantity-stepper v-model="quantity" :max="currentStock" />
+          <mb-quantity-stepper
+            v-model="quantity"
+            class="mb-spec__quantity-stepper"
+            :max="currentStock"
+          />
         </view>
       </scroll-view>
 
       <!-- actions -->
       <view class="mb-spec__footer">
         <view v-if="mode === 'both'" class="mb-spec__actions mb-spec__actions--dual">
-          <view class="mb-spec__btn mb-spec__btn--cart" @tap="onAddToCart">
+          <view class="mb-spec__btn mb-spec__btn--cart" @tap.stop="onAddToCart">
             <text class="mb-spec__btn-text">加入购物车</text>
           </view>
-          <view class="mb-spec__btn mb-spec__btn--buy" @tap="onBuyNow">
+          <view class="mb-spec__btn mb-spec__btn--buy" @tap.stop="onBuyNow">
             <text class="mb-spec__btn-text mb-spec__btn-text--light">立即购买</text>
           </view>
         </view>
@@ -60,7 +64,7 @@
           <view
             class="mb-spec__btn"
             :class="mode === 'cart' ? 'mb-spec__btn--cart-full' : 'mb-spec__btn--buy-full'"
-            @tap="mode === 'cart' ? onAddToCart() : onBuyNow()"
+            @tap.stop="mode === 'cart' ? onAddToCart() : onBuyNow()"
           >
             <text class="mb-spec__btn-text" :class="{ 'mb-spec__btn-text--light': mode === 'buy' }">
               {{ mode === 'cart' ? '加入购物车' : '立即购买' }}
@@ -258,6 +262,7 @@ watch(() => props.visible, (val) => {
   flex: 1;
   padding: 32rpx;
   max-height: 50vh;
+  box-sizing: border-box;
 }
 
 .mb-spec__group {
@@ -308,14 +313,23 @@ watch(() => props.visible, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24rpx;
+  width: 100%;
   padding-top: 24rpx;
   border-top: 1rpx solid var(--color-border, #e0e3e5);
+  box-sizing: border-box;
 }
 
 .mb-spec__quantity-label {
+  flex: 1;
+  min-width: 0;
   font-size: 26rpx;
   font-weight: 600;
   color: var(--color-text, #1b1b1b);
+}
+
+.mb-spec__quantity-stepper {
+  flex-shrink: 0;
 }
 
 .mb-spec__footer {
