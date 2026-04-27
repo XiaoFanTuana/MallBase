@@ -192,9 +192,9 @@ async function fetchGoods(reset) {
   if (query.keyword) {
     params.keyword = query.keyword
   }
-  if (sortField.value) {
-    params.sort_field = sortField.value
-    params.sort_order = sortOrder.value
+  const sortBy = getSortBy()
+  if (sortBy) {
+    params.sort_by = sortBy
   }
 
   try {
@@ -242,6 +242,14 @@ function onSortTap(item) {
   fetchGoods(true)
 }
 
+function getSortBy() {
+  if (activeSortKey.value === 'sales') return 'sales_desc'
+  if (activeSortKey.value === 'price') {
+    return sortOrder.value === 'desc' ? 'price_desc' : 'price_asc'
+  }
+  return ''
+}
+
 // ---------- view toggle ----------
 function toggleViewMode() {
   viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
@@ -251,9 +259,21 @@ function toggleViewMode() {
 function normalizeGoods(item) {
   return {
     ...item,
-    cover: item.main_image_full_url || item.cover || '',
+    cover: getGoodsCover(item),
     original_price: item.market_price,
   }
+}
+
+function getGoodsCover(item) {
+  if (item.main_image_full_url) return item.main_image_full_url
+  if (item.main_image) return item.main_image
+  if (item.cover) return item.cover
+  if (Array.isArray(item.images) && item.images.length > 0) {
+    const first = item.images[0]
+    if (typeof first === 'string') return first
+    return first.full_url || first.url || ''
+  }
+  return ''
 }
 
 // ---------- navigation ----------

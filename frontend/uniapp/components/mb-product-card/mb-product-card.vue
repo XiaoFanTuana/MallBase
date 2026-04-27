@@ -10,6 +10,7 @@
         :src="cover"
         :mode="mode === 'grid' ? 'aspectFill' : 'aspectFill'"
         lazy-load
+        @error="onImageError"
       />
     </view>
     <view class="mb-card__info">
@@ -37,9 +38,24 @@ defineEmits(['tap'])
 
 const cover = computed(() => {
   if (props.goods.cover) return props.goods.cover
-  if (Array.isArray(props.goods.images) && props.goods.images.length > 0) return props.goods.images[0]
+  if (props.goods.main_image_full_url) return props.goods.main_image_full_url
+  if (props.goods.main_image) return props.goods.main_image
+  if (Array.isArray(props.goods.images) && props.goods.images.length > 0) {
+    const first = props.goods.images[0]
+    if (typeof first === 'string') return first
+    return first.full_url || first.url || ''
+  }
   return ''
 })
+
+function onImageError(error) {
+  if (import.meta.env.DEV) {
+    console.warn('[mb-product-card:image-error]', {
+      cover: cover.value,
+      error,
+    })
+  }
+}
 </script>
 
 <style scoped>
@@ -62,8 +78,10 @@ const cover = computed(() => {
 }
 
 .mb-card__img-wrap--grid {
+  position: relative;
   width: 100%;
-  aspect-ratio: 1;
+  height: 0;
+  padding-bottom: 100%;
   overflow: hidden;
   background: #eef0f3;
 }
@@ -80,6 +98,12 @@ const cover = computed(() => {
 .mb-card__img {
   width: 100%;
   height: 100%;
+}
+
+.mb-card__img-wrap--grid .mb-card__img {
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .mb-card__info {

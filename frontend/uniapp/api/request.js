@@ -1,6 +1,7 @@
 import config from '@/config/index'
 
 const TOKEN_KEY = 'mb_access_token'
+const REQUEST_TIMEOUT = 15000
 
 function getToken() {
   return uni.getStorageSync(TOKEN_KEY) || ''
@@ -8,6 +9,7 @@ function getToken() {
 
 function request(options) {
   const { url, method = 'GET', data, header = {} } = options
+  const requestUrl = `${config.baseUrl}${url}`
   const token = getToken()
   if (token) {
     header['Authorization'] = `Bearer ${token}`
@@ -15,9 +17,10 @@ function request(options) {
 
   return new Promise((resolve, reject) => {
     uni.request({
-      url: `${config.baseUrl}${url}`,
+      url: requestUrl,
       method,
       data,
+      timeout: REQUEST_TIMEOUT,
       header: {
         'Content-Type': 'application/json',
         ...header
@@ -47,6 +50,12 @@ function request(options) {
         }
       },
       fail(err) {
+        console.error('[request:fail]', {
+          url: requestUrl,
+          method,
+          data,
+          err
+        })
         uni.showToast({ title: '网络异常', icon: 'none' })
         reject(err)
       }
