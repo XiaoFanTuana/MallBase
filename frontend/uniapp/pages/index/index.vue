@@ -53,7 +53,9 @@ const bentoGroups = computed(() => {
 async function fetchRecommend() {
   try {
     const data = await getGoodsRecommend(6)
-    recommendList.value = Array.isArray(data) ? data : []
+    recommendList.value = Array.isArray(data?.list)
+      ? data.list
+      : (Array.isArray(data) ? data : [])
   } catch {
     recommendList.value = []
   }
@@ -125,8 +127,15 @@ function formatPrice(price) {
 }
 
 function getFirstImage(item) {
+  if (item.main_image_full_url) return item.main_image_full_url
   if (item.cover) return item.cover
-  if (Array.isArray(item.images) && item.images.length > 0) return item.images[0]
+  if (item.main_image) return item.main_image
+  if (Array.isArray(item.images) && item.images.length > 0) {
+    const first = item.images[0]
+    if (typeof first === 'string') return first
+    if (first?.full_url) return first.full_url
+    if (first?.url) return first.url
+  }
   return ''
 }
 
@@ -428,8 +437,7 @@ function onTabTap(tab) {
    =========================== */
 .banner-swiper {
   width: 100%;
-  height: 0;
-  padding-bottom: 48%;
+  height: 336rpx;
   border-radius: 40rpx;
   overflow: hidden;
 }
@@ -447,8 +455,7 @@ function onTabTap(tab) {
 }
 
 .banner--placeholder {
-  height: 0;
-  padding-bottom: 48%;
+  height: 336rpx;
 }
 
 .banner__image {

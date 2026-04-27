@@ -1409,6 +1409,8 @@ class SettingService extends BaseService
             throw new BusinessException('分组不存在');
         }
 
+        $updatedCodes = [];
+
         if ($group->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
             // tab 模式：遍历所有启用的子分组，逐个更新设置项
             $childGroups = $this->model()
@@ -1423,8 +1425,7 @@ class SettingService extends BaseService
 
                 foreach ($settings as $setting) {
                     if (array_key_exists($setting->code, $values)) {
-                        $setting->value = $values[$setting->code];
-                        $setting->save();
+                        $updatedCodes[] = $this->saveSettingValue($setting, $values[$setting->code]);
                     }
                 }
 
@@ -1439,15 +1440,23 @@ class SettingService extends BaseService
 
             foreach ($settings as $setting) {
                 if (array_key_exists($setting->code, $values)) {
-                    $setting->value = $values[$setting->code];
-                    $setting->save();
+                    $updatedCodes[] = $this->saveSettingValue($setting, $values[$setting->code]);
                 }
             }
         }
 
+        $this->cacheService->clearSettingValues($updatedCodes);
         $this->cacheService->clearGroup($groupCode);
 
         return true;
+    }
+
+    private function saveSettingValue(Setting $setting, mixed $value): string
+    {
+        $setting->value = $value;
+        $setting->save();
+
+        return (string)$setting->code;
     }
 
     /**

@@ -13,6 +13,10 @@ use think\facade\Cache;
  */
 class SettingCacheService
 {
+    private const TAG_SETTING = 'setting';
+    private const TAG_SETTING_VALUE = 'setting:value';
+    private const CACHE_EXPIRE_SECONDS = 86400;
+
     /**
      * 缓存前缀
      */
@@ -28,6 +32,22 @@ class SettingCacheService
     }
 
     /**
+     * 获取分组缓存标签
+     */
+    protected function getGroupCacheTag(string $code): string
+    {
+        return $this->groupPrefix . $code;
+    }
+
+    /**
+     * 获取单个设置项缓存 key
+     */
+    protected function getSettingValueCacheKey(string $code): string
+    {
+        return self::TAG_SETTING_VALUE . ':' . $code;
+    }
+
+    /**
      * 获取分组配置（先走缓存，未命中则回调获取并缓存）
      *
      * @param string $groupCode 分组编码
@@ -38,7 +58,8 @@ class SettingCacheService
     {
         $cacheKey = $this->getGroupCacheKey($groupCode);
 
-        return Cache::remember($cacheKey, $callback, 86400); // 缓存1天
+        return Cache::tag([self::TAG_SETTING, $this->getGroupCacheTag($groupCode)])
+            ->remember($cacheKey, $callback, self::CACHE_EXPIRE_SECONDS);
     }
 
     /**
@@ -48,6 +69,12 @@ class SettingCacheService
     {
         $cacheKey = $this->getGroupCacheKey($groupCode);
         Cache::delete($cacheKey);
+
+        try {
+            Cache::tag($this->getGroupCacheTag($groupCode))->clear();
+        } catch (\Throwable $e) {
+            // 驱动不支持 tag 时忽略，保留上面的精确 key 删除作为兼容兜底
+        }
     }
 
     /**
@@ -60,8 +87,8 @@ class SettingCacheService
 
         // 通过标签清除（如果驱动支持 tag）
         try {
-            Cache::tag('setting')->clear();
-        } catch (\Exception $e) {
+            Cache::tag(self::TAG_SETTING)->clear();
+        } catch (\Throwable $e) {
             // 驱动不支持 tag 时忽略
         }
     }
@@ -71,7 +98,8 @@ class SettingCacheService
      */
     public function getAllGroups(callable $callback): array
     {
-        return Cache::remember($this->allKey, $callback, 86400);
+        return Cache::tag(self::TAG_SETTING)
+            ->remember($this->allKey, $callback, self::CACHE_EXPIRE_SECONDS);
     }
 
     /**
@@ -83,8 +111,10 @@ class SettingCacheService
      */
     public function getSettingValue(string $code, callable $callback): mixed
     {
-        $cacheKey = 'setting:value:' . $code;
-        return Cache::remember($cacheKey, $callback, 86400);
+        $cacheKey = $this->getSettingValueCacheKey($code);
+
+        return Cache::tag([self::TAG_SETTING, self::TAG_SETTING_VALUE])
+            ->remember($cacheKey, $callback, self::CACHE_EXPIRE_SECONDS);
     }
 
     /**
@@ -92,6 +122,29 @@ class SettingCacheService
      */
     public function clearSettingValue(string $code): void
     {
-        Cache::delete('setting:value:' . $code);
+        Cache::delete($this->getSettingValueCacheKey($code));
+    }
+
+    /**
+     * 批量清除设置项单值缓存
+     *
+     * @param array<int, string> $codes 设置项编码
+     */
+    public function clearSettingValues(array $codes): void
+    {
+        $codes = array_values(array_unique(array_filter(array_map('strval', $codes), static fn(string $code): bool => $code !== '')));
+        if ($codes === []) {
+            return;
+        }
+
+        try {
+            Cache::tag(self::TAG_SETTING_VALUE)->clear();
+        } catch (\Throwable $e) {
+            // 驱动不支持 tag 时忽略，继续执行精确 key 删除
+        }
+
+        foreach ($codes as $code) {
+            Cache::delete($this->getSettingValueCacheKey($code));
+        }
     }
 }
