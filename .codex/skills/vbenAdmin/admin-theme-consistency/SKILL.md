@@ -1,3 +1,8 @@
+---
+name: admin-theme-consistency
+description: MallBase Vben Admin 主题一致性规则；开发后台页面、组件样式或明暗色适配时使用。
+---
+
 # Vben 规则：Admin 主题一致性（明暗色）
 
 ## 适用范围

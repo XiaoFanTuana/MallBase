@@ -1,3 +1,8 @@
+---
+name: goods-spec-toggle-state
+description: MallBase Vben Admin 商品规格切换状态规则；处理商品规格、SKU 表单、单规格与多规格切换时使用。
+---
+
 # VbenAdmin 规则：商品规格切换状态保真
 
 ## 适用范围

@@ -1,3 +1,8 @@
+---
+name: list-return-compact
+description: MallBase ThinkPHP 分页返回 compact 规范；实现或调整分页接口返回 total 和 list 时使用。
+---
+
 # ThinkPHP 规则：分页返回 compact
 
 ## 适用范围

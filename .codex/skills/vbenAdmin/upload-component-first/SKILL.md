@@ -1,3 +1,8 @@
+---
+name: upload-component-first
+description: MallBase Vben Admin 上传组件优先规则；仅在实现图片或文件上传 UI 交互并选择上传组件时使用。
+---
+
 # Vben 规则：上传优先复用 Upload 组件
 
 ## 适用范围

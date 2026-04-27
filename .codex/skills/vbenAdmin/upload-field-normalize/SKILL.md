@@ -1,3 +1,8 @@
+---
+name: upload-field-normalize
+description: MallBase Vben Admin 上传字段规范；仅在处理上传字段回填、FileInfo 转换和提交协议归一化时使用。
+---
+
 # Vben 规则：上传字段回填与提交规范
 
 ## 适用范围

@@ -1,3 +1,8 @@
+---
+name: region-snapshot-invalid-on-change
+description: MallBase ThinkPHP 地区快照失效规则；处理地区快照、地区变更、地址同步或历史数据一致性时使用。
+---
+
 # 地区快照与失效治理
 
 适用场景：

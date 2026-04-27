@@ -1,3 +1,8 @@
+---
+name: build-list-query-only
+description: MallBase ThinkPHP 列表查询构建规则；仅在实现或调整 Service::buildListQuery 与分页查询构建封装时使用。
+---
+
 # build-list-query-only
 
 ## 适用范围

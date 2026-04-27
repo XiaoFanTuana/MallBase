@@ -1,3 +1,8 @@
+---
+name: api-path-param
+description: MallBase Vben Admin API 路径参数一致性规则；仅在前端接口方法对接后端 /:id 路径参数时使用。
+---
+
 # Vben 规则：API 路径参数一致性
 
 ## 适用范围

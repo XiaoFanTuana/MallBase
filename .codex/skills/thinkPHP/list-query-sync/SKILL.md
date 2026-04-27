@@ -1,3 +1,8 @@
+---
+name: list-query-sync
+description: MallBase ThinkPHP 分页 list 和 total 条件同源规则；实现或修改分页列表、搜索筛选和 total 统计时使用。
+---
+
 # ThinkPHP 规则：分页 list/total 条件同源
 
 ## 适用范围

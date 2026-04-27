@@ -1,3 +1,8 @@
+---
+name: model-field-accessor-first
+description: MallBase ThinkPHP 模型字段访问器优先规则；仅在 Model 字段读写、访问器、修改器或字段转换逻辑时使用。
+---
+
 # ThinkPHP 规则：正式字段优先走模型访问器/修改器
 
 ## 适用范围

@@ -1,3 +1,8 @@
+---
+name: ide-generic-annotation
+description: MallBase ThinkPHP IDE 泛型注释规范；新增或调整 Controller、Service 注释与跳转类型时使用。
+---
+
 # ThinkPHP 规则：IDE 泛型注释与跳转
 
 ## 适用范围

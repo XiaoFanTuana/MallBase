@@ -1,3 +1,8 @@
+---
+name: api-contract
+description: MallBase UniApp 预留接口协议规则；仅在明确修改 frontend/uniapp 接口调用、响应结构或错误码处理时使用。
+---
+
 # UniApp 规则：接口协议一致
 
 ## 适用范围

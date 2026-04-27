@@ -1,3 +1,8 @@
+---
+name: open-source-wording
+description: MallBase 开源项目文案措辞规范；编写提交信息、文档、注释、备注或提示文案时使用。
+---
+
 # 开源项目文案措辞规范
 
 ## 适用范围

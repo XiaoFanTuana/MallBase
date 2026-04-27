@@ -1,3 +1,8 @@
+---
+name: service-stateless-swoole
+description: MallBase ThinkPHP Swoole Service 无状态规则；实现或重构 Service、协程安全业务逻辑时使用。
+---
+
 # ThinkPHP 规则：Service 无状态（Swoole）
 
 ## 适用范围

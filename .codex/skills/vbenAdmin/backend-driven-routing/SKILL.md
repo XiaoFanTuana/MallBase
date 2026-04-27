@@ -1,3 +1,8 @@
+---
+name: backend-driven-routing
+description: MallBase Vben Admin 后端驱动路由规则；新增或调整后台菜单、权限路由、页面路由和 System 路由映射时使用。
+---
+
 # Vben 规则：后端驱动路由
 
 ## 适用范围

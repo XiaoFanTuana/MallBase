@@ -1,3 +1,8 @@
+---
+name: backend-test-baseline
+description: MallBase ThinkPHP 后端测试基线；新增、修改或回归后端接口、服务、模型逻辑时使用。
+---
+
 # Skill: backend-test-baseline
 
 ## 适用场景

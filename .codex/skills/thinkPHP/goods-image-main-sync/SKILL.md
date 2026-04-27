@@ -1,3 +1,8 @@
+---
+name: goods-image-main-sync
+description: MallBase ThinkPHP 商品主图与轮播图一致性规则；仅在处理商品主图和轮播图同步、保存或回填时使用。
+---
+
 # ThinkPHP 规则：商品主图与轮播图一致性
 
 ## 适用范围

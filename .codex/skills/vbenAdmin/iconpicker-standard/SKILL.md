@@ -1,3 +1,8 @@
+---
+name: iconpicker-standard
+description: MallBase Vben Admin IconPicker 规范；实现或调整后台图标选择、菜单图标和图标表单字段时使用。
+---
+
 # Vben 规则：图标选择统一 IconPicker 模式
 
 ## 适用范围

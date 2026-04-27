@@ -1,3 +1,8 @@
+---
+name: module-structure
+description: MallBase UniApp 预留模块结构规则；仅在明确新增或调整 frontend/uniapp 页面、组件、接口和业务模块时使用。
+---
+
 # UniApp 规则：模块化目录结构
 
 ## 适用范围

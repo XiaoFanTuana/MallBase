@@ -1,3 +1,8 @@
+---
+name: route-permission-system
+description: MallBase ThinkPHP 后台路由与权限元数据规范；新增或调整 System 路由、菜单、权限字段时使用。
+---
+
 # ThinkPHP 规则：后台路由与权限元数据
 
 ## 适用范围

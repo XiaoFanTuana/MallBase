@@ -1,3 +1,8 @@
+---
+name: goods-sku-unified-sales-unit
+description: MallBase ThinkPHP 商品统一售卖单元规则；处理商品 SKU、规格、价格、库存或销售单元逻辑时使用。
+---
+
 # ThinkPHP 规则：商品统一售卖单元必须落 SKU
 
 ## 适用范围

@@ -1,3 +1,8 @@
+---
+name: architecture-layering
+description: MallBase ThinkPHP 三层架构边界规则；涉及 backend controller、service、model 分层开发或重构时使用。
+---
+
 # ThinkPHP 规则：三层架构边界
 
 ## 适用范围

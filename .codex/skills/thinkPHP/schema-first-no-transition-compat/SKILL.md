@@ -1,3 +1,8 @@
+---
+name: schema-first-no-transition-compat
+description: MallBase ThinkPHP 正式字段优先规则；仅在字段迁移、Schema 定型、移除过渡兼容或正式字段替换时使用。
+---
+
 # ThinkPHP 规则：正式字段优先，禁止长期过渡兼容
 
 ## 适用范围

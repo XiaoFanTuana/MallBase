@@ -1,3 +1,8 @@
+---
+name: thinkphp
+description: MallBase ThinkPHP 后端规则索引；仅在需要浏览或选择后端规则、且无法确定具体 ThinkPHP skill 时使用。
+---
+
 # ThinkPHP Skills 索引（MallBase）
 
 后端规则按子目录拆分，请按场景选用：

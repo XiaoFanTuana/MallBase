@@ -1,3 +1,8 @@
+---
+name: vben-admin
+description: MallBase Vben Admin 前端规则索引；仅在需要浏览或选择后台前端规则、且无法确定具体 Vben skill 时使用。
+---
+
 # Vben Admin Skills 索引（MallBase）
 
 前端规则按子目录拆分，请按场景选用：

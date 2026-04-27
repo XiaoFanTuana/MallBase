@@ -1,3 +1,8 @@
+---
+name: docs-linking
+description: MallBase 文档链接与放置规范；仅在新增、移动、删除 docs/ 或 README 文档索引时使用。
+---
+
 # 文档链接与放置规范
 
 ## 适用范围

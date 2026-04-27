@@ -1,3 +1,8 @@
+---
+name: e2e-webantd-realapi
+description: MallBase Vben Admin 真实后端 E2E 测试规则；执行或编写 web-antd 端到端回归测试时使用。
+---
+
 # Skill: e2e-webantd-realapi
 
 ## 适用场景

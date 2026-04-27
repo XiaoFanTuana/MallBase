@@ -1,3 +1,8 @@
+---
+name: mall-base-boundary
+description: MallBase ThinkPHP 框架边界规则；涉及 mall_base 底层、业务服务放置或跨层职责判断时使用。
+---
+
 # ThinkPHP 规则：mall_base 框架边界
 
 ## 适用范围

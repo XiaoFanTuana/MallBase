@@ -1,3 +1,8 @@
+---
+name: validate-then-transact
+description: MallBase ThinkPHP 先校验再事务规则；处理新增、更新、删除等写操作和事务一致性时使用。
+---
+
 # ThinkPHP 规则：先校验再事务
 
 ## 适用范围

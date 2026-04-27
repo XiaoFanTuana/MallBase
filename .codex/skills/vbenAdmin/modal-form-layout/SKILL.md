@@ -1,3 +1,8 @@
+---
+name: modal-form-layout
+description: MallBase Vben Admin Modal 表单布局规范；新增或调整后台弹窗表单、字段布局和交互一致性时使用。
+---
+
 # Vben 规则：Modal 表单布局一致
 
 ## 适用范围

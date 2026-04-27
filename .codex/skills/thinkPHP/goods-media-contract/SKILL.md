@@ -1,3 +1,8 @@
+---
+name: goods-media-contract
+description: MallBase ThinkPHP 商品媒体字段契约；处理商品主图、轮播图、主视频字段协议和接口契约变更时使用。
+---
+
 # ThinkPHP 规则：商品媒体字段契约（主图/主视频）
 
 ## 适用范围

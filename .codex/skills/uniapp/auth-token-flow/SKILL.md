@@ -1,3 +1,8 @@
+---
+name: auth-token-flow
+description: MallBase UniApp 预留认证规则；仅在明确修改 frontend/uniapp 登录态、Token 存储、刷新或失效处理时使用。
+---
+
 # UniApp 规则：认证与 Token 流程
 
 ## 适用范围
