@@ -29,28 +29,48 @@
 
     <!-- Main content -->
     <scroll-view v-else scroll-y class="goods-detail__scroll">
-      <!-- Image swiper -->
-      <view class="goods-detail__swiper-wrap">
+      <!-- Media swiper -->
+      <view class="goods-detail__swiper-wrap" :style="{ height: `${currentMediaHeight}rpx` }">
         <swiper
           class="goods-detail__swiper"
+          :style="{ height: `${currentMediaHeight}rpx` }"
           :current="swiperIndex"
           :indicator-dots="false"
           :autoplay="false"
-          circular
+          :circular="mediaList.length > 1"
           @change="onSwiperChange"
         >
-          <swiper-item v-for="(img, idx) in images" :key="idx">
-            <image
-              class="goods-detail__swiper-img"
-              :src="img"
-              mode="aspectFill"
-              @tap="previewImage(idx)"
-            />
+          <swiper-item
+            v-for="(media, idx) in mediaList"
+            :key="media.key"
+            class="goods-detail__swiper-item"
+            :style="{ height: `${currentMediaHeight}rpx` }"
+          >
+            <view class="goods-detail__swiper-media" :style="{ height: `${currentMediaHeight}rpx` }">
+              <video
+                v-if="media.type === 'video'"
+                class="goods-detail__swiper-video"
+                :src="media.url"
+                :poster="media.poster"
+                controls
+                object-fit="contain"
+              />
+              <image
+                v-else
+                class="goods-detail__swiper-img"
+                :src="media.url"
+                :style="{ height: `${currentMediaHeight}rpx` }"
+                mode="aspectFill"
+                lazy-load
+                @load="onMediaImageLoad(idx, $event)"
+                @tap="previewImage(idx)"
+              />
+            </view>
           </swiper-item>
         </swiper>
-        <view class="goods-detail__counter">
+        <view v-if="mediaList.length > 0" class="goods-detail__counter">
           <text class="goods-detail__counter-text">
-            {{ swiperIndex + 1 }}/{{ images.length }}
+            {{ swiperIndex + 1 }}/{{ mediaList.length }}
           </text>
         </view>
       </view>
@@ -62,10 +82,10 @@
             <text class="goods-detail__price-symbol">¥</text>
             <text class="goods-detail__price-value">{{ formattedPrice }}</text>
             <view
-              v-if="goods.market_price && Number(goods.market_price) > Number(displayPrice)"
+              v-if="displayMarketPrice && Number(displayMarketPrice) > Number(displayPrice)"
               class="goods-detail__original-price"
             >
-              <text class="goods-detail__original-price-text">¥{{ goods.market_price }}</text>
+              <text class="goods-detail__original-price-text">¥{{ displayMarketPrice }}</text>
             </view>
           </view>
           <view class="goods-detail__stock-tag">
@@ -102,7 +122,7 @@
           <text class="goods-detail__content-title">商品详情</text>
           <view class="goods-detail__content-line" />
         </view>
-        <rich-text v-if="goods.content" :nodes="goods.content" class="goods-detail__rich-text" />
+        <rich-text v-if="descriptionNodes" :nodes="descriptionNodes" class="goods-detail__rich-text" />
         <view v-else class="goods-detail__content-empty">
           <text class="goods-detail__content-empty-text">暂无详情</text>
         </view>
@@ -145,8 +165,11 @@
     <mb-spec-selector
       :visible="showSpec"
       :goods="goods || {}"
-      :sku-list="goods?.skus || []"
+      :sku-list="skuList"
       :mode="specMode"
+      :selected-specs="selectedSpecs"
+      :selected-sku-id="selectedSku?.id || null"
+      @change="onSpecChange"
       @close="showSpec = false"
       @add-to-cart="onAddToCart"
       @buy-now="onBuyNow"
@@ -155,10 +178,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getGoodsDetail } from '@/api/goods/goods'
 import { useCartStore } from '@/store/cart'
+
+const IMAGE_DEFAULT_HEIGHT = 422
+const IMAGE_MAX_HEIGHT = 1200
+const VIDEO_HEIGHT = 422
 
 const cartStore = useCartStore()
 
@@ -167,6 +194,9 @@ const goods = ref(null)
 const swiperIndex = ref(0)
 const showSpec = ref(false)
 const specMode = ref('both')
+const selectedSpecs = ref({})
+const selectedSkuId = ref(null)
+const mediaHeights = ref({})
 
 onLoad((query) => {
   if (query?.id) {
@@ -181,6 +211,7 @@ async function fetchDetail(id) {
   try {
     const res = await getGoodsDetail(id)
     goods.value = res?.data ?? res ?? null
+    resetSelection()
   } catch {
     goods.value = null
   } finally {
@@ -188,17 +219,102 @@ async function fetchDetail(id) {
   }
 }
 
-const images = computed(() => {
-  if (!goods.value) return []
-  const list = Array.isArray(goods.value.images) ? goods.value.images : []
-  const urls = list
-    .map((item) => (typeof item === 'string' ? item : item?.full_url || item?.url || ''))
-    .filter(Boolean)
-  if (urls.length > 0) return urls
-  return goods.value.main_image_full_url ? [goods.value.main_image_full_url] : []
+const skuList = computed(() => (Array.isArray(goods.value?.skus) ? goods.value.skus : []))
+
+const specGroups = computed(() => {
+  const meta = goods.value?.spec_meta
+  if (!Array.isArray(meta) || meta.length === 0) return []
+  return meta.map((group) => ({
+    name: group.name,
+    addPic: Number(group.add_pic || 0) === 1,
+    values: Array.isArray(group.values) ? group.values.map((item) => item.value) : [],
+    items: Array.isArray(group.values) ? group.values : [],
+  }))
 })
 
-const displayPrice = computed(() => goods.value?.price ?? '0')
+const hasMultiSpec = computed(() => specGroups.value.length > 0)
+const specImageGroup = computed(() => specGroups.value.find((group) => group.addPic) || null)
+
+const selectedSku = computed(() => {
+  if (!hasMultiSpec.value && skuList.value.length === 1) {
+    return skuList.value[0]
+  }
+
+  if (selectedSkuId.value) {
+    const found = skuList.value.find((sku) => String(sku.id) === String(selectedSkuId.value))
+    if (found) return found
+  }
+
+  const sku = findSkuBySpecs(selectedSpecs.value)
+  return sku || null
+})
+
+const mediaList = computed(() => {
+  if (!goods.value) return []
+
+  const list = []
+  const imageIndexMap = new Map()
+  const videoUrl = goods.value.main_video_full_url || goods.value.main_video || ''
+  if (videoUrl) {
+    list.push({
+      key: `video:${videoUrl}`,
+      type: 'video',
+      url: videoUrl,
+      poster: goods.value.main_image_full_url || normalizeImageUrl(goods.value.images?.[0]) || '',
+    })
+  }
+
+  const appendImage = (url, source = 'goods', specName = '', specValue = '') => {
+    if (!url) return
+    const existedIndex = imageIndexMap.get(url)
+    if (existedIndex !== undefined) {
+      if (source === 'spec') addSpecValueToMedia(list[existedIndex], specName, specValue)
+      return
+    }
+
+    const item = {
+      key: `${source}:${url}`,
+      type: 'image',
+      url,
+      source,
+      specName,
+      specValues: source === 'spec' && specValue ? [specValue] : [],
+    }
+    imageIndexMap.set(url, list.length)
+    list.push(item)
+  }
+
+  const goodsImages = Array.isArray(goods.value.images) ? goods.value.images : []
+  goodsImages.forEach((image) => appendImage(normalizeImageUrl(image), 'goods'))
+  if (list.filter((item) => item.type === 'image').length === 0) {
+    appendImage(goods.value.main_image_full_url || goods.value.main_image || '', 'goods')
+  }
+
+  if (specImageGroup.value) {
+    specImageGroup.value.items.forEach((item) => {
+      appendImage(item.pic_full_url || item.pic || '', 'spec', specImageGroup.value.name, item.value)
+    })
+  }
+
+  return list
+})
+
+const currentMedia = computed(() => mediaList.value[swiperIndex.value] || null)
+
+const currentMediaHeight = computed(() => {
+  if (currentMedia.value?.type === 'video') return VIDEO_HEIGHT
+  return mediaHeights.value[swiperIndex.value] || IMAGE_DEFAULT_HEIGHT
+})
+
+const imagePreviewUrls = computed(() => mediaList.value
+  .filter((item) => item.type === 'image')
+  .map((item) => item.url))
+
+const descriptionNodes = computed(() => normalizeDescriptionHtml(goods.value?.description || ''))
+
+const displayPrice = computed(() => selectedSku.value?.price ?? goods.value?.price ?? '0')
+const displayMarketPrice = computed(() => selectedSku.value?.market_price ?? goods.value?.market_price ?? '')
+const displayStock = computed(() => selectedSku.value?.stock ?? goods.value?.stock ?? 0)
 
 const formattedPrice = computed(() => {
   const num = Number(displayPrice.value)
@@ -208,25 +324,159 @@ const formattedPrice = computed(() => {
   return dec === '00' ? int : `${int}.${dec}`
 })
 
-const displayStock = computed(() => goods.value?.stock ?? 0)
-
 const cartCount = computed(() => cartStore.count)
 
+const selectedSpecText = computed(() => specGroups.value
+  .map((group) => selectedSpecs.value[group.name])
+  .filter(Boolean)
+  .join(' / '))
+
 const specDisplayText = computed(() => {
-  const meta = goods.value?.spec_meta
-  if (!Array.isArray(meta) || meta.length === 0) return '默认规格'
-  return `已选：${meta.map((g) => g.name).join('、')}`
+  if (!hasMultiSpec.value) return '默认规格'
+  if (selectedSpecText.value) return `已选：${selectedSpecText.value}`
+  return `请选择 ${specGroups.value.map((group) => group.name).join(' / ')}`
 })
 
-function onSwiperChange(e) {
-  swiperIndex.value = e.detail.current
+function resetSelection() {
+  swiperIndex.value = 0
+  mediaHeights.value = {}
+  selectedSpecs.value = {}
+  selectedSkuId.value = null
+
+  if (!hasMultiSpec.value && skuList.value.length === 1) {
+    selectedSkuId.value = skuList.value[0].id
+  }
 }
 
-function previewImage(idx) {
-  uni.previewImage({
-    urls: images.value,
-    current: idx,
+function normalizeImageUrl(image) {
+  if (!image) return ''
+  if (typeof image === 'string') return image
+  return image.full_url || image.url || image.image_full_url || image.image || image.src || ''
+}
+
+function addSpecValueToMedia(media, specName, specValue) {
+  if (!media.specName) media.specName = specName
+  if (!media.specValues) media.specValues = []
+  if (specValue && !media.specValues.includes(specValue)) {
+    media.specValues.push(specValue)
+  }
+}
+
+function findSkuBySpecs(specs) {
+  if (!hasMultiSpec.value) return skuList.value[0] || null
+  if (Object.keys(specs).length < specGroups.value.length) return null
+
+  const specValues = specGroups.value.map((group) => specs[group.name] || '')
+  if (specValues.some((value) => value === '')) return null
+
+  const specText = specValues.join(',')
+  return skuList.value.find((sku) => sku.spec_values === specText) || null
+}
+
+function findSpecMediaIndex(specName, specValue) {
+  if (!specName || !specValue) return -1
+
+  return mediaList.value.findIndex((media) => (
+    media.type === 'image' &&
+    media.source === 'spec' &&
+    media.specName === specName &&
+    Array.isArray(media.specValues) &&
+    media.specValues.includes(specValue)
+  ))
+}
+
+function jumpToSpecMedia(specName, specValue) {
+  const index = findSpecMediaIndex(specName, specValue)
+  if (index < 0) return
+  nextTick(() => {
+    swiperIndex.value = index
   })
+}
+
+function onMediaImageLoad(index, event) {
+  const width = Number(event?.detail?.width || 0)
+  const height = Number(event?.detail?.height || 0)
+  if (width <= 0 || height <= 0) return
+
+  const nextHeight = Math.min(IMAGE_MAX_HEIGHT, Math.ceil((750 * height) / width))
+  mediaHeights.value = { ...mediaHeights.value, [index]: nextHeight }
+}
+
+function normalizeDescriptionHtml(html) {
+  if (!html) return ''
+
+  return String(html)
+    .replace(/<(p|div|section|span|table|tbody|thead|tr|td|th)\b([^>]*)>/gi, (match, tag, attrs) => {
+      const cleanedAttrs = normalizeRichTextAttrs(attrs)
+      return `<${tag}${cleanedAttrs}>`
+    })
+    .replace(/<img\b([^>]*)>/gi, (match, attrs) => {
+      const cleanedAttrs = normalizeRichTextAttrs(attrs)
+
+      return `<img${cleanedAttrs} style="max-width:100%;width:100%;height:auto;display:block;box-sizing:border-box;" />`
+    })
+}
+
+function normalizeRichTextAttrs(attrs = '') {
+  return String(attrs)
+    .replace(/\/\s*$/g, '')
+    .replace(/\s(width|height)=["'][^"']*["']/gi, '')
+    .replace(/\s(width|height)=[^\s>]*/gi, '')
+    .replace(/\sstyle=(["'])(.*?)\1/gi, (match, quote, style) => {
+      const rules = style
+        .split(';')
+        .map((rule) => rule.trim())
+        .filter(Boolean)
+        .filter((rule) => !/^(width|min-width|max-width|height|min-height|max-height|left|right|margin-left|margin-right|position|transform)\s*:/i.test(rule))
+
+      if (rules.length === 0) return ''
+      return ` style="${rules.join(';')}"`
+    })
+}
+
+function onSwiperChange(event) {
+  const index = event.detail.current
+  swiperIndex.value = index
+
+  const media = mediaList.value[index]
+  if (
+    !media ||
+    media.type !== 'image' ||
+    media.source !== 'spec' ||
+    !media.specName ||
+    !Array.isArray(media.specValues) ||
+    media.specValues.length === 0
+  ) {
+    return
+  }
+
+  const nextSpecs = {
+    ...selectedSpecs.value,
+    [media.specName]: media.specValues[0],
+  }
+  const sku = findSkuBySpecs(nextSpecs)
+  selectedSpecs.value = nextSpecs
+  selectedSkuId.value = sku?.id || null
+}
+
+function previewImage(mediaIndex) {
+  const media = mediaList.value[mediaIndex]
+  if (!media || media.type !== 'image') return
+
+  uni.previewImage({
+    urls: imagePreviewUrls.value,
+    current: media.url,
+  })
+}
+
+function onSpecChange(payload) {
+  selectedSpecs.value = { ...(payload?.selectedSpecs || {}) }
+  selectedSkuId.value = payload?.sku?.id || null
+
+  const group = specImageGroup.value
+  if (group && selectedSpecs.value[group.name]) {
+    jumpToSpecMedia(group.name, selectedSpecs.value[group.name])
+  }
 }
 
 function onShare() {
@@ -256,12 +506,7 @@ function goCart() {
 }
 
 function onOpenSpec(mode) {
-  const meta = goods.value?.spec_meta
-  if (!Array.isArray(meta) || meta.length === 0) {
-    specMode.value = 'both'
-  } else {
-    specMode.value = mode === 'buy' ? 'buy' : 'cart'
-  }
+  specMode.value = hasMultiSpec.value ? (mode === 'buy' ? 'buy' : 'cart') : 'both'
   showSpec.value = true
 }
 
@@ -373,16 +618,38 @@ function onBuyNow({ sku, quantity }) {
   position: relative;
   width: 100%;
   background: $mb-color-bg-secondary;
+  transition: height 0.2s ease;
 }
 
 .goods-detail__swiper {
   width: 100%;
-  height: 750rpx;
+  transition: height 0.2s ease;
+}
+
+.goods-detail__swiper-item {
+  width: 100%;
+  overflow: hidden;
+}
+
+.goods-detail__swiper-media {
+  width: 100%;
+  overflow: hidden;
+}
+
+.goods-detail__swiper-img,
+.goods-detail__swiper-video {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .goods-detail__swiper-img {
-  width: 100%;
-  height: 750rpx;
+  background: $mb-color-bg-secondary;
+}
+
+.goods-detail__swiper-video {
+  height: 100%;
+  background: #000000;
 }
 
 .goods-detail__counter {
@@ -535,7 +802,11 @@ function onBuyNow({ sku, quantity }) {
 // ---------- Content section ----------
 .goods-detail__content-section {
   background: $mb-color-bg;
-  padding: $mb-spacing-xl $mb-spacing-page $mb-spacing-xl;
+  padding: $mb-spacing-xl 0 $mb-spacing-xl;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .goods-detail__content-header {
@@ -543,6 +814,8 @@ function onBuyNow({ sku, quantity }) {
   align-items: center;
   gap: $mb-spacing-md;
   margin-bottom: $mb-spacing-lg;
+  padding: 0 $mb-spacing-page;
+  box-sizing: border-box;
 }
 
 .goods-detail__content-line {
@@ -559,10 +832,15 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__rich-text {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   font-size: $mb-font-md;
   line-height: 1.7;
   color: $mb-color-text;
   word-break: break-all;
+  overflow: hidden;
 }
 
 .goods-detail__content-empty {

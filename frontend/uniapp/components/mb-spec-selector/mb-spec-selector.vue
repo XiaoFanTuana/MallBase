@@ -45,7 +45,7 @@
           <mb-quantity-stepper
             v-model="quantity"
             class="mb-spec__quantity-stepper"
-            :max="currentStock"
+            :max="quantityMax"
           />
         </view>
       </scroll-view>
@@ -84,38 +84,42 @@ const props = defineProps({
   goods: { type: Object, default: () => ({}) },
   skuList: { type: Array, default: () => [] },
   mode: { type: String, default: 'both' },
+  selectedSpecs: { type: Object, default: () => ({}) },
+  selectedSkuId: { type: [Number, String], default: null },
 })
 
-const emit = defineEmits(['close', 'addToCart', 'buyNow'])
+const emit = defineEmits(['close', 'change', 'addToCart', 'buyNow'])
 
 const show = ref(false)
 const quantity = ref(1)
-const selectedSpecs = ref({})
 
 const specGroups = computed(() => {
   const meta = props.goods.spec_meta
   if (!Array.isArray(meta) || meta.length === 0) return []
   return meta.map((group) => ({
     name: group.name,
-    values: group.values.map((v) => v.value),
+    values: Array.isArray(group.values) ? group.values.map((v) => v.value) : [],
   }))
 })
+
+const selectedSpecs = computed(() => props.selectedSpecs || {})
 
 const selectedSku = computed(() => {
   if (specGroups.value.length === 0 && props.skuList.length === 1) {
     return props.skuList[0]
   }
-  const selected = selectedSpecs.value
-  const groupCount = specGroups.value.length
-  const selectedCount = Object.keys(selected).length
-  if (selectedCount < groupCount) return null
 
-  const selectedStr = specGroups.value.map((g) => selected[g.name]).join(',')
-  return props.skuList.find((sku) => sku.spec_values === selectedStr) || null
+  if (props.selectedSkuId) {
+    const found = props.skuList.find((sku) => String(sku.id) === String(props.selectedSkuId))
+    if (found) return found
+  }
+
+  return findSkuBySpecs(selectedSpecs.value)
 })
 
 const currentPrice = computed(() => selectedSku.value?.price ?? props.goods.price ?? 0)
 const currentStock = computed(() => selectedSku.value?.stock ?? props.goods.stock ?? 0)
+const quantityMax = computed(() => Math.max(1, Number(currentStock.value) || 0))
 
 const selectedSpecText = computed(() =>
   specGroups.value
@@ -124,11 +128,22 @@ const selectedSpecText = computed(() =>
     .join(' / '),
 )
 
+function findSkuBySpecs(specs) {
+  if (specGroups.value.length === 0) return props.skuList[0] || null
+  if (Object.keys(specs).length < specGroups.value.length) return null
+
+  const selectedValues = specGroups.value.map((group) => specs[group.name] || '')
+  if (selectedValues.some((value) => value === '')) return null
+
+  const selectedStr = selectedValues.join(',')
+  return props.skuList.find((sku) => sku.spec_values === selectedStr) || null
+}
+
 function isSpecDisabled(groupName, value) {
   const trial = { ...selectedSpecs.value, [groupName]: value }
   return !props.skuList.some((sku) => {
-    if (!sku.spec_values || sku.stock <= 0) return false
-    const skuValues = sku.spec_values.split(',')
+    if (!sku.spec_values || Number(sku.stock) <= 0) return false
+    const skuValues = String(sku.spec_values).split(',')
     return specGroups.value.every((group, idx) => {
       const trialVal = trial[group.name]
       if (!trialVal) return true
@@ -139,13 +154,18 @@ function isSpecDisabled(groupName, value) {
 
 function selectSpec(groupName, value) {
   if (isSpecDisabled(groupName, value)) return
-  if (selectedSpecs.value[groupName] === value) {
-    const next = { ...selectedSpecs.value }
+
+  const next = { ...selectedSpecs.value }
+  if (next[groupName] === value) {
     delete next[groupName]
-    selectedSpecs.value = next
   } else {
-    selectedSpecs.value = { ...selectedSpecs.value, [groupName]: value }
+    next[groupName] = value
   }
+
+  emit('change', {
+    selectedSpecs: next,
+    sku: findSkuBySpecs(next),
+  })
 }
 
 function validate() {
@@ -153,7 +173,7 @@ function validate() {
     uni.showToast({ title: '请选择规格', icon: 'none' })
     return false
   }
-  if (currentStock.value <= 0) {
+  if (Number(currentStock.value) <= 0) {
     uni.showToast({ title: '库存不足', icon: 'none' })
     return false
   }
@@ -178,11 +198,13 @@ function close() {
 watch(() => props.visible, (val) => {
   if (val) {
     quantity.value = 1
-    if (specGroups.value.length === 0 || props.skuList.length <= 1) {
-      selectedSpecs.value = {}
-    }
     nextTick(() => { show.value = true })
   }
+})
+
+watch(currentStock, (stock) => {
+  const max = Math.max(1, Number(stock) || 0)
+  if (quantity.value > max) quantity.value = max
 })
 </script>
 

@@ -89,6 +89,7 @@ class ClientGoodsService extends BaseService
         $data['skus'] = $this->model(GoodsSku::class)
             ->where('goods_id', $goodsId)
             ->where('status', 1)
+            ->order('id', 'asc')
             ->select()
             ->toArray();
 
