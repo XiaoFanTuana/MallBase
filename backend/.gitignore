@@ -12,5 +12,6 @@ Thumbs.db
 public/docs
 public/uploads
 public/admin
+public/client
 public/h5
 install/install.lock

@@ -1,0 +1,25 @@
+# ==========================================
+# 前端一次性打包：UniApp H5 产物同步到 backend/public/client
+#
+# 用法：
+#   docker compose -f docker-compose.uniapp-build.yml up uniapp-build
+# ==========================================
+
+services:
+  uniapp-build:
+    image: node:20-alpine
+    container_name: mallbase-uniapp-build
+    working_dir: /app
+    volumes:
+      - ./frontend/uniapp:/app
+      - ./backend/public/client:/dist
+      - uniapp_node_modules:/app/node_modules
+      - ./deploy/docker/uniapp-build.sh:/uniapp-build.sh:ro
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      CI: "true"
+    command: sh /uniapp-build.sh
+    restart: "no"
+
+volumes:
+  uniapp_node_modules:

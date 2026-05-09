@@ -12,12 +12,12 @@ MallBase 的前后端路径拆分规则如下：
 
 | 路径 | 处理方式 | 说明 |
 |------|----------|------|
+| `/` | Nginx 直接返回静态文件 | UniApp H5 入口与静态资源 |
 | `/admin/` | Nginx 直接返回静态文件 | 后台前端入口与静态资源 |
 | `/admin/api/` | 反向代理到 Swoole | 后台 API |
 | `/install` | 反向代理到 Swoole | 安装向导 |
-| `/client/` | 反向代理到 Swoole | 客户端 API（预留） |
+| `/client/api/` | 反向代理到 Swoole | 客户端 API |
 | `/uploads/` | 反向代理到 Swoole | 上传文件访问 |
-| `/` | 301 跳转到 `/admin/` | 默认进入后台 |
 
 ## 使用前确认
 
@@ -34,6 +34,7 @@ curl -I http://127.0.0.1:8080/
 ### 2. 前端静态文件已经存在
 
 ```bash
+ls /var/www/mallbase/client/index.html
 ls /var/www/mallbase/admin/index.html
 ```
 
@@ -49,6 +50,15 @@ VITE_GLOB_API_URL=/admin/api
 ```
 
 这样前端路由和接口地址才能与下面的 Nginx 路径规则对齐。
+
+`frontend/uniapp/.env.production` 应保持：
+
+```ini
+VITE_UNIAPP_BASE_URL=
+VITE_UNIAPP_API_PREFIX=/client/api
+```
+
+这样 H5 会使用当前访问域名下的 `/client/api/...`，避免打包时写死域名。
 
 ## Nginx 配置示例
 
@@ -67,12 +77,35 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
     gzip_vary on;
 
-    location /admin/ {
+    root /var/www/mallbase/client;
+    index index.html;
+
+    location = /client/api {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location ^~ /client/api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    location ^~ /admin/ {
         alias /var/www/mallbase/admin/;
         try_files $uri $uri/ /admin/index.html;
     }
 
-    location /admin/api/ {
+    location ^~ /admin/api/ {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -91,20 +124,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /client/ {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /uploads/ {
+    location ^~ /uploads/ {
         proxy_pass http://127.0.0.1:8080;
     }
 
-    location = / {
-        return 301 /admin/;
+    location / {
+        try_files $uri $uri/ /index.html;
     }
 }
 ```
@@ -115,23 +140,23 @@ server {
 
 - 80 → 443 自动跳转
 - `ssl_certificate` / `ssl_certificate_key`
-- 与 HTTP 版一致的路径拆分规则
+- 与 HTTP 版一致的路径拆分规则：根路径进入 H5，`/admin` 进入后台
 
 ## 推荐部署步骤
 
 ### 方式一：手动安装
 
 1. 后端直接运行在宿主机，确认 `php think swoole` 已监听 `127.0.0.1:8080` 或 `0.0.0.0:8080`
-2. 将前端构建产物放到 `/var/www/mallbase/admin/`
+2. 将 H5 构建产物放到 `/var/www/mallbase/client/`，将后台构建产物放到 `/var/www/mallbase/admin/`
 3. 把 `deploy/nginx/mallbase.conf` 复制到 Nginx 站点目录
 4. 按实际域名、证书路径、静态目录修改配置
 5. 执行 `nginx -t && systemctl reload nginx`
 
 ### 方式四：Docker 生产
 
-1. 先构建前端并上传到 `/var/www/mallbase/admin/`
+1. 先构建前端并上传到 `/var/www/mallbase/client/` 和 `/var/www/mallbase/admin/`
 2. 再执行 `docker compose up -d --build` 启动后端容器
-3. Nginx 的 `/admin/api/`、`/install`、`/client/`、`/uploads/` 指向宿主机暴露的 `127.0.0.1:8080`
+3. Nginx 的 `/admin/api/`、`/install`、`/client/api/`、`/uploads/` 指向宿主机暴露的 `127.0.0.1:8080`
 4. 执行 `nginx -t && systemctl reload nginx`
 
 ## 自检命令
@@ -139,10 +164,11 @@ server {
 ### 1. 检查静态首页
 
 ```bash
+curl -I http://mall.example.com/
 curl -I http://mall.example.com/admin/
 ```
 
-预期返回 `200 OK`。
+预期都返回 `200 OK`；其中根路径是 H5，`/admin/` 是后台。
 
 ### 2. 检查后台 API 已经过代理
 
@@ -187,6 +213,15 @@ curl -I http://127.0.0.1:8080/
 
 确认后端本身可访问，再排查 Nginx。
 
+### `/` 不是 H5 页面
+
+优先检查两点：
+
+- `/var/www/mallbase/client/index.html` 是否存在
+- server 块里的 `root` 是否指向 `/var/www/mallbase/client`
+
+H5 生产构建默认使用根路径资源，例如 `/assets/...`，所以域名根路径应该由 H5 目录承载。
+
 ### 前端能打开，但接口走成了错误地址
 
 检查前端生产构建参数：
@@ -194,9 +229,11 @@ curl -I http://127.0.0.1:8080/
 ```ini
 VITE_BASE=/admin/
 VITE_GLOB_API_URL=/admin/api
+VITE_UNIAPP_BASE_URL=
+VITE_UNIAPP_API_PREFIX=/client/api
 ```
 
-如果这里写成了 `/api` 或完整域名，而 Nginx 实际路径不是这样，登录、菜单和数据请求都会异常。
+如果 Admin 写成了 `/api`，或 H5 写死了完整域名，而 Nginx 实际路径不是这样，登录、菜单和数据请求都会异常。
 
 ### 修改配置后没有生效
 

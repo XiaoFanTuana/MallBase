@@ -78,7 +78,7 @@
 | [troubleshooting.md](./troubleshooting.md) | 安装与部署相关的总故障排查 |
 | [env-files.md](./env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
 | [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) | `/admin/`、`/admin/api/`、`/install` 等路径的代理规则 |
-| [upload-public-admin.md](./upload-public-admin.md) | 把本地 `backend/public/admin` 打包上传到服务器 |
+| [upload-public-admin.md](./upload-public-admin.md) | 把本地 `backend/public/admin` 打包上传到服务器；如果存在 `backend/public/client`，会同步上传 H5 |
 | [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md) | Docker 全套模式首次启动的时序与密码问题专题记录 |
 
 ## 重要提醒

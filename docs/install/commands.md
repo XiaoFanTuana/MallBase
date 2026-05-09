@@ -92,6 +92,14 @@ pnpm run dev:antd
 
 ## 静态资源上传
 
+### 构建 UniApp H5 到发布目录
+
+```bash
+docker compose -f docker-compose.uniapp-build.yml up uniapp-build
+```
+
+执行后 H5 会同步到 `backend/public/client`。
+
 ### 直接上传到 Nginx 静态目录
 
 适用：方式四
@@ -102,7 +110,9 @@ sh deploy/upload-public-admin.sh \
   --remote-dir /var/www/mallbase/admin
 ```
 
-### 上传到服务器项目目录下的 `backend/public/admin`
+如果本地存在 `backend/public/client/index.html`，脚本会同时上传到 `/var/www/mallbase/client`。
+
+### 上传到服务器项目目录下的 `backend/public/admin` 和 `backend/public/client`
 
 适用：方式四
 

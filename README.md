@@ -54,10 +54,12 @@ mall-base/
 ├── deploy/
 │   ├── docker/
 │   │   ├── Dockerfile              # Docker 相关脚本与镜像构建
+│   │   ├── frontend-build.sh       # 后台前端打包脚本
+│   │   ├── uniapp-build.sh         # UniApp H5 打包脚本
 │   │   └── mysql/                  # MySQL 初始化脚本
 │   ├── nginx/
 │   │   └── mallbase.conf           # Nginx 配置示例
-│   └── upload-public-admin.sh      # 打包并上传后台静态资源
+│   └── upload-public-admin.sh      # 打包并上传前端静态资源
 │
 ├── docs/                           # 文档
 │   ├── install.md                  # 安装入口（兼容旧链接）
@@ -75,12 +77,14 @@ mall-base/
 │   │   └── issues/
 │   │       └── docker-fullstack-first-run.md  # Docker 全套模式首装问题排查记录
 │   ├── freight-template-roadmap.md # 运费模板路线图
+│   ├── uniapp-h5-build.md          # UniApp H5 打包说明
 │   ├── claude-code-guide.md        # Claude Code 使用指南
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
 ├── docker-compose.yml              # 单容器部署（默认）
 ├── docker-compose.prod.yml         # 双容器生产部署
 ├── docker-compose.dev.yml          # 开发环境（含 MySQL + Redis）
+├── docker-compose.uniapp-build.yml # UniApp H5 一键打包
 └── README.md
 ```
 
@@ -135,8 +139,9 @@ docker compose restart
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
 | [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
 | [Nginx 反向代理配置说明](docs/install/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
-| [后台静态资源上传脚本](docs/install/upload-public-admin.md) | 本地打包 `backend/public/admin` 并上传到服务器目录 |
+| [前端静态资源上传脚本](docs/install/upload-public-admin.md) | 本地打包 `backend/public/admin`，并在存在 H5 产物时同步上传 `backend/public/client` |
 | [Docker 首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
+| [UniApp H5 打包说明](docs/uniapp-h5-build.md) | 根目录 Docker Compose 一键打包 H5 与产物位置 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |

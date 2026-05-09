@@ -7,6 +7,7 @@
 - 服务器可直接安装 PHP 8.2、MySQL 8.0、Redis 6、Nginx
 - 你希望自行管理进程与系统服务
 - 已准备好项目代码目录，例如 `mall-base/`
+- 如需同时发布 H5，已准备 `backend/public/client`
 
 ## 完整步骤
 
@@ -159,6 +160,13 @@ sudo cp -r frontend/admin/apps/web-antd/dist/* /var/www/mallbase/admin/
 
 如果你更想走打包后的上传脚本，参考 [upload-public-admin.md](./upload-public-admin.md)。
 
+如果已经构建了 H5，同步到发布目录：
+
+```bash
+sudo mkdir -p /var/www/mallbase/client
+sudo cp -r backend/public/client/. /var/www/mallbase/client/
+```
+
 ### 8. 配置 Nginx
 
 复制并调整项目自带配置：
@@ -206,11 +214,13 @@ php think swoole
 
 ```bash
 curl -I http://127.0.0.1:8080/
+ls /var/www/mallbase/client/index.html
 ls /var/www/mallbase/admin/index.html
 ```
 
 浏览器访问：
 
+- `/`：H5 首页
 - `/install`：首次安装
 - `/admin/`：安装完成后进入后台
 
