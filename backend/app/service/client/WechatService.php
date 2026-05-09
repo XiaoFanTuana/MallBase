@@ -5,6 +5,7 @@ namespace app\service\client;
 
 use app\common\enum\RegisterType;
 use app\model\user\User;
+use app\service\UploadService;
 use EasyWeChat\Kernel\Exceptions\HttpException;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -262,8 +263,8 @@ class WechatService extends BaseService
         if ($nickname !== '' && (string) $user->nickname === '') {
             $updates['nickname'] = mb_substr($nickname, 0, 50);
         }
-        if ($avatar !== '' && (string) $user->avatar === '') {
-            $updates['avatar'] = $avatar;
+        if ($avatar !== '' && (string) $user->avatar === '' && !preg_match('#^(https?:)?//#i', $avatar)) {
+            $updates['avatar'] = $this->normalizeAvatar($avatar);
         }
         if ($updates !== []) {
             $user->save($updates);
@@ -452,6 +453,11 @@ class WechatService extends BaseService
         return (string) $payload['openid'];
     }
 
+    public function assertMiniappBindToken(string $token): void
+    {
+        $this->resolveBindToken($token, RegisterType::WECHAT_MINIAPP);
+    }
+
     private function clearBindToken(string $token): void
     {
         Cache::delete(self::BIND_TOKEN_PREFIX . trim($token));
@@ -507,11 +513,17 @@ class WechatService extends BaseService
             $updates['nickname'] = mb_substr($nickname, 0, 50);
         }
         if ($avatar !== '' && (string) $user->avatar === '') {
-            $updates['avatar'] = $avatar;
+            $updates['avatar'] = $this->normalizeAvatar($avatar);
         }
         if ($updates !== []) {
             $user->save($updates);
         }
+    }
+
+    private function normalizeAvatar(string $avatar): string
+    {
+        return app()->make(UploadService::class)
+            ->normalizeStoredImagePath($avatar);
     }
 
     private function settingBool(string $code): bool

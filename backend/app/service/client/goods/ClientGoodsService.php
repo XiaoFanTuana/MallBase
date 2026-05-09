@@ -92,6 +92,7 @@ class ClientGoodsService extends BaseService
             ->order('id', 'asc')
             ->select()
             ->toArray();
+        $data['guarantees'] = $this->goodsGuarantees();
 
         return $data;
     }
@@ -133,5 +134,48 @@ class ClientGoodsService extends BaseService
             'newest'     => $query->order('id', 'desc'),
             default      => $query->order('sort', 'asc')->order('id', 'desc'),
         };
+    }
+
+    /**
+     * 商品详情页保障说明。
+     *
+     * @return array<int, array{title:string, desc:string, icon:string}>
+     */
+    private function goodsGuarantees(): array
+    {
+        $default = [
+            ['title' => '正品保障', 'desc' => '平台严选商品来源', 'icon' => 'shield'],
+            ['title' => '极速发货', 'desc' => '现货商品优先出库', 'icon' => 'truck'],
+            ['title' => '七天无理由', 'desc' => '符合条件可无理由退货', 'icon' => 'refresh'],
+            ['title' => '售后无忧', 'desc' => '订单售后进度可追踪', 'icon' => 'service'],
+        ];
+
+        $raw = getSystemSetting('client_goods_guarantees');
+        if (!is_string($raw) || trim($raw) === '') {
+            return $default;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return $default;
+        }
+
+        $items = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $title = trim((string) ($item['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $items[] = [
+                'title' => mb_substr($title, 0, 20),
+                'desc' => mb_substr(trim((string) ($item['desc'] ?? '')), 0, 60),
+                'icon' => mb_substr(trim((string) ($item['icon'] ?? 'shield')), 0, 30),
+            ];
+        }
+
+        return $items !== [] ? $items : $default;
     }
 }

@@ -33,38 +33,42 @@ const categoryDescMap = {
   '食品饮料': '健康美味品质生活之选',
 }
 
-// ---------- subcategory icon map (Unicode) ----------
+// ---------- subcategory icon map ----------
 const subIconMap = {
-  '智能手机': '\u{1F4F1}',
-  '笔记本': '\u{1F4BB}',
-  '影音娱乐': '\u{1F3A7}',
-  '智能穿戴': '⌚',
-  '平板电脑': '\u{1F4F1}',
-  '数码相机': '\u{1F4F7}',
-  '电视': '\u{1F4FA}',
-  '音响': '\u{1F50A}',
-  '耳机': '\u{1F3A7}',
-  '键盘': '⌨',
-  '鼠标': '\u{1F5B1}',
-  '充电器': '\u{1F50C}',
-  '沙发': '\u{1FA91}',
-  '床品': '\u{1F6CF}',
-  '灯具': '\u{1F4A1}',
-  '厨具': '\u{1F373}',
-  '收纳': '\u{1F4E6}',
-  '装饰': '\u{1F3A8}',
-  '男装': '\u{1F454}',
-  '女装': '\u{1F457}',
-  '鞋靴': '\u{1F45F}',
-  '包袋': '\u{1F45C}',
-  '配饰': '\u{1F48D}',
-  '手表': '⌚',
-  '护肤': '✨',
-  '彩妆': '\u{1F484}',
-  '香水': '\u{1F9F4}',
-  '面膜': '\u{1F3AD}',
-  '洗护': '\u{1F9F4}',
-  '美发': '\u{1F487}',
+  '智能手机': 'phone',
+  '手机': 'phone',
+  '笔记本': 'laptop',
+  '电脑': 'laptop',
+  '影音娱乐': 'headphone',
+  '耳机': 'headphone',
+  '智能穿戴': 'watch',
+  '手表': 'watch',
+  '平板电脑': 'tablet',
+  '平板': 'tablet',
+  '数码相机': 'camera',
+  '相机': 'camera',
+  '电视': 'screen',
+  '音响': 'speaker',
+  '键盘': 'keyboard',
+  '鼠标': 'mouse',
+  '充电器': 'charger',
+  '沙发': 'home',
+  '床品': 'home',
+  '灯具': 'lamp',
+  '厨具': 'home',
+  '收纳': 'box',
+  '装饰': 'home',
+  '男装': 'shirt',
+  '女装': 'shirt',
+  '鞋靴': 'shoe',
+  '包袋': 'bag',
+  '配饰': 'watch',
+  '护肤': 'beauty',
+  '彩妆': 'beauty',
+  '香水': 'beauty',
+  '面膜': 'beauty',
+  '洗护': 'beauty',
+  '美发': 'beauty',
 }
 
 // ---------- derived ----------
@@ -260,10 +264,11 @@ onLoad(() => {
                   mode="aspectFill"
                   lazy-load
                 />
-                <text
+                <view
                   v-else-if="getSubIcon(sub.name)"
-                  class="grid__icon-emoji"
-                >{{ getSubIcon(sub.name) }}</text>
+                  class="grid__line-icon"
+                  :class="'grid__line-icon--' + getSubIcon(sub.name)"
+                />
                 <text v-else class="grid__icon-char">{{ sub.name.charAt(0) }}</text>
               </view>
               <text class="grid__name">{{ sub.name }}</text>
@@ -274,7 +279,7 @@ onLoad(() => {
         <!-- Empty subcategories -->
         <view v-if="subcategories.length === 0" class="empty-sub">
           <mb-empty-state
-            icon="&#x1F4C2;"
+            icon=""
             text="暂无子分类"
             padding-top="160rpx"
           />
@@ -288,7 +293,7 @@ onLoad(() => {
     <!-- Empty state: no categories at all -->
     <view v-else class="empty-root">
       <mb-empty-state
-        icon="&#x1F4C2;"
+        icon=""
         :text="loadError ? '加载失败，点击重试' : '暂无分类'"
         :action-text="loadError ? '重新加载' : ''"
         @action="fetchCategories"
@@ -305,7 +310,7 @@ onLoad(() => {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: $mb-color-bg;
+  background-color: $mb-color-bg-secondary;
 }
 
 /* ===========================
@@ -321,9 +326,9 @@ onLoad(() => {
    Left Sidebar
    =========================== */
 .sidebar {
-  width: 176rpx;
+  width: 168rpx;
   flex-shrink: 0;
-  background-color: $mb-color-bg;
+  background-color: #f0f0ff;
   height: 100%;
 }
 
@@ -338,7 +343,7 @@ onLoad(() => {
 }
 
 .sidebar__item--active {
-  background-color: $mb-color-bg-secondary;
+  background-color: $mb-color-bg-surface;
 }
 
 .sidebar__indicator {
@@ -349,7 +354,7 @@ onLoad(() => {
   width: 6rpx;
   height: 44rpx;
   border-radius: 0 $mb-radius-sm $mb-radius-sm 0;
-  background-color: $mb-color-text-title;
+  background-color: $mb-color-primary;
 }
 
 .sidebar__text {
@@ -374,7 +379,7 @@ onLoad(() => {
 .content {
   flex: 1;
   height: 100%;
-  background-color: $mb-color-bg-secondary;
+  background-color: $mb-color-bg;
 }
 
 /* ===========================
@@ -386,27 +391,25 @@ onLoad(() => {
   height: 200rpx;
   border-radius: $mb-radius-lg;
   overflow: hidden;
+  border: 1rpx solid $mb-color-divider;
 }
 
 .banner__bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #2a2218 0%, #1a1a1a 40%, #2d2d2d 100%);
+  background:
+    radial-gradient(circle at 78% 48%, rgba(255, 255, 255, 0.14) 0 16%, transparent 17%),
+    linear-gradient(135deg, #11263f 0%, #08182c 56%, #07111f 100%);
 }
 
 .banner__accent {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 55%;
+  left: 48%;
+  width: 2rpx;
   height: 100%;
-  background: linear-gradient(
-    135deg,
-    rgba(180, 150, 80, 0.5) 0%,
-    rgba(160, 120, 50, 0.3) 40%,
-    transparent 100%
-  );
-  border-radius: 0 0 60% 0;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 68rpx 0 0 rgba(255, 255, 255, 0.12), -68rpx 0 0 rgba(255, 255, 255, 0.1);
 }
 
 .banner__text {
@@ -414,8 +417,9 @@ onLoad(() => {
   inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-left: $mb-spacing-lg;
   z-index: 1;
 }
 
@@ -423,16 +427,16 @@ onLoad(() => {
   font-size: $mb-font-xs;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 6rpx;
+  letter-spacing: 1rpx;
   text-transform: uppercase;
   margin-bottom: $mb-spacing-xs;
 }
 
 .banner__zh {
-  font-size: $mb-font-xl;
+  font-size: $mb-font-md;
   font-weight: 700;
   color: $mb-color-text-inverse;
-  letter-spacing: 4rpx;
+  letter-spacing: 0;
 }
 
 /* ===========================
@@ -504,10 +508,11 @@ onLoad(() => {
 }
 
 .grid__icon-wrap {
-  width: 112rpx;
-  height: 112rpx;
+  width: 104rpx;
+  height: 104rpx;
   border-radius: $mb-radius-lg;
-  background-color: #2a2a2a;
+  background-color: #fafbff;
+  border: 1rpx solid $mb-color-divider;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -524,19 +529,63 @@ onLoad(() => {
   height: 100%;
 }
 
-.grid__icon-emoji {
-  font-size: 48rpx;
-  line-height: 1;
-  // Use CSS filter to make emoji appear more monotone/white-ish
-  filter: grayscale(100%) brightness(2);
-}
-
 .grid__icon-char {
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-inverse;
+  color: $mb-color-primary;
   line-height: 1;
 }
+
+.grid__line-icon {
+  position: relative;
+  width: 42rpx;
+  height: 42rpx;
+  color: $mb-color-primary;
+}
+
+.grid__line-icon::before,
+.grid__line-icon::after {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.grid__line-icon--phone::before { inset: 2rpx 10rpx; border: 4rpx solid currentColor; border-radius: 8rpx; }
+.grid__line-icon--phone::after { left: 18rpx; bottom: 8rpx; width: 6rpx; height: 4rpx; border-radius: 999rpx; background: currentColor; }
+.grid__line-icon--laptop::before { left: 4rpx; top: 8rpx; width: 34rpx; height: 22rpx; border: 4rpx solid currentColor; border-radius: 4rpx; }
+.grid__line-icon--laptop::after { left: 0; bottom: 4rpx; width: 42rpx; height: 5rpx; border-radius: 999rpx; background: currentColor; }
+.grid__line-icon--headphone::before { left: 4rpx; top: 6rpx; width: 34rpx; height: 30rpx; border: 4rpx solid currentColor; border-bottom: 0; border-radius: 20rpx 20rpx 0 0; }
+.grid__line-icon--headphone::after { left: 2rpx; bottom: 4rpx; width: 38rpx; height: 16rpx; border-left: 8rpx solid currentColor; border-right: 8rpx solid currentColor; border-radius: 6rpx; }
+.grid__line-icon--watch::before { left: 10rpx; top: 10rpx; width: 22rpx; height: 22rpx; border: 4rpx solid currentColor; border-radius: 50%; }
+.grid__line-icon--watch::after { left: 16rpx; top: 0; width: 10rpx; height: 42rpx; border-top: 8rpx solid currentColor; border-bottom: 8rpx solid currentColor; }
+.grid__line-icon--tablet::before { inset: 4rpx 7rpx; border: 4rpx solid currentColor; border-radius: 6rpx; }
+.grid__line-icon--tablet::after { left: 18rpx; bottom: 8rpx; width: 6rpx; height: 4rpx; border-radius: 999rpx; background: currentColor; }
+.grid__line-icon--camera::before { left: 4rpx; top: 12rpx; width: 34rpx; height: 24rpx; border: 4rpx solid currentColor; border-radius: 6rpx; }
+.grid__line-icon--camera::after { left: 15rpx; top: 17rpx; width: 12rpx; height: 12rpx; border: 4rpx solid currentColor; border-radius: 50%; background: #fafbff; }
+.grid__line-icon--screen::before { left: 4rpx; top: 8rpx; width: 34rpx; height: 24rpx; border: 4rpx solid currentColor; border-radius: 5rpx; }
+.grid__line-icon--screen::after { left: 14rpx; bottom: 4rpx; width: 14rpx; height: 4rpx; background: currentColor; box-shadow: 0 -4rpx 0 currentColor; }
+.grid__line-icon--speaker::before { left: 10rpx; top: 4rpx; width: 22rpx; height: 34rpx; border: 4rpx solid currentColor; border-radius: 8rpx; }
+.grid__line-icon--speaker::after { left: 17rpx; top: 11rpx; width: 8rpx; height: 8rpx; background: currentColor; border-radius: 50%; box-shadow: 0 14rpx 0 currentColor; }
+.grid__line-icon--keyboard::before { left: 3rpx; top: 12rpx; width: 36rpx; height: 22rpx; border: 4rpx solid currentColor; border-radius: 6rpx; }
+.grid__line-icon--keyboard::after { left: 10rpx; top: 21rpx; width: 22rpx; height: 4rpx; background: currentColor; box-shadow: 0 -7rpx 0 currentColor; }
+.grid__line-icon--mouse::before { left: 12rpx; top: 4rpx; width: 18rpx; height: 34rpx; border: 4rpx solid currentColor; border-radius: 12rpx; }
+.grid__line-icon--mouse::after { left: 20rpx; top: 8rpx; width: 3rpx; height: 10rpx; background: currentColor; }
+.grid__line-icon--charger::before { left: 12rpx; top: 12rpx; width: 18rpx; height: 20rpx; border: 4rpx solid currentColor; border-radius: 4rpx; }
+.grid__line-icon--charger::after { left: 15rpx; top: 2rpx; width: 4rpx; height: 14rpx; background: currentColor; box-shadow: 9rpx 0 0 currentColor; }
+.grid__line-icon--home::before { left: 5rpx; top: 15rpx; width: 32rpx; height: 22rpx; border: 4rpx solid currentColor; border-top: 0; border-radius: 0 0 6rpx 6rpx; }
+.grid__line-icon--home::after { left: 8rpx; top: 5rpx; width: 26rpx; height: 26rpx; border-left: 4rpx solid currentColor; border-top: 4rpx solid currentColor; transform: rotate(45deg); }
+.grid__line-icon--lamp::before { left: 9rpx; top: 6rpx; width: 24rpx; height: 18rpx; border: 4rpx solid currentColor; border-radius: 16rpx 16rpx 4rpx 4rpx; }
+.grid__line-icon--lamp::after { left: 19rpx; top: 24rpx; width: 4rpx; height: 16rpx; background: currentColor; box-shadow: -8rpx 14rpx 0 0 currentColor, 8rpx 14rpx 0 0 currentColor; }
+.grid__line-icon--box::before { left: 5rpx; top: 12rpx; width: 32rpx; height: 24rpx; border: 4rpx solid currentColor; border-radius: 6rpx; }
+.grid__line-icon--box::after { left: 5rpx; top: 20rpx; width: 32rpx; height: 4rpx; background: currentColor; }
+.grid__line-icon--shirt::before { left: 6rpx; top: 8rpx; width: 30rpx; height: 30rpx; border: 4rpx solid currentColor; border-radius: 8rpx 8rpx 4rpx 4rpx; }
+.grid__line-icon--shirt::after { left: 4rpx; top: 8rpx; width: 34rpx; height: 12rpx; border-left: 8rpx solid currentColor; border-right: 8rpx solid currentColor; }
+.grid__line-icon--shoe::before { left: 4rpx; bottom: 8rpx; width: 34rpx; height: 16rpx; border: 4rpx solid currentColor; border-radius: 2rpx 12rpx 6rpx 6rpx; }
+.grid__line-icon--shoe::after { left: 8rpx; bottom: 24rpx; width: 16rpx; height: 8rpx; border-top: 4rpx solid currentColor; transform: rotate(25deg); }
+.grid__line-icon--bag::before { left: 7rpx; top: 14rpx; width: 28rpx; height: 24rpx; border: 4rpx solid currentColor; border-radius: 5rpx; }
+.grid__line-icon--bag::after { left: 14rpx; top: 4rpx; width: 14rpx; height: 16rpx; border: 4rpx solid currentColor; border-bottom: 0; border-radius: 10rpx 10rpx 0 0; }
+.grid__line-icon--beauty::before { left: 13rpx; top: 8rpx; width: 16rpx; height: 30rpx; border: 4rpx solid currentColor; border-radius: 8rpx; }
+.grid__line-icon--beauty::after { left: 18rpx; top: 2rpx; width: 6rpx; height: 12rpx; background: currentColor; border-radius: 999rpx; }
 
 .grid__name {
   margin-top: $mb-spacing-xs;
@@ -590,7 +639,7 @@ onLoad(() => {
   background: linear-gradient(
     90deg,
     $mb-color-bg-secondary 25%,
-    #eef0f3 50%,
+    $mb-color-bg-surface 50%,
     $mb-color-bg-secondary 75%
   );
   background-size: 200% 100%;
@@ -637,7 +686,7 @@ onLoad(() => {
   background: linear-gradient(
     90deg,
     $mb-color-bg 25%,
-    #eef0f3 50%,
+    $mb-color-bg-surface 50%,
     $mb-color-bg 75%
   );
   background-size: 200% 100%;
@@ -652,7 +701,7 @@ onLoad(() => {
   background: linear-gradient(
     90deg,
     $mb-color-bg 25%,
-    #eef0f3 50%,
+    $mb-color-bg-surface 50%,
     $mb-color-bg 75%
   );
   background-size: 200% 100%;

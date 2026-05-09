@@ -221,8 +221,8 @@ watch(currentStock, (stock) => {
 .mb-spec__panel {
   width: 100%;
   max-height: 80vh;
-  background: #ffffff;
-  border-radius: 32rpx 32rpx 0 0;
+  background: var(--color-bg, #ffffff);
+  border-radius: var(--radius-lg, 20rpx) var(--radius-lg, 20rpx) 0 0;
   display: flex;
   flex-direction: column;
   transform: translateY(100%);
@@ -237,15 +237,15 @@ watch(currentStock, (stock) => {
   display: flex;
   padding: 32rpx;
   gap: 24rpx;
-  border-bottom: 1rpx solid var(--color-border, #e0e3e5);
+  border-bottom: 1rpx solid var(--color-border, #e0e4e8);
 }
 
 .mb-spec__thumb {
   width: 160rpx;
   height: 160rpx;
-  border-radius: 16rpx;
+  border-radius: var(--radius-md, 12rpx);
   flex-shrink: 0;
-  background: #eef0f3;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .mb-spec__header-info {
@@ -258,12 +258,12 @@ watch(currentStock, (stock) => {
 
 .mb-spec__stock {
   font-size: 24rpx;
-  color: var(--color-text-tertiary, #848484);
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-spec__selected {
   font-size: 24rpx;
-  color: var(--color-text-secondary, #5e5e5e);
+  color: var(--color-text-secondary, #434654);
 }
 
 .mb-spec__close {
@@ -277,7 +277,7 @@ watch(currentStock, (stock) => {
 
 .mb-spec__close-icon {
   font-size: 28rpx;
-  color: var(--color-text-tertiary, #848484);
+  color: var(--color-text-tertiary, #737686);
 }
 
 .mb-spec__body {
@@ -294,7 +294,7 @@ watch(currentStock, (stock) => {
 .mb-spec__group-title {
   font-size: 26rpx;
   font-weight: 600;
-  color: var(--color-text, #1b1b1b);
+  color: var(--color-text, #191b23);
   margin-bottom: 20rpx;
 }
 
@@ -306,8 +306,8 @@ watch(currentStock, (stock) => {
 
 .mb-spec__tag {
   padding: 12rpx 32rpx;
-  border-radius: 999rpx;
-  background: var(--color-bg-secondary, #f7f9fb);
+  border-radius: var(--radius-sm, 8rpx);
+  background: var(--color-bg-secondary, #faf8ff);
   border: 2rpx solid transparent;
 }
 
@@ -323,7 +323,7 @@ watch(currentStock, (stock) => {
 
 .mb-spec__tag-text {
   font-size: 26rpx;
-  color: var(--color-text, #1b1b1b);
+  color: var(--color-text, #191b23);
 }
 
 .mb-spec__tag--active .mb-spec__tag-text {
@@ -338,7 +338,7 @@ watch(currentStock, (stock) => {
   gap: 24rpx;
   width: 100%;
   padding-top: 24rpx;
-  border-top: 1rpx solid var(--color-border, #e0e3e5);
+  border-top: 1rpx solid var(--color-border, #e0e4e8);
   box-sizing: border-box;
 }
 
@@ -347,7 +347,7 @@ watch(currentStock, (stock) => {
   min-width: 0;
   font-size: 26rpx;
   font-weight: 600;
-  color: var(--color-text, #1b1b1b);
+  color: var(--color-text, #191b23);
 }
 
 .mb-spec__quantity-stepper {
@@ -357,7 +357,7 @@ watch(currentStock, (stock) => {
 .mb-spec__footer {
   padding: 24rpx 32rpx;
   padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
-  border-top: 1rpx solid var(--color-border, #e0e3e5);
+  border-top: 1rpx solid var(--color-border, #e0e4e8);
 }
 
 .mb-spec__actions {
@@ -371,19 +371,19 @@ watch(currentStock, (stock) => {
 
 .mb-spec__btn {
   height: 88rpx;
-  border-radius: 44rpx;
+  border-radius: var(--radius-sm, 8rpx);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .mb-spec__btn--cart {
-  background: var(--color-bg-secondary, #f7f9fb);
-  border: 2rpx solid var(--color-border, #e0e3e5);
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 2rpx solid var(--color-border, #e0e4e8);
 }
 
 .mb-spec__btn--buy {
-  background: #000000;
+  background: var(--color-primary, #0d50d5);
 }
 
 .mb-spec__btn--cart-full {
@@ -393,13 +393,13 @@ watch(currentStock, (stock) => {
 
 .mb-spec__btn--buy-full {
   width: 100%;
-  background: #000000;
+  background: var(--color-primary, #0d50d5);
 }
 
 .mb-spec__btn-text {
   font-size: 28rpx;
   font-weight: 600;
-  color: var(--color-text, #1b1b1b);
+  color: var(--color-text, #191b23);
 }
 
 .mb-spec__btn-text--light {

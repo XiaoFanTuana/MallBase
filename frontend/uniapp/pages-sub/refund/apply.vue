@@ -132,7 +132,7 @@ async function onSubmit() {
         mode="aspectFill"
       />
       <view v-else class="product-card__image product-card__image--placeholder">
-        <text class="product-card__placeholder-text">&#x1F4E6;</text>
+        <view class="product-card__placeholder-box" />
       </view>
       <view class="product-card__info">
         <text class="product-card__name">{{ goodsName || '商品' }}</text>
@@ -166,7 +166,7 @@ async function onSubmit() {
           class="form-textarea"
           placeholder="请详细描述您遇到的问题..."
           :maxlength="MAX_DESC_LENGTH"
-          placeholder-style="color: #848484"
+          placeholder-style="color: #737686"
         />
         <text class="form-textarea__count">
           {{ description.length }}/{{ MAX_DESC_LENGTH }}
@@ -230,7 +230,7 @@ async function onSubmit() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: $mb-color-bg-secondary;
   padding: 0 $mb-spacing-page $mb-spacing-xl;
 }
 
@@ -239,9 +239,10 @@ async function onSubmit() {
   display: flex;
   gap: $mb-spacing-md;
   padding: $mb-spacing-lg;
-  margin: $mb-spacing-sm (-$mb-spacing-page) 0;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-xl;
+  margin: $mb-spacing-sm 0 0;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
   margin-left: 0;
   margin-right: 0;
 }
@@ -260,8 +261,24 @@ async function onSubmit() {
   justify-content: center;
 }
 
-.product-card__placeholder-text {
-  font-size: 48rpx;
+.product-card__placeholder-box {
+  width: 44rpx;
+  height: 36rpx;
+  border: 4rpx solid $mb-color-primary;
+  border-radius: 8rpx;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 10rpx;
+    right: 10rpx;
+    top: 10rpx;
+    height: 4rpx;
+    border-radius: $mb-radius-full;
+    background: $mb-color-primary;
+    opacity: 0.5;
+  }
 }
 
 .product-card__info {
@@ -310,6 +327,10 @@ async function onSubmit() {
 // ---- Form section ----
 .form-section {
   margin-top: $mb-spacing-lg;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
+  padding: 0 $mb-spacing-lg;
 }
 
 .form-item {
@@ -447,8 +468,9 @@ async function onSubmit() {
 .amount-card {
   margin-top: $mb-spacing-xl;
   padding: $mb-spacing-lg;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-xl;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -490,8 +512,8 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000000;
-  border-radius: $mb-radius-full;
+  background: $mb-color-primary;
+  border-radius: $mb-radius-sm;
   transition: opacity 0.15s;
 
   &:active {

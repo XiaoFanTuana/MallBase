@@ -4,12 +4,12 @@
 
     <view class="page-content">
       <!-- Avatar -->
-      <view class="avatar-section" @tap="chooseAvatar">
-        <view class="avatar-wrapper">
+      <view class="avatar-section">
+        <view class="avatar-wrapper" @tap="chooseAvatarFallback">
           <image
-            v-if="form.avatar"
+            v-if="avatarPreview"
             class="avatar"
-            :src="form.avatar"
+            :src="avatarPreview"
             mode="aspectFill"
           />
           <view v-else class="avatar avatar--placeholder">
@@ -21,8 +21,11 @@
           <view class="avatar-badge">
             <text class="avatar-badge-text">换</text>
           </view>
+          <!-- #ifdef MP-WEIXIN -->
+          <button class="avatar-picker-button" open-type="chooseAvatar" @chooseavatar="chooseWechatAvatar"></button>
+          <!-- #endif -->
         </view>
-        <text class="avatar-hint">更换头像</text>
+        <text class="avatar-hint">{{ avatarUploading ? '头像上传中...' : '点击头像更换' }}</text>
       </view>
 
       <!-- Form -->
@@ -107,6 +110,7 @@ import { ref, reactive, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { updateMyInfo } from '@/api/user/user'
+import { uploadFile } from '@/api/request'
 
 const userStore = useUserStore()
 
@@ -126,6 +130,7 @@ const today = computed(() => {
 
 const form = reactive({
   avatar: '',
+  avatar_full_url: '',
   nickname: '',
   gender: 0,
   birthday: '',
@@ -133,16 +138,25 @@ const form = reactive({
 })
 
 const loading = ref(false)
-const localAvatarPath = ref('')
+const avatarUploading = ref(false)
+const avatarTempPreview = ref('')
+const avatarUploadPath = ref('')
+
+const avatarPreview = computed(() => {
+  return avatarTempPreview.value || form.avatar_full_url || form.avatar
+})
 
 onShow(() => {
   const info = userStore.userInfo
   if (info) {
     form.avatar = info.avatar || ''
+    form.avatar_full_url = info.avatar_full_url || ''
     form.nickname = info.nickname || ''
     form.gender = info.gender ?? 0
     form.birthday = info.birthday || ''
     form.bio = info.bio || ''
+    avatarTempPreview.value = ''
+    avatarUploadPath.value = ''
   }
 })
 
@@ -150,21 +164,55 @@ function onBirthdayChange(e) {
   form.birthday = e.detail.value
 }
 
-function chooseAvatar() {
+function chooseAvatarFallback() {
+  // #ifndef MP-WEIXIN
+  chooseLocalAvatar()
+  // #endif
+}
+
+async function uploadAvatarPath(tempPath) {
+  if (!tempPath || avatarUploading.value) return
+  avatarTempPreview.value = tempPath
+  avatarUploadPath.value = ''
+  avatarUploading.value = true
+  try {
+    const uploadRes = await uploadFile('/client/api/upload/single', tempPath)
+    if (!uploadRes?.url) {
+      throw new Error('上传结果缺少头像路径')
+    }
+    avatarUploadPath.value = uploadRes.url
+  } catch (_) {
+    avatarTempPreview.value = ''
+    avatarUploadPath.value = ''
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
+function chooseLocalAvatar() {
   uni.chooseImage({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
     success(res) {
       const tempPath = res.tempFilePaths[0]
-      localAvatarPath.value = tempPath
-      form.avatar = tempPath
+      uploadAvatarPath(tempPath)
     },
   })
 }
 
+function chooseWechatAvatar(e) {
+  const avatarUrl = e.detail?.avatarUrl || ''
+  if (!avatarUrl) return
+  uploadAvatarPath(avatarUrl)
+}
+
 async function handleSave() {
   if (loading.value) return
+  if (avatarUploading.value) {
+    uni.showToast({ title: '头像上传中，请稍后', icon: 'none' })
+    return
+  }
   if (!form.nickname.trim()) {
     uni.showToast({ title: '请输入昵称', icon: 'none' })
     return
@@ -176,30 +224,11 @@ async function handleSave() {
       nickname: form.nickname.trim(),
       gender: form.gender,
       birthday: form.birthday || undefined,
-      bio: form.bio.trim() || undefined,
+      bio: form.bio.trim(),
     }
 
-    // If user picked a local image, upload it first
-    if (localAvatarPath.value) {
-      const uploadRes = await new Promise((resolve, reject) => {
-        uni.uploadFile({
-          url: '/client/api/common/upload',
-          filePath: localAvatarPath.value,
-          name: 'file',
-          success: (res) => {
-            try {
-              const data = JSON.parse(res.data)
-              resolve(data)
-            } catch (e) {
-              reject(e)
-            }
-          },
-          fail: reject,
-        })
-      })
-      if (uploadRes?.data?.url) {
-        payload.avatar = uploadRes.data.url
-      }
+    if (avatarUploadPath.value) {
+      payload.avatar = avatarUploadPath.value
     }
 
     await updateMyInfo(payload)
@@ -242,6 +271,23 @@ async function handleSave() {
   margin-bottom: 16rpx;
 }
 
+.avatar-picker-button {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 160rpx;
+  height: 160rpx;
+  padding: 0;
+  margin: 0;
+  border-radius: $mb-radius-full;
+  background: transparent;
+  opacity: 0;
+
+  &::after {
+    border: 0;
+  }
+}
+
 .avatar {
   width: 160rpx;
   height: 160rpx;
@@ -275,7 +321,7 @@ async function handleSave() {
 .avatar-icon__body {
   width: 48rpx;
   height: 28rpx;
-  border-radius: 24rpx 24rpx 0 0;
+  border-radius: $mb-radius-lg $mb-radius-lg 0 0;
   background: $mb-color-border;
   position: absolute;
   bottom: 0;
@@ -344,13 +390,15 @@ async function handleSave() {
   display: flex;
   align-items: center;
   height: 100rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-border;
   padding: 0 32rpx;
-  transition: box-shadow 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
-    box-shadow: 0 0 0 3rpx rgba(13, 80, 213, 0.15);
+    border-color: rgba(13, 80, 213, 0.3);
+    background: $mb-color-bg;
   }
 }
 
@@ -396,8 +444,9 @@ async function handleSave() {
 .gender-chip {
   flex: 1;
   height: 80rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-border;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -405,7 +454,8 @@ async function handleSave() {
 }
 
 .gender-chip--active {
-  background: $mb-color-text;
+  background: rgba($mb-color-primary, 0.08);
+  border-color: rgba($mb-color-primary, 0.3);
 }
 
 .gender-chip-text {
@@ -414,19 +464,21 @@ async function handleSave() {
 }
 
 .gender-chip--active .gender-chip-text {
-  color: #ffffff;
+  color: $mb-color-primary;
   font-weight: 500;
 }
 
 // ---- Textarea ----
 .textarea-wrapper {
   background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-lg;
+  border-radius: $mb-radius-sm;
+  border: 1rpx solid $mb-color-border;
   padding: 24rpx 32rpx;
-  transition: box-shadow 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
-    box-shadow: 0 0 0 3rpx rgba(13, 80, 213, 0.15);
+    border-color: rgba(13, 80, 213, 0.3);
+    background: $mb-color-bg;
   }
 }
 
@@ -441,8 +493,8 @@ async function handleSave() {
 // ---- Button ----
 .primary-btn {
   height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-text;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -464,6 +516,6 @@ async function handleSave() {
   font-size: 32rpx;
   font-weight: 600;
   color: #ffffff;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 </style>

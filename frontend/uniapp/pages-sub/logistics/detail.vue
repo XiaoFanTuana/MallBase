@@ -169,7 +169,7 @@ function copyTrackingNo() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: $mb-color-bg-secondary;
 }
 
 // ---- Loading ----
@@ -254,10 +254,11 @@ function copyTrackingNo() {
 
 // ---- Card base ----
 .card {
-  background: $mb-color-bg-secondary;
+  background: $mb-color-bg;
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin: 0 $mb-spacing-md $mb-spacing-md;
+  border: 1rpx solid $mb-color-border;
 }
 
 // ---- Address card ----
@@ -306,8 +307,9 @@ function copyTrackingNo() {
 .map-placeholder {
   height: 300rpx;
   margin: 0 $mb-spacing-md $mb-spacing-md;
-  background: #eef4ff;
+  background: $mb-color-bg;
   border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-border;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -320,7 +322,8 @@ function copyTrackingNo() {
   height: 20rpx;
   border-radius: 50%;
   background: $mb-color-primary;
-  box-shadow: 0 0 0 8rpx rgba($mb-color-primary, 0.2);
+  border: 8rpx solid rgba($mb-color-primary, 0.12);
+  box-sizing: content-box;
 }
 
 .map-placeholder__text {
@@ -381,7 +384,8 @@ function copyTrackingNo() {
     width: 16rpx;
     height: 16rpx;
     background: $mb-color-primary;
-    box-shadow: 0 0 0 6rpx rgba($mb-color-primary, 0.15);
+    border: 6rpx solid rgba($mb-color-primary, 0.12);
+    box-sizing: content-box;
   }
 }
 

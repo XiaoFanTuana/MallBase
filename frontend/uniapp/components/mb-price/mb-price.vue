@@ -12,7 +12,7 @@ import { computed } from 'vue'
 const props = defineProps({
   value: { type: [Number, String], default: 0 },
   size: { type: String, default: 'md' },
-  color: { type: String, default: 'var(--color-text-title, #131b2e)' },
+  color: { type: String, default: 'var(--color-text-title, #191b23)' },
   showDecimal: { type: Boolean, default: true },
 })
 

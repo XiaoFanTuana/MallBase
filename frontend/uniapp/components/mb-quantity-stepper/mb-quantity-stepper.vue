@@ -64,8 +64,9 @@ function onBlur(e) {
   align-items: center;
   flex: 0 0 auto;
   height: 56rpx;
-  border-radius: 28rpx;
-  background: var(--color-bg-secondary, #f7f9fb);
+  border-radius: var(--radius-sm, 8rpx);
+  background: var(--color-bg-secondary, #faf8ff);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -88,7 +89,7 @@ function onBlur(e) {
 .mb-stepper__icon {
   font-size: 28rpx;
   font-weight: 600;
-  color: var(--color-text, #1b1b1b);
+  color: var(--color-text, #191b23);
   line-height: 1;
 }
 
@@ -100,7 +101,7 @@ function onBlur(e) {
   text-align: center;
   font-size: 26rpx;
   font-weight: 600;
-  color: var(--color-text, #1b1b1b);
+  color: var(--color-text, #191b23);
   background: transparent;
   box-sizing: border-box;
 }

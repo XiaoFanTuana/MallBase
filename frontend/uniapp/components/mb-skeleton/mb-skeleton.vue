@@ -57,9 +57,9 @@ const rows = computed(() => {
 .mb-skeleton__row {
   background: linear-gradient(
     90deg,
-    var(--color-bg-secondary, #f7f9fb) 25%,
-    #eef0f3 50%,
-    var(--color-bg-secondary, #f7f9fb) 75%
+    var(--color-bg-secondary, #faf8ff) 25%,
+    var(--color-bg-surface, #f3f3fe) 50%,
+    var(--color-bg-secondary, #faf8ff) 75%
   );
   background-size: 200% 100%;
   animation: mb-shimmer 1.5s infinite ease-in-out;

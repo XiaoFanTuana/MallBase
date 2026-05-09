@@ -1,4 +1,4 @@
-import { post } from '@/api/request'
+import { post, uploadFile } from '@/api/request'
 
 export const sendSmsCode = (mobile, scene = 'login') =>
   post('/client/api/user/auth/sms/send', { mobile, scene })
@@ -30,6 +30,9 @@ export const wechatBindByPhoneCode = (bindToken, phoneCode, profile = {}) =>
 
 export const wechatBindUserInfo = (bindToken, profile = {}) =>
   post('/client/api/user/auth/wechat/bindUserInfo', { bind_token: bindToken, ...profile })
+
+export const uploadWechatBindAvatar = (bindToken, filePath) =>
+  uploadFile('/client/api/upload/wechat-avatar', filePath, 'file', { bind_token: bindToken })
 
 export const wechatOfficialLogin = (code) =>
   post('/client/api/user/auth/wechat/official', { code })

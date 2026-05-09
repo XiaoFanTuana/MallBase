@@ -30,7 +30,18 @@
     <template v-else>
       <!-- Status section -->
       <view class="status-section">
-        <text class="status-section__title">{{ statusText }}</text>
+        <view class="status-section__content">
+          <text class="status-section__title">{{ statusText }}</text>
+          <text class="status-section__desc">{{ statusDesc }}</text>
+        </view>
+        <view class="status-section__icon">
+          <view class="status-truck">
+            <view class="status-truck__body" />
+            <view class="status-truck__cab" />
+            <view class="status-truck__wheel status-truck__wheel--front" />
+            <view class="status-truck__wheel status-truck__wheel--rear" />
+          </view>
+        </view>
       </view>
 
       <!-- Logistics preview (when shipped) -->
@@ -59,35 +70,36 @@
         </view>
         <view class="address-card__info">
           <view class="address-card__top">
-            <text class="address-card__name">{{ order.receiver_name }}</text>
-            <text class="address-card__phone">{{ maskPhone(order.receiver_mobile) }}</text>
+            <text class="address-card__name">{{ receiverName }}</text>
+            <text class="address-card__phone">{{ maskPhone(receiverPhone) }}</text>
           </view>
           <text class="address-card__detail">{{ fullAddress }}</text>
         </view>
-      </view>
-      <view class="address-divider">
-        <view v-for="i in 20" :key="i" class="address-divider__dot" />
       </view>
 
       <!-- Goods list -->
       <view class="card goods-card">
         <view
-          v-for="item in order.items"
+          v-for="item in orderItems"
           :key="item.id"
           class="goods-item"
         >
           <image
+            v-if="getOrderItemImage(item)"
             class="goods-item__img"
-            :src="item.goods_image"
+            :src="getOrderItemImage(item)"
             mode="aspectFill"
             lazy-load
           />
+          <view v-else class="goods-item__img goods-item__img--placeholder">
+            <view class="goods-item__placeholder-box" />
+          </view>
           <view class="goods-item__info">
-            <text class="goods-item__name">{{ item.goods_name }}</text>
-            <text v-if="item.sku_spec" class="goods-item__spec">{{ item.sku_spec }}</text>
+            <text class="goods-item__name">{{ item.goods_name || item.name || '商品信息' }}</text>
+            <text v-if="getItemSpec(item)" class="goods-item__spec">{{ getItemSpec(item) }}</text>
             <view class="goods-item__bottom">
               <mb-price :value="item.unit_price" size="sm" color="var(--color-text-title)" />
-              <text class="goods-item__qty">&times;{{ item.quantity }}</text>
+              <text class="goods-item__qty">x{{ item.quantity || 1 }}</text>
             </view>
           </view>
         </view>
@@ -107,12 +119,16 @@
         </view>
         <view class="summary-row">
           <text class="summary-row__label">运费</text>
-          <mb-price :value="order.shipping_fee || 0" size="sm" color="var(--color-text)" />
+          <mb-price :value="order.shipping_fee || order.freight_amount || 0" size="sm" color="var(--color-text)" />
+        </view>
+        <view class="summary-row">
+          <text class="summary-row__label">优惠减免</text>
+          <text class="summary-row__discount">-¥{{ order.discount_amount || '0.00' }}</text>
         </view>
         <view class="summary-divider" />
         <view class="summary-row summary-row--total">
-          <text class="summary-row__label">实付金额</text>
-          <mb-price :value="order.total_amount" size="md" color="var(--color-text-title)" />
+          <text class="summary-row__label">合计</text>
+          <mb-price :value="order.pay_amount || order.total_amount" size="md" color="var(--color-text-title)" />
         </view>
       </view>
 
@@ -169,6 +185,7 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, payOrder, cancelOrder, confirmReceive } from '@/api/order/order'
+import config from '@/config/index'
 
 const STATUS_MAP = {
   0: { label: '待付款' },
@@ -210,17 +227,53 @@ const statusText = computed(() => {
   return STATUS_MAP[order.value.status]?.label || '未知'
 })
 
+const statusDesc = computed(() => {
+  if (!order.value) return ''
+  const map = {
+    0: '请在订单关闭前完成支付',
+    10: '商家正在为你处理订单',
+    20: '你的包裹正在路上，请保持电话畅通',
+    30: '订单已签收，期待你的评价',
+    40: '订单已完成，感谢你的购买',
+    90: '订单已关闭',
+  }
+  return map[order.value.status] || '订单状态已更新'
+})
+
+const orderItems = computed(() => getOrderItems(order.value))
+
+const receiverName = computed(() => {
+  if (!order.value) return ''
+  return order.value.receiver_name || order.value.consignee || order.value.name || '收货人'
+})
+
+const receiverPhone = computed(() => {
+  if (!order.value) return ''
+  return order.value.receiver_phone || order.value.receiver_mobile || order.value.mobile || order.value.phone || ''
+})
+
 const fullAddress = computed(() => {
   if (!order.value) return ''
   const o = order.value
-  return [o.province_name, o.city_name, o.district_name, o.address_detail]
-    .filter(Boolean)
-    .join(' ')
+  const snapshotAddress = [
+    o.receiver_province,
+    o.receiver_city,
+    o.receiver_district,
+    o.receiver_address,
+  ].filter(Boolean).join(' ')
+  const regionAddress = [
+    o.region_path_text,
+    o.province_name,
+    o.city_name,
+    o.district_name,
+    o.address_detail,
+  ].filter(Boolean).join(' ')
+  return snapshotAddress || regionAddress || o.address || '暂无收货地址'
 })
 
 const goodsTotal = computed(() => {
-  if (!order.value?.items) return 0
-  return order.value.items.reduce(
+  if (!orderItems.value.length) return 0
+  return orderItems.value.reduce(
     (sum, item) => sum + Number(item.unit_price) * Number(item.quantity),
     0,
   )
@@ -232,16 +285,55 @@ const actions = computed(() => {
   if (order.value.status === 0) {
     list.push({ key: 'cancel', label: '取消订单', primary: false })
     list.push({ key: 'pay', label: '去付款', primary: true })
+  } else if (order.value.status === 10) {
+    list.push({ key: 'refund', label: '申请售后', primary: false })
   } else if (order.value.status === 20) {
-    list.push({ key: 'extend', label: '延长收货', primary: false })
-    list.push({ key: 'logistics', label: '查看物流', primary: true })
+    list.push({ key: 'logistics', label: '查看物流', primary: false })
+    list.push({ key: 'confirm', label: '确认收货', primary: true })
   } else if (order.value.status === 30 || order.value.status === 40) {
+    list.push({ key: 'refund', label: '申请售后', primary: false })
     list.push({ key: 'review', label: '去评价', primary: false })
   }
   return list
 })
 
 // --- Helpers ---
+
+function normalizeImageUrl(url) {
+  if (!url) return ''
+  const value = String(url)
+  if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+    return value.startsWith('//') ? `https:${value}` : value
+  }
+  if (value.startsWith('/') && config.baseUrl) {
+    return `${config.baseUrl}${value}`
+  }
+  return value
+}
+
+function getOrderItems(source) {
+  if (Array.isArray(source?.items)) return source.items
+  if (Array.isArray(source?.order_items)) return source.order_items
+  return []
+}
+
+function getOrderItemImage(item) {
+  return normalizeImageUrl(
+    item?.goods_image_full_url
+      || item?.goods_image_url
+      || item?.main_image_full_url
+      || item?.image_full_url
+      || item?.cover_full_url
+      || item?.goods_image
+      || item?.main_image
+      || item?.cover
+      || '',
+  )
+}
+
+function getItemSpec(item) {
+  return item?.sku_spec_text || item?.sku_spec || item?.spec_text || item?.spec || ''
+}
 
 function maskPhone(phone) {
   if (!phone || phone.length < 7) return phone || ''
@@ -302,12 +394,23 @@ async function handleAction(key) {
     uni.showToast({ title: '已延长收货', icon: 'none' })
   } else if (key === 'logistics') {
     uni.navigateTo({
-      url: `/pages-sub/order/logistics?order_id=${order.value.id}`,
+      url: `/pages-sub/logistics/detail?order_id=${order.value.id}`,
     })
   } else if (key === 'review') {
     uni.navigateTo({
       url: `/pages-sub/review/post?order_id=${order.value.id}`,
     })
+  } else if (key === 'refund') {
+    const firstItem = orderItems.value[0] || null
+    const query = [
+      `order_id=${order.value.id}`,
+      firstItem?.goods_name ? `goods_name=${encodeURIComponent(firstItem.goods_name)}` : '',
+      getOrderItemImage(firstItem) ? `goods_image=${encodeURIComponent(getOrderItemImage(firstItem))}` : '',
+      getItemSpec(firstItem) ? `sku_spec_text=${encodeURIComponent(getItemSpec(firstItem))}` : '',
+      firstItem?.unit_price ? `price=${encodeURIComponent(firstItem.unit_price)}` : '',
+      firstItem?.quantity ? `quantity=${encodeURIComponent(firstItem.quantity)}` : '',
+    ].filter(Boolean).join('&')
+    uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
   }
 }
 
@@ -324,7 +427,7 @@ function goBack() {
 <style lang="scss" scoped>
 .detail-page {
   min-height: 100vh;
-  background-color: $mb-color-bg-secondary;
+  background-color: #faf8ff;
   padding: 0 $mb-spacing-page $mb-spacing-lg;
 }
 
@@ -336,25 +439,95 @@ function goBack() {
 // ---- Card base ----
 .card {
   background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
+  border-radius: 16rpx;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
 }
 
 // ---- Status section ----
 .status-section {
-  padding: $mb-spacing-xl 0 $mb-spacing-md;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-lg;
+  margin: 0 (-$mb-spacing-page) $mb-spacing-md;
+  padding: 34rpx $mb-spacing-page 42rpx;
+  background: $mb-color-primary;
+  color: $mb-color-text-inverse;
+}
+
+.status-section__content {
+  flex: 1;
+  min-width: 0;
 }
 
 .status-section__title {
   display: block;
-  font-size: 56rpx;
+  font-size: 34rpx;
   font-weight: 700;
-  color: $mb-color-text-title;
-  letter-spacing: 2rpx;
+  color: $mb-color-text-inverse;
   line-height: 1.2;
 }
+
+.status-section__desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $mb-font-sm;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.4;
+}
+
+.status-section__icon {
+  flex-shrink: 0;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 18rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-truck {
+  position: relative;
+  width: 46rpx;
+  height: 32rpx;
+}
+
+.status-truck__body,
+.status-truck__cab,
+.status-truck__wheel {
+  position: absolute;
+  background: $mb-color-text-inverse;
+}
+
+.status-truck__body {
+  left: 0;
+  bottom: 8rpx;
+  width: 28rpx;
+  height: 18rpx;
+  border-radius: 4rpx;
+}
+
+.status-truck__cab {
+  right: 0;
+  bottom: 8rpx;
+  width: 16rpx;
+  height: 14rpx;
+  border-radius: 2rpx 6rpx 4rpx 2rpx;
+}
+
+.status-truck__wheel {
+  bottom: 0;
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3rpx rgba(13, 80, 213, 0.5);
+}
+
+.status-truck__wheel--rear { left: 6rpx; }
+.status-truck__wheel--front { right: 6rpx; }
 
 // ---- Logistics preview ----
 .logistics-preview {
@@ -364,8 +537,8 @@ function goBack() {
   padding: $mb-spacing-md $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
   background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.03);
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
 }
 
 .logistics-preview__icon {
@@ -416,16 +589,15 @@ function goBack() {
   display: flex;
   align-items: flex-start;
   gap: $mb-spacing-md;
-  margin-bottom: 0;
-  border-radius: $mb-radius-lg $mb-radius-lg 0 0;
-  padding-bottom: $mb-spacing-md;
+  margin-bottom: $mb-spacing-md;
+  padding: 20rpx $mb-spacing-lg;
 }
 
 .address-card__icon {
   flex-shrink: 0;
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 14rpx;
   background: rgba($mb-color-primary, 0.08);
   display: flex;
   align-items: center;
@@ -482,7 +654,7 @@ function goBack() {
   margin-bottom: 8rpx;
 }
 
-.address-card__name { font-size: $mb-font-lg; font-weight: 600; color: $mb-color-text-title; }
+.address-card__name { font-size: $mb-font-lg; font-weight: 700; color: $mb-color-text-title; }
 .address-card__phone { font-size: $mb-font-sm; color: $mb-color-text-secondary; }
 
 .address-card__detail {
@@ -495,36 +667,15 @@ function goBack() {
   overflow: hidden;
 }
 
-// ---- Address divider ----
-.address-divider {
-  display: flex;
-  height: 6rpx;
-  margin-bottom: $mb-spacing-md;
-  overflow: hidden;
-  border-radius: 0 0 $mb-radius-lg $mb-radius-lg;
-}
-
-.address-divider__dot {
-  flex: 1;
-
-  &:nth-child(odd) {
-    background: $mb-color-primary;
-  }
-
-  &:nth-child(even) {
-    background: $mb-color-error;
-  }
-}
-
 // ---- Goods card ----
 .goods-card {
-  padding-bottom: $mb-spacing-sm;
+  padding: 14rpx $mb-spacing-lg;
 }
 
 .goods-item {
   display: flex;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-md 0;
+  gap: 18rpx;
+  padding: 14rpx 0 18rpx;
 
   &:first-child {
     padding-top: $mb-spacing-xs;
@@ -537,10 +688,23 @@ function goBack() {
 
 .goods-item__img {
   flex-shrink: 0;
-  width: 180rpx;
-  height: 180rpx;
-  border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 12rpx;
+  background: #f3f5f9;
+}
+
+.goods-item__img--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.goods-item__placeholder-box {
+  width: 58rpx;
+  height: 42rpx;
+  border-radius: 8rpx;
+  background: linear-gradient(135deg, rgba(13, 80, 213, 0.14), rgba(25, 27, 35, 0.06));
 }
 
 .goods-item__info {
@@ -566,11 +730,15 @@ function goBack() {
 .goods-item__spec {
   font-size: $mb-font-sm;
   color: $mb-color-text-tertiary;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-sm;
-  padding: 4rpx 12rpx;
+  background: #f5f7fb;
+  border-radius: 8rpx;
+  padding: 5rpx 12rpx;
   align-self: flex-start;
   margin-top: 8rpx;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .goods-item__bottom {
@@ -618,6 +786,11 @@ function goBack() {
 }
 
 .summary-row__label { font-size: $mb-font-md; color: $mb-color-text-secondary; }
+
+.summary-row__discount {
+  font-size: $mb-font-sm;
+  color: #c2410c;
+}
 
 .summary-divider { height: 1rpx; background: $mb-color-divider; margin: 8rpx 0; }
 
@@ -721,7 +894,7 @@ function goBack() {
   bottom: 0;
   z-index: 100;
   background: $mb-color-bg;
-  box-shadow: 0 -2rpx 16rpx rgba(0, 0, 0, 0.05);
+  border-top: 1rpx solid rgba(25, 27, 35, 0.08);
 }
 
 .action-bar__inner {
@@ -734,14 +907,14 @@ function goBack() {
 }
 
 .action-bar__btn {
-  height: 80rpx;
-  min-width: 200rpx;
-  border-radius: $mb-radius-full;
+  height: 78rpx;
+  min-width: 176rpx;
+  border-radius: 18rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 $mb-spacing-xl;
-  border: 2rpx solid $mb-color-border;
+  padding: 0 $mb-spacing-lg;
+  border: 1rpx solid rgba(13, 80, 213, 0.45);
   transition: opacity 0.15s, transform 0.15s;
 
   &:active {
@@ -751,8 +924,8 @@ function goBack() {
 }
 
 .action-bar__btn--primary {
-  background: $mb-color-text-title;
-  border-color: $mb-color-text-title;
+  background: $mb-color-primary;
+  border-color: $mb-color-primary;
 }
 
 .action-bar__btn-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-text; }

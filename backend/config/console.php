@@ -9,6 +9,7 @@ use app\command\OrderExpireCommand;
 use app\command\SyncPermissions;
 use app\command\SyncSettingPermissions;
 use app\command\UpgradeAdminSchema;
+use app\command\UpgradeClientSearchSchema;
 use app\command\UpgradeUserRegisterType;
 use app\command\UpgradeUserWechatSchema;
 
@@ -22,6 +23,7 @@ return [
         'order:expire' => OrderExpireCommand::class,
         'install:auto' => InstallAuto::class,
         'upgrade:admin-schema' => UpgradeAdminSchema::class,
+        'upgrade:client-search-schema' => UpgradeClientSearchSchema::class,
         'upgrade:user-register-type' => UpgradeUserRegisterType::class,
         'upgrade:user-wechat-schema' => UpgradeUserWechatSchema::class,
     ],

@@ -145,28 +145,28 @@ async function handleBind() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: #ffffff;
+  background: $mb-color-bg-secondary;
   display: flex;
   flex-direction: column;
 }
 
 .page-content {
   width: 100%;
-  padding: 0 48rpx;
+  padding: 0 $mb-spacing-page calc(140rpx + env(safe-area-inset-bottom));
 }
 
 // ---- Header ----
 .header-section {
-  padding-top: 80rpx;
-  margin-bottom: 64rpx;
+  padding: $mb-spacing-xl 0 $mb-spacing-md;
+  margin-bottom: $mb-spacing-md;
 }
 
 .page-title {
   display: block;
   font-size: 52rpx;
   font-weight: 600;
-  color: $mb-color-text;
-  letter-spacing: -0.02em;
+  color: $mb-color-text-title;
+  letter-spacing: 0;
   line-height: 1.2;
   margin-bottom: 16rpx;
 }
@@ -183,20 +183,26 @@ async function handleBind() {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-lg;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-border;
 }
 
 .input-pill {
   display: flex;
   align-items: center;
   height: 100rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-border;
   padding: 0 32rpx;
-  transition: box-shadow 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
-    box-shadow: 0 0 0 3rpx rgba(13, 80, 213, 0.15);
+    border-color: rgba(13, 80, 213, 0.3);
+    background: $mb-color-bg;
   }
 }
 
@@ -241,8 +247,8 @@ async function handleBind() {
 // ---- Buttons ----
 .primary-btn {
   height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-text;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -264,6 +270,6 @@ async function handleBind() {
   font-size: 32rpx;
   font-weight: 600;
   color: #ffffff;
-  letter-spacing: 0.2em;
+  letter-spacing: 0;
 }
 </style>

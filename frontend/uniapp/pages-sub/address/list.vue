@@ -15,7 +15,7 @@
 
     <mb-empty-state
       v-else-if="list.length === 0"
-      icon="📮"
+      icon=""
       text="还没有收货地址"
       action-text="新增地址"
       @action="goAdd"
@@ -168,7 +168,7 @@ function goEdit(id) {
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+  border: 1rpx solid $mb-color-border;
 }
 
 .addr-card__body {
@@ -202,7 +202,7 @@ function goEdit(id) {
 }
 
 .addr-card__badge {
-  background: $mb-color-text-title;
+  background: rgba($mb-color-primary, 0.08);
   padding: 4rpx 16rpx;
   border-radius: $mb-radius-sm;
   margin-left: $mb-spacing-xs;
@@ -210,7 +210,7 @@ function goEdit(id) {
 
 .addr-card__badge-text {
   font-size: $mb-font-xs;
-  color: $mb-color-text-inverse;
+  color: $mb-color-primary;
   font-weight: 600;
 }
 
@@ -288,12 +288,13 @@ function goEdit(id) {
   background: $mb-color-bg;
   padding: $mb-spacing-md $mb-spacing-page;
   padding-bottom: calc(#{$mb-spacing-md} + env(safe-area-inset-bottom));
+  box-shadow: $mb-shadow-bar;
 }
 
 .addr-list__add-btn {
   height: 96rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-text-title;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -308,6 +309,6 @@ function goEdit(id) {
   font-size: $mb-font-md;
   font-weight: 600;
   color: $mb-color-text-inverse;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
 }
 </style>

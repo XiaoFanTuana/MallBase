@@ -24,7 +24,7 @@ INSERT INTO `mb_goods_spec_template` (`id`, `name`, `detail`, `sort`, `status`) 
 
 -- ---- 商品 1：iPhone 15 Pro（多规格）----
 INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
-(1, 5, 1, 'iPhone 15 Pro', '钛金属设计，A17 Pro 芯片', '/static/demo/iphone15pro.png', '["/static/demo/iphone15pro.png"]', 2,
+(1, 5, 1, 'iPhone 15 Pro', '钛金属设计，A17 Pro 芯片', '/static/demo/iphone15pro.png', '["/static/demo/iphone15pro.png","/static/demo/iphone15pro-2.png","/static/demo/iphone15pro-3.png"]', 2,
  '[{"name":"颜色","add_pic":0,"values":[{"value":"黑色钛金属","pic":""},{"value":"白色钛金属","pic":""}]},{"name":"内存","add_pic":0,"values":[{"value":"256G","pic":""},{"value":"512G","pic":""}]}]',
  '<p>全新 iPhone 15 Pro，搭载 A17 Pro 芯片，钛金属设计，超视网膜 XDR 显示屏。</p>',
  7999.00, 8999.00, 200, 56, '台', 1, 1, 1, 1, 1);
@@ -50,7 +50,7 @@ INSERT INTO `mb_goods_sku` (`goods_id`, `spec_values`, `price`, `market_price`, 
 
 -- ---- 商品 3：小米14（多规格）----
 INSERT INTO `mb_goods` (`id`, `category_id`, `brand_id`, `name`, `subtitle`, `main_image`, `images`, `spec_type`, `spec_meta`, `description`, `price`, `market_price`, `stock`, `sales`, `unit`, `is_on_sale`, `is_recommend`, `is_new`, `is_hot`, `sort`) VALUES
-(3, 5, 3, '小米14', '徕卡光学，骁龙8 Gen3', '/static/demo/xiaomi14.png', '["/static/demo/xiaomi14.png"]', 2,
+(3, 5, 3, '小米14', '徕卡光学，骁龙8 Gen3', '/static/demo/xiaomi14.png', '["/static/demo/xiaomi14.png","/static/demo/xiaomi14-2.png","/static/demo/xiaomi14-3.png"]', 2,
  '[{"name":"颜色","add_pic":0,"values":[{"value":"黑色","pic":""},{"value":"白色","pic":""},{"value":"岩石青","pic":""}]},{"name":"内存","add_pic":0,"values":[{"value":"256G","pic":""},{"value":"512G","pic":""}]}]',
  '<p>小米14，搭载第三代骁龙8，徕卡光学镜头，小米澎湃 OS。</p>',
  3999.00, 4299.00, 300, 120, '台', 1, 1, 1, 0, 3);
@@ -98,5 +98,9 @@ INSERT INTO `mb_goods_tag_relation` (`goods_id`, `tag_id`) VALUES
 (5, 4);
 
 -- 演示用首页轮播图（images 类型以 JSON 数组存储路径）
-UPDATE `mb_setting` SET `value` = '["/static/client/banner-1.png","/static/client/banner-2.png","/static/client/banner-3.png"]'
+UPDATE `mb_setting` SET `value` = '["/static/demo/banner-digital.png","/static/demo/banner-fashion.png","/static/demo/banner-home.png"]'
 WHERE `code` = 'client_home_banners';
+
+-- 演示用商品保障
+UPDATE `mb_setting` SET `value` = '[{"title":"正品保障","desc":"平台严选商品来源","icon":"shield"},{"title":"极速发货","desc":"现货商品优先出库","icon":"truck"},{"title":"七天无理由","desc":"符合条件可无理由退货","icon":"refresh"},{"title":"售后无忧","desc":"订单售后进度可追踪","icon":"service"}]'
+WHERE `code` = 'client_goods_guarantees';

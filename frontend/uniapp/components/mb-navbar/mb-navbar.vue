@@ -24,7 +24,7 @@ const props = defineProps({
   title: { type: String, default: '' },
   back: { type: Boolean, default: true },
   bgColor: { type: String, default: '#ffffff' },
-  textColor: { type: String, default: 'var(--color-text, #1b1b1b)' },
+  textColor: { type: String, default: 'var(--color-text, #191b23)' },
   accentLine: { type: Boolean, default: false },
 })
 

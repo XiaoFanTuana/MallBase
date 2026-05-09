@@ -4,11 +4,11 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getRefundDetail, cancelRefund } from '@/api/order/refund'
 
 const STATUS_CONFIG = {
-  0: { label: '待审核', color: '#e08a00', bg: 'linear-gradient(135deg, #e08a00 0%, #f0ad4e 100%)' },
-  1: { label: '已同意', color: '#25a350', bg: 'linear-gradient(135deg, #25a350 0%, #34c759 100%)' },
-  2: { label: '已拒绝', color: '#ba1a1a', bg: 'linear-gradient(135deg, #ba1a1a 0%, #d04040 100%)' },
-  3: { label: '已退款', color: '#848484', bg: 'linear-gradient(135deg, #6b6b6b 0%, #848484 100%)' },
-  4: { label: '已取消', color: '#848484', bg: 'linear-gradient(135deg, #6b6b6b 0%, #848484 100%)' },
+  0: { label: '待审核', color: '#e08a00', bg: 'rgba(224, 138, 0, 0.1)' },
+  1: { label: '已同意', color: '#25a350', bg: 'rgba(37, 163, 80, 0.1)' },
+  2: { label: '已拒绝', color: '#ba1a1a', bg: 'rgba(186, 26, 26, 0.1)' },
+  3: { label: '已退款', color: '#0d50d5', bg: 'rgba(13, 80, 213, 0.08)' },
+  4: { label: '已取消', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' },
 }
 
 const TIMELINE_STEPS = {
@@ -137,7 +137,7 @@ function onCancelRefund() {
     <template v-else>
       <!-- Status header -->
       <view class="status-header" :style="{ background: statusConfig.bg }">
-        <text class="status-header__label">{{ statusConfig.label }}</text>
+        <text class="status-header__label" :style="{ color: statusConfig.color }">{{ statusConfig.label }}</text>
         <text v-if="detail.status === 0" class="status-header__hint">
           商家正在审核您的退款申请
         </text>
@@ -203,7 +203,7 @@ function onCancelRefund() {
             mode="aspectFill"
           />
           <view v-else class="product-row__image product-row__image--placeholder">
-            <text class="product-row__placeholder-text">&#x1F4E6;</text>
+            <view class="product-row__placeholder-box" />
           </view>
           <view class="product-row__info">
             <text class="product-row__name">{{ detail.goods_name || '商品' }}</text>
@@ -294,28 +294,23 @@ function onCancelRefund() {
 
 // ---- Status header ----
 .status-header {
-  margin: 0 (-$mb-spacing-page);
-  padding: $mb-spacing-xl $mb-spacing-page;
+  margin: $mb-spacing-md 0;
+  padding: $mb-spacing-lg;
   position: relative;
   overflow: hidden;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
 }
 
 .status-header::after {
-  content: '';
-  position: absolute;
-  bottom: -2rpx;
-  left: 0;
-  right: 0;
-  height: $mb-spacing-lg;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-lg $mb-radius-lg 0 0;
+  display: none;
 }
 
 .status-header__label {
   display: block;
   font-size: $mb-font-xl;
   font-weight: 700;
-  color: $mb-color-text-inverse;
+  color: $mb-color-primary;
   position: relative;
   z-index: 1;
 }
@@ -323,7 +318,7 @@ function onCancelRefund() {
 .status-header__hint {
   display: block;
   font-size: $mb-font-md;
-  color: rgba(255, 255, 255, 0.8);
+  color: $mb-color-text-secondary;
   margin-top: $mb-spacing-xs;
   position: relative;
   z-index: 1;
@@ -332,10 +327,10 @@ function onCancelRefund() {
 // ---- Card base ----
 .card {
   background: $mb-color-bg;
-  border-radius: $mb-radius-xl;
+  border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid $mb-color-border;
 }
 
 .card__title {
@@ -383,7 +378,8 @@ function onCancelRefund() {
 
 .timeline__dot--active {
   background: $mb-color-primary;
-  box-shadow: 0 0 0 6rpx rgba($mb-color-primary, 0.2);
+  border: 6rpx solid rgba($mb-color-primary, 0.14);
+  box-sizing: content-box;
 }
 
 .timeline__dot--rejected {
@@ -442,8 +438,24 @@ function onCancelRefund() {
   justify-content: center;
 }
 
-.product-row__placeholder-text {
-  font-size: 40rpx;
+.product-row__placeholder-box {
+  width: 42rpx;
+  height: 34rpx;
+  border: 4rpx solid $mb-color-primary;
+  border-radius: 8rpx;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 9rpx;
+    right: 9rpx;
+    top: 9rpx;
+    height: 4rpx;
+    border-radius: $mb-radius-full;
+    background: $mb-color-primary;
+    opacity: 0.5;
+  }
 }
 
 .product-row__info {
@@ -552,14 +564,14 @@ function onCancelRefund() {
 .amount-row__symbol {
   font-size: $mb-font-md;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: $mb-color-primary;
   margin-right: 4rpx;
 }
 
 .amount-row__value {
   font-size: $mb-font-xl;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: $mb-color-primary;
 }
 
 .amount-row__method {
@@ -579,7 +591,7 @@ function onCancelRefund() {
   bottom: 0;
   z-index: 100;
   background: $mb-color-bg;
-  box-shadow: 0 -2rpx 16rpx rgba(0, 0, 0, 0.05);
+  box-shadow: $mb-shadow-bar;
 }
 
 .action-bar__inner {
@@ -593,7 +605,7 @@ function onCancelRefund() {
 .action-bar__btn {
   height: 76rpx;
   min-width: 200rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   display: flex;
   align-items: center;
   justify-content: center;

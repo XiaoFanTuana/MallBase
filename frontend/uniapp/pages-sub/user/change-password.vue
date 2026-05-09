@@ -126,19 +126,22 @@ async function handleSubmit() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: #ffffff;
+  background: $mb-color-bg-secondary;
 }
 
 .page-content {
-  padding: 0 48rpx;
+  padding: $mb-spacing-lg $mb-spacing-page calc(160rpx + env(safe-area-inset-bottom));
 }
 
 // ---- Form ----
 .form-section {
-  padding-top: 48rpx;
   display: flex;
   flex-direction: column;
-  gap: 36rpx;
+  gap: $mb-spacing-lg;
+  padding: $mb-spacing-lg;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-border;
 }
 
 .form-group {
@@ -158,13 +161,15 @@ async function handleSubmit() {
   display: flex;
   align-items: center;
   height: 100rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-border;
   padding: 0 32rpx;
-  transition: box-shadow 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
-    box-shadow: 0 0 0 3rpx rgba(13, 80, 213, 0.15);
+    border-color: rgba(13, 80, 213, 0.3);
+    background: $mb-color-bg;
   }
 }
 
@@ -223,8 +228,8 @@ async function handleSubmit() {
 // ---- Button ----
 .primary-btn {
   height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-text;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -246,6 +251,6 @@ async function handleSubmit() {
   font-size: 32rpx;
   font-weight: 600;
   color: #ffffff;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 </style>

@@ -5,13 +5,10 @@ import { getGoodsList, getGoodsRecommend } from '@/api/goods/goods'
 import { useAppStore } from '@/store/app'
 
 const appStore = useAppStore()
-const brandName = computed(() => appStore.siteConfig?.site_name || '商城')
 
-// ---------- system info ----------
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight || 0
 
-// ---------- state ----------
 const recommendList = ref([])
 const goodsList = ref([])
 const page = ref(1)
@@ -20,39 +17,31 @@ const loading = ref(false)
 const noMore = ref(false)
 const refreshing = ref(false)
 
-// ---------- static data ----------
-const categoryTabs = [
-  { label: '精品', query: '?tag=recommend' },
-  { label: '热门', query: '?sort=sales' },
-  { label: '活动', query: '?tag=promo' },
-  { label: '新品', query: '?tag=new' },
+const categoryEntries = [
+  { label: '数码', query: '?keyword=数码', icon: 'phone' },
+  { label: '美妆', query: '?keyword=美妆', icon: 'beauty' },
+  { label: '服饰', query: '?keyword=服饰', icon: 'shirt' },
+  { label: '家居', query: '?keyword=家居', icon: 'sofa' },
+  { label: '美食', query: '?keyword=美食', icon: 'food' },
 ]
 
-// ---------- banners ----------
+const heroTitle = computed(() => appStore.siteConfig?.site_slogan || '年度旗舰大赏')
+const heroSubtitle = computed(() => appStore.siteConfig?.site_name || '精选全球好货 限时特惠抢购')
+
 const banners = computed(() => {
   const raw = appStore.siteConfig?.client_home_banners
   if (Array.isArray(raw) && raw.length > 0) return raw
   return []
 })
-const hasBanners = computed(() => banners.value.length > 0)
-const swiperCurrent = ref(0)
 
-// ---------- computed ----------
-const bentoGroups = computed(() => {
-  const groups = []
-  for (let i = 0; i < goodsList.value.length; i += 3) {
-    groups.push({
-      items: goodsList.value.slice(i, i + 3),
-      reversed: (i / 3) % 2 === 1,
-    })
-  }
-  return groups
+const mustBuyList = computed(() => {
+  const source = recommendList.value.length > 0 ? recommendList.value : goodsList.value
+  return source.slice(0, 6)
 })
 
-// ---------- data fetching ----------
 async function fetchRecommend() {
   try {
-    const data = await getGoodsRecommend(6)
+    const data = await getGoodsRecommend(8)
     recommendList.value = Array.isArray(data?.list)
       ? data.list
       : (Array.isArray(data) ? data : [])
@@ -78,11 +67,7 @@ async function fetchGoodsList(reset = false) {
       ? data.list
       : (Array.isArray(data) ? data : [])
 
-    if (reset) {
-      goodsList.value = list
-    } else {
-      goodsList.value = [...goodsList.value, ...list]
-    }
+    goodsList.value = reset ? list : [...goodsList.value, ...list]
 
     if (list.length < limit) {
       noMore.value = true
@@ -102,7 +87,6 @@ async function refresh() {
   refreshing.value = false
 }
 
-// ---------- lifecycle ----------
 onMounted(() => {
   refresh()
 })
@@ -116,7 +100,6 @@ onReachBottom(() => {
   fetchGoodsList(false)
 })
 
-// ---------- helpers ----------
 function formatPrice(price) {
   const num = Number(price)
   if (Number.isNaN(num)) return '0'
@@ -127,6 +110,7 @@ function formatPrice(price) {
 }
 
 function getFirstImage(item) {
+  if (!item) return ''
   if (item.main_image_full_url) return item.main_image_full_url
   if (item.cover) return item.cover
   if (item.main_image) return item.main_image
@@ -139,608 +123,755 @@ function getFirstImage(item) {
   return ''
 }
 
-// ---------- navigation ----------
 function goSearch() {
   uni.navigateTo({ url: '/pages-sub/search/index' })
 }
 
+function goCart() {
+  uni.switchTab({ url: '/pages/cart/index' })
+}
+
 function goGoodsDetail(id) {
+  if (!id) return
   uni.navigateTo({ url: `/pages-sub/goods/detail?id=${id}` })
 }
 
 function goGoodsList(query = '') {
   uni.navigateTo({ url: `/pages-sub/goods/list${query}` })
 }
-
-function onTabTap(tab) {
-  goGoodsList(tab.query)
-}
 </script>
 
 <template>
   <view class="page">
-    <!-- ========== Floating Top App Bar ========== -->
-    <view
-      class="top-bar"
-      :style="{ top: statusBarHeight + 8 + 'px' }"
-    >
-      <view class="top-bar__inner">
-        <text class="top-bar__brand">{{ brandName }}</text>
-
-        <view class="top-bar__search" @tap="goSearch">
-          <text class="top-bar__search-icon">&#x1F50D;</text>
-          <text class="top-bar__search-text">搜索商品</text>
+    <view class="home" :style="{ paddingTop: statusBarHeight + 'px' }">
+      <view class="header">
+        <view class="brand">
+          <view class="brand__icon">
+            <view class="brand__icon-line" />
+          </view>
+          <text class="brand__text">MallBase</text>
         </view>
-
-        <text
-          class="top-bar__cart-icon"
-          @tap="() => uni.switchTab({ url: '/pages/cart/index' })"
-        >&#x1F6CD;&#xFE0F;</text>
+        <view class="cart-btn" @tap="goCart">
+          <view class="cart-icon">
+            <view class="cart-icon__handle" />
+          </view>
+          <text class="cart-badge">3</text>
+        </view>
       </view>
-    </view>
 
-    <!-- ========== Main Content ========== -->
-    <view class="main" :style="{ paddingTop: statusBarHeight + 68 + 'px' }">
+      <view class="search" @tap="goSearch">
+        <view class="search__icon" />
+        <text class="search__text">搜索你心仪的商品...</text>
+      </view>
 
-      <!-- Banner Swiper (real data from siteConfig) -->
-      <swiper
-        v-if="hasBanners"
-        class="banner-swiper"
-        :autoplay="true"
-        :interval="4000"
-        :duration="500"
-        :circular="true"
-        :indicator-dots="banners.length > 1"
-        indicator-color="rgba(255,255,255,0.4)"
-        indicator-active-color="#ffffff"
-        @change="e => swiperCurrent = e.detail.current"
-      >
-        <swiper-item
-          v-for="(src, idx) in banners"
-          :key="idx"
+      <view class="hero" @tap="goGoodsList()">
+        <swiper
+          v-if="banners.length > 0"
+          class="hero__swiper"
+          :autoplay="true"
+          :interval="4200"
+          :duration="500"
+          :circular="true"
+          :indicator-dots="false"
         >
-          <view class="banner" @tap="goGoodsList()">
-            <image
-              class="banner__image"
-              :src="src"
-              mode="aspectFill"
-            />
+          <swiper-item v-for="(src, idx) in banners" :key="idx">
+            <image class="hero__image" :src="src" mode="aspectFill" />
+          </swiper-item>
+        </swiper>
+        <view v-else class="hero__fallback">
+          <view class="hero__mall">
+            <view class="hero__hall" />
+            <view class="hero__shop hero__shop--left" />
+            <view class="hero__shop hero__shop--right" />
+            <view class="hero__floor" />
           </view>
-        </swiper-item>
-      </swiper>
-
-      <!-- Banner Fallback (no remote banners) -->
-      <view v-else class="banner banner--placeholder">
-        <view class="banner__gradient" />
-        <view class="banner__overlay">
-          <text class="banner__title">{{ brandName }}</text>
-          <text class="banner__subtitle">{{ appStore.siteConfig?.site_slogan || '发现好物，品质生活' }}</text>
+        </view>
+        <view class="hero__shade" />
+        <view class="hero__copy">
+          <text class="hero__title">{{ heroTitle }}</text>
+          <text class="hero__subtitle">{{ heroSubtitle }}</text>
         </view>
       </view>
 
-      <!-- Category Tabs -->
-      <scroll-view scroll-x class="category-tabs" :show-scrollbar="false">
-        <view class="category-tabs__track">
-          <view
-            v-for="tab in categoryTabs"
-            :key="tab.label"
-            class="category-tab"
-            @tap="onTabTap(tab)"
-          >
-            <text class="category-tab__text">{{ tab.label }}</text>
+      <view class="category-row">
+        <view
+          v-for="item in categoryEntries"
+          :key="item.label"
+          class="category-item"
+          @tap="goGoodsList(item.query)"
+        >
+          <view class="category-item__icon">
+            <view :class="['cat-icon', `cat-icon--${item.icon}`]" />
+          </view>
+          <text class="category-item__label">{{ item.label }}</text>
+        </view>
+      </view>
+
+      <view v-if="mustBuyList.length > 0" class="section">
+        <view class="section__head">
+          <text class="section__title">今日必买</text>
+          <view class="section__more" @tap="goGoodsList('?tag=recommend')">
+            <text class="section__more-text">查看全部</text>
+            <view class="arrow" />
           </view>
         </view>
-      </scroll-view>
 
-      <!-- Recommend Section -->
-      <view v-if="recommendList.length > 0" class="section">
-        <view class="section__header">
-          <text class="section__title">精品推荐</text>
-          <text class="section__more" @tap="goGoodsList('?tag=recommend')">查看全部</text>
-        </view>
-
-        <scroll-view scroll-x class="recommend-scroll" :show-scrollbar="false">
-          <view class="recommend-scroll__track">
+        <scroll-view scroll-x class="must-scroll" :show-scrollbar="false">
+          <view class="must-scroll__track">
             <view
-              v-for="item in recommendList"
+              v-for="item in mustBuyList"
               :key="item.id"
-              class="recommend-card"
+              class="must-card"
               @tap="goGoodsDetail(item.id)"
             >
-              <view class="recommend-card__img-wrap">
+              <view class="must-card__image-wrap">
                 <image
-                  class="recommend-card__img"
+                  v-if="getFirstImage(item)"
+                  class="must-card__image"
                   :src="getFirstImage(item)"
                   mode="aspectFill"
                   lazy-load
                 />
+                <view v-else class="image-placeholder" />
               </view>
-              <text class="recommend-card__name">{{ item.name }}</text>
-              <text class="recommend-card__price">{{ '¥' }}{{ formatPrice(item.price) }}</text>
+              <text class="must-card__name">{{ item.name }}</text>
+              <text class="must-card__price">¥{{ formatPrice(item.price) }}</text>
             </view>
           </view>
         </scroll-view>
       </view>
 
-      <!-- Bento Section ("猜你喜欢") -->
-      <view v-if="goodsList.length > 0" class="section">
-        <view class="section__header">
+      <view v-if="goodsList.length > 0" class="section section--goods">
+        <view class="section__head">
           <text class="section__title">猜你喜欢</text>
         </view>
 
-        <view class="bento">
+        <view class="goods-grid">
           <view
-            v-for="(group, gi) in bentoGroups"
-            :key="gi"
-            class="bento-row"
-            :class="{ 'bento-row--reversed': group.reversed }"
+            v-for="(item, index) in goodsList"
+            :key="item.id"
+            class="goods-card"
+            @tap="goGoodsDetail(item.id)"
           >
-            <!-- Main (large) card -->
-            <view
-              class="bento-card bento-card--main"
-              @tap="goGoodsDetail(group.items[0].id)"
-            >
+            <view class="goods-card__image-wrap">
               <image
-                class="bento-card__img"
-                :src="getFirstImage(group.items[0])"
+                v-if="getFirstImage(item)"
+                class="goods-card__image"
+                :src="getFirstImage(item)"
                 mode="aspectFill"
                 lazy-load
               />
-              <view class="bento-card__info">
-                <text class="bento-card__name">{{ group.items[0].name }}</text>
-                <text class="bento-card__price">{{ '¥' }}{{ formatPrice(group.items[0].price) }}</text>
-              </view>
+              <view v-else class="image-placeholder" />
             </view>
-
-            <!-- Side column (2 small cards) -->
-            <view class="bento-col">
-              <view
-                v-if="group.items[1]"
-                class="bento-card bento-card--small"
-                @tap="goGoodsDetail(group.items[1].id)"
-              >
-                <image
-                  class="bento-card__img"
-                  :src="getFirstImage(group.items[1])"
-                  mode="aspectFill"
-                  lazy-load
-                />
-                <view class="bento-card__info">
-                  <text class="bento-card__name">{{ group.items[1].name }}</text>
-                  <text class="bento-card__price">{{ '¥' }}{{ formatPrice(group.items[1].price) }}</text>
-                </view>
+            <view class="goods-card__body">
+              <text class="goods-card__name">{{ item.name }}</text>
+              <view class="goods-card__tags">
+                <text class="goods-card__tag">{{ index % 2 === 0 ? '满减中' : '新品' }}</text>
+                <text v-if="index % 3 === 0" class="goods-card__tag">顺丰直达</text>
               </view>
-
-              <view
-                v-if="group.items[2]"
-                class="bento-card bento-card--small"
-                @tap="goGoodsDetail(group.items[2].id)"
-              >
-                <image
-                  class="bento-card__img"
-                  :src="getFirstImage(group.items[2])"
-                  mode="aspectFill"
-                  lazy-load
-                />
-                <view class="bento-card__info">
-                  <text class="bento-card__name">{{ group.items[2].name }}</text>
-                  <text class="bento-card__price">{{ '¥' }}{{ formatPrice(group.items[2].price) }}</text>
-                </view>
+              <view class="goods-card__bottom">
+                <text class="goods-card__price">¥{{ formatPrice(item.price) }}</text>
+                <text class="goods-card__sold">已售 {{ index % 2 === 0 ? '2k+' : '500+' }}</text>
               </view>
             </view>
           </view>
         </view>
       </view>
 
-      <!-- Loading / No More indicator -->
-      <view v-if="goodsList.length > 0" class="load-state">
-        <text v-if="loading" class="load-state__text">加载中...</text>
-        <view v-else-if="noMore" class="load-state__divider">
-          <view class="load-state__line" />
-          <text class="load-state__text">已经到底了</text>
-          <view class="load-state__line" />
-        </view>
-      </view>
-
-      <!-- Empty state (before any data arrives) -->
       <view
         v-if="!loading && !refreshing && goodsList.length === 0 && recommendList.length === 0"
-        class="empty-state"
+        class="empty"
       >
-        <text class="empty-state__icon">&#x1F6D2;</text>
-        <text class="empty-state__text">暂无商品</text>
+        <text class="empty__text">暂无商品</text>
       </view>
 
-      <!-- Bottom safe area padding for native tabBar -->
+      <view v-if="goodsList.length > 0" class="load-state">
+        <text v-if="loading" class="load-state__text">加载中...</text>
+        <text v-else-if="noMore" class="load-state__text">已经到底了</text>
+      </view>
+
       <view class="bottom-spacer" />
     </view>
   </view>
 </template>
 
 <style lang="scss" scoped>
-/* ===========================
-   Page
-   =========================== */
 .page {
   min-height: 100vh;
-  background-color: var(--color-bg-secondary, #f7f9fb);
+  background: #faf8ff;
 }
 
-/* ===========================
-   Floating Top App Bar
-   =========================== */
-.top-bar {
-  position: fixed;
-  left: 16rpx;
-  right: 16rpx;
-  z-index: 999;
+.home {
+  min-height: 100vh;
+  padding-left: 28rpx;
+  padding-right: 28rpx;
 }
 
-.top-bar__inner {
+.header {
+  height: 72rpx;
   display: flex;
   align-items: center;
-  height: 96rpx;
-  padding: 0 32rpx;
-  background-color: rgba(255, 255, 255, 0.80);
-  backdrop-filter: blur(48rpx);
-  -webkit-backdrop-filter: blur(48rpx);
-  border-radius: 999rpx;
-  box-shadow: 0 16rpx 60rpx rgba(15, 23, 42, 0.04);
+  justify-content: space-between;
 }
 
-.top-bar__brand {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--color-text, #1b1b1b);
-  flex-shrink: 0;
-}
-
-.top-bar__search {
-  flex: 1;
+.brand {
   display: flex;
   align-items: center;
-  height: 64rpx;
-  margin: 0 24rpx;
-  padding: 0 24rpx;
-  background-color: rgba(241, 243, 245, 0.50);
-  border-radius: 999rpx;
-  overflow: hidden;
+  gap: 10rpx;
 }
 
-.top-bar__search-icon {
-  font-size: 24rpx;
-  margin-right: 12rpx;
-  flex-shrink: 0;
-}
-
-.top-bar__search-text {
-  font-size: 26rpx;
-  color: var(--color-text-tertiary, #848484);
-  white-space: nowrap;
-}
-
-.top-bar__cart-icon {
-  font-size: 36rpx;
-  flex-shrink: 0;
-  padding-left: 4rpx;
-}
-
-/* ===========================
-   Main Content Area
-   =========================== */
-.main {
-  padding: 0 24rpx;
-}
-
-/* ===========================
-   Banner Swiper
-   =========================== */
-.banner-swiper {
-  width: 100%;
-  height: 336rpx;
-  border-radius: 40rpx;
-  overflow: hidden;
-}
-
-/* ===========================
-   Banner
-   =========================== */
-.banner {
+.brand__icon {
+  width: 28rpx;
+  height: 26rpx;
+  border: 4rpx solid #2b5aed;
+  border-radius: 6rpx;
   position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 40rpx;
-  overflow: hidden;
-  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.06);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 3rpx;
+    right: 3rpx;
+    top: 5rpx;
+    height: 3rpx;
+    background: #2b5aed;
+    border-radius: 3rpx;
+  }
 }
 
-.banner--placeholder {
-  height: 336rpx;
-}
-
-.banner__image {
+.brand__icon-line {
   position: absolute;
-  top: 0;
-  left: 0;
+  left: 5rpx;
+  top: -8rpx;
+  width: 4rpx;
+  height: 8rpx;
+  background: #2b5aed;
+  border-radius: 4rpx;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 10rpx;
+    top: 0;
+    width: 4rpx;
+    height: 8rpx;
+    background: #2b5aed;
+    border-radius: 4rpx;
+  }
+}
+
+.brand__text {
+  font-size: 32rpx;
+  line-height: 1;
+  font-weight: 800;
+  color: #2b5aed;
+}
+
+.cart-btn {
+  position: relative;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cart-icon {
+  width: 30rpx;
+  height: 24rpx;
+  border: 4rpx solid #aab6d1;
+  border-top: 0;
+  border-radius: 0 0 7rpx 7rpx;
+  position: relative;
+}
+
+.cart-icon__handle {
+  position: absolute;
+  left: 6rpx;
+  top: -13rpx;
+  width: 12rpx;
+  height: 14rpx;
+  border: 4rpx solid #aab6d1;
+  border-bottom: 0;
+  border-radius: 12rpx 12rpx 0 0;
+}
+
+.cart-badge {
+  position: absolute;
+  right: 1rpx;
+  top: -4rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 6rpx;
+  border-radius: 18rpx;
+  background: #2b5aed;
+  color: #ffffff;
+  font-size: 18rpx;
+  font-weight: 800;
+  line-height: 28rpx;
+  text-align: center;
+}
+
+.search {
+  height: 72rpx;
+  margin-top: 14rpx;
+  padding: 0 24rpx;
+  border-radius: 12rpx;
+  background: #f0f0fb;
+  display: flex;
+  align-items: center;
+}
+
+.search__icon {
+  width: 22rpx;
+  height: 22rpx;
+  border: 4rpx solid #aeb5ca;
+  border-radius: 50%;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: -10rpx;
+    bottom: -6rpx;
+    width: 13rpx;
+    height: 4rpx;
+    border-radius: 4rpx;
+    background: #aeb5ca;
+    transform: rotate(45deg);
+  }
+}
+
+.search__text {
+  margin-left: 20rpx;
+  font-size: 24rpx;
+  color: #a6adbf;
+}
+
+.hero {
+  position: relative;
+  height: 314rpx;
+  margin-top: 32rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background: #e8e6e2;
+}
+
+.hero__swiper,
+.hero__image,
+.hero__fallback {
   width: 100%;
   height: 100%;
 }
 
-.banner__gradient {
+.hero__fallback {
+  position: relative;
+  background: linear-gradient(90deg, #332b25 0%, #d8d1c4 49%, #1c1714 100%);
+}
+
+.hero__mall {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
 }
 
-.banner__overlay {
+.hero__hall {
+  position: absolute;
+  left: 258rpx;
+  top: 0;
+  width: 130rpx;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(250, 252, 255, 0.85), rgba(218, 225, 230, 0.55));
+  transform: skewX(-4deg);
+}
+
+.hero__shop {
+  position: absolute;
+  top: 40rpx;
+  width: 220rpx;
+  height: 176rpx;
+  background: rgba(24, 20, 17, 0.68);
+}
+
+.hero__shop--left {
+  left: 0;
+  transform: skewY(6deg);
+}
+
+.hero__shop--right {
+  right: 0;
+  transform: skewY(-6deg);
+}
+
+.hero__floor {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 60rpx 40rpx 36rpx;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), transparent);
+  height: 124rpx;
+  background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(226, 222, 214, 0.75));
+}
+
+.hero__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(25, 27, 35, 0.05), rgba(25, 27, 35, 0.25));
+}
+
+.hero__copy {
+  position: absolute;
+  left: 32rpx;
+  bottom: 42rpx;
   display: flex;
   flex-direction: column;
 }
 
-.banner__title {
-  font-size: 48rpx;
-  font-weight: 700;
+.hero__title {
+  font-size: 32rpx;
+  font-weight: 800;
   color: #ffffff;
   line-height: 1.2;
 }
 
-.banner__subtitle {
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.80);
-  margin-top: 8rpx;
-  line-height: 1.5;
+.hero__subtitle {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-/* ===========================
-   Category Tabs
-   =========================== */
-.category-tabs {
-  white-space: nowrap;
-  padding-top: 32rpx;
+.category-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 40rpx;
+  padding: 0 6rpx;
 }
 
-.category-tabs__track {
-  display: inline-flex;
-  gap: 16rpx;
-  padding: 0 8rpx;
+.category-item {
+  width: 104rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.category-tab {
-  display: inline-flex;
+.category-item__icon {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 16rpx;
+  background: #f0f6ff;
+  display: flex;
   align-items: center;
   justify-content: center;
-  height: 72rpx;
-  padding: 0 40rpx;
-  border-radius: 999rpx;
-  background-color: #ffffff;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.03);
-  transition: background-color 0.2s;
+}
 
-  &:active {
-    background-color: var(--color-text, #1b1b1b);
+.category-item__label {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #51566a;
+}
 
-    .category-tab__text {
-      color: #ffffff;
-    }
+.cat-icon {
+  position: relative;
+  width: 34rpx;
+  height: 34rpx;
+  color: #2b5aed;
+}
+
+.cat-icon--phone {
+  border: 4rpx solid #2b5aed;
+  border-radius: 5rpx;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 9rpx;
+    bottom: 3rpx;
+    width: 8rpx;
+    height: 3rpx;
+    background: #2b5aed;
+    border-radius: 3rpx;
   }
 }
 
-.category-tab__text {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--color-text, #1b1b1b);
-  letter-spacing: 2rpx;
+.cat-icon--beauty {
+  border-left: 5rpx solid #2b5aed;
+  border-right: 5rpx solid #2b5aed;
+  border-bottom: 5rpx solid #2b5aed;
+  border-radius: 0 0 10rpx 10rpx;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 6rpx;
+    top: -12rpx;
+    width: 12rpx;
+    height: 18rpx;
+    border: 4rpx solid #2b5aed;
+    border-radius: 12rpx 12rpx 0 0;
+  }
 }
 
-/* ===========================
-   Section Generic
-   =========================== */
+.cat-icon--shirt {
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 2rpx 3rpx;
+    border: 5rpx solid #2b5aed;
+    border-top: 0;
+    border-radius: 5rpx;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 9rpx;
+    top: 0;
+    width: 14rpx;
+    height: 10rpx;
+    border-bottom: 5rpx solid #2b5aed;
+    border-radius: 0 0 10rpx 10rpx;
+  }
+}
+
+.cat-icon--sofa {
+  border: 5rpx solid #2b5aed;
+  border-radius: 7rpx;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: -6rpx;
+    right: -6rpx;
+    bottom: -6rpx;
+    height: 12rpx;
+    border: 5rpx solid #2b5aed;
+    border-radius: 8rpx;
+    background: #f0f6ff;
+  }
+}
+
+.cat-icon--food {
+  &::before {
+    content: '';
+    position: absolute;
+    left: 7rpx;
+    top: 1rpx;
+    width: 5rpx;
+    height: 32rpx;
+    background: #2b5aed;
+    border-radius: 5rpx;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 7rpx;
+    top: 0;
+    width: 10rpx;
+    height: 34rpx;
+    border-left: 5rpx solid #2b5aed;
+    border-radius: 10rpx;
+  }
+}
+
 .section {
-  margin-top: 48rpx;
+  margin-top: 38rpx;
 }
 
-.section__header {
+.section--goods {
+  margin-top: 34rpx;
+}
+
+.section__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  padding: 0 8rpx;
-  margin-bottom: 24rpx;
+  margin-bottom: 22rpx;
 }
 
 .section__title {
-  font-size: 40rpx;
-  font-weight: 700;
-  color: var(--color-text-title, #131b2e);
-  line-height: 1.3;
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #191b23;
 }
 
 .section__more {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.section__more-text {
   font-size: 22rpx;
-  font-weight: 600;
-  color: var(--color-primary, #0d50d5);
-  letter-spacing: 2rpx;
+  font-weight: 700;
+  color: #2b5aed;
 }
 
-/* ===========================
-   Horizontal Recommend Scroll
-   =========================== */
-.recommend-scroll {
-  white-space: nowrap;
+.arrow {
+  width: 10rpx;
+  height: 10rpx;
+  border-top: 3rpx solid #2b5aed;
+  border-right: 3rpx solid #2b5aed;
+  transform: rotate(45deg);
+}
+
+.must-scroll {
   width: 100%;
+  white-space: nowrap;
 }
 
-.recommend-scroll__track {
+.must-scroll__track {
   display: inline-flex;
-  gap: 24rpx;
-  padding: 0 8rpx 16rpx;
+  gap: 20rpx;
+  padding: 0 4rpx 8rpx;
 }
 
-.recommend-card {
-  flex-shrink: 0;
-  width: 320rpx;
+.must-card {
+  width: 238rpx;
+  padding: 12rpx;
+  border-radius: 12rpx;
+  background: #ffffff;
   display: inline-flex;
   flex-direction: column;
 }
 
-.recommend-card__img-wrap {
-  width: 320rpx;
-  height: 426rpx;
-  border-radius: 32rpx;
+.must-card__image-wrap {
+  width: 214rpx;
+  height: 214rpx;
+  border-radius: 10rpx;
   overflow: hidden;
-  background-color: #eef0f3;
+  background: #f2f3f8;
 }
 
-.recommend-card__img {
+.must-card__image,
+.image-placeholder {
   width: 100%;
   height: 100%;
 }
 
-.recommend-card__name {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: var(--color-text, #1b1b1b);
-  margin-top: 16rpx;
+.image-placeholder {
+  background: linear-gradient(135deg, #edf2ff, #f8f8ff);
+}
+
+.must-card__name {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #3b3f4c;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.recommend-card__price {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: var(--color-text-title, #131b2e);
-  margin-top: 6rpx;
+.must-card__price {
+  margin-top: 8rpx;
+  font-size: 34rpx;
+  line-height: 1;
+  font-weight: 900;
+  color: #1453d8;
 }
 
-/* ===========================
-   Bento Layout
-   =========================== */
-.bento {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
+.goods-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20rpx;
 }
 
-.bento-row {
-  display: flex;
-  gap: 16rpx;
-  height: 560rpx;
-}
-
-.bento-row--reversed {
-  flex-direction: row-reverse;
-}
-
-.bento-card {
-  border-radius: 24rpx;
+.goods-card {
+  min-width: 0;
   overflow: hidden;
-  background-color: #ffffff;
-  display: flex;
-  flex-direction: column;
+  border-radius: 12rpx;
+  background: #ffffff;
 }
 
-.bento-card--main {
-  flex: 1.3;
-}
-
-.bento-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.bento-card--small {
-  flex: 1;
-}
-
-.bento-card__img {
+.goods-card__image-wrap {
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  height: 278rpx;
+  background: #f2f3f8;
 }
 
-.bento-card__info {
-  padding: 12rpx 16rpx 16rpx;
-  flex-shrink: 0;
+.goods-card__image {
+  width: 100%;
+  height: 100%;
 }
 
-.bento-card__name {
+.goods-card__body {
+  padding: 20rpx 18rpx 18rpx;
+}
+
+.goods-card__name {
+  min-height: 72rpx;
   font-size: 24rpx;
-  font-weight: 500;
-  color: #45464d;
+  font-weight: 800;
+  color: #3b3f4c;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.4;
 }
 
-.bento-card__price {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 700;
-  color: var(--color-text-title, #131b2e);
-  margin-top: 4rpx;
-}
-
-/* ===========================
-   Load State
-   =========================== */
-.load-state {
-  padding: 48rpx 0 16rpx;
+.goods-card__tags {
+  min-height: 36rpx;
+  margin-top: 12rpx;
   display: flex;
+  gap: 8rpx;
+  flex-wrap: wrap;
+}
+
+.goods-card__tag {
+  height: 32rpx;
+  padding: 0 10rpx;
+  border-radius: 4rpx;
+  background: #eef4ff;
+  color: #2b5aed;
+  font-size: 18rpx;
+  font-weight: 800;
+  line-height: 32rpx;
+}
+
+.goods-card__bottom {
+  margin-top: 14rpx;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10rpx;
+}
+
+.goods-card__price {
+  font-size: 34rpx;
+  font-weight: 900;
+  color: #1453d8;
+  line-height: 1;
+}
+
+.goods-card__sold {
+  min-width: 0;
+  font-size: 20rpx;
+  color: #c4c8d4;
+  white-space: nowrap;
+}
+
+.empty {
+  height: 420rpx;
+  display: flex;
+  align-items: center;
   justify-content: center;
 }
 
+.empty__text,
 .load-state__text {
   font-size: 24rpx;
-  color: var(--color-text-tertiary, #848484);
-  padding: 0 24rpx;
+  color: #737686;
 }
 
-.load-state__divider {
-  display: flex;
-  align-items: center;
-  width: 60%;
+.load-state {
+  padding: 40rpx 0 20rpx;
+  text-align: center;
 }
 
-.load-state__line {
-  flex: 1;
-  height: 1rpx;
-  background-color: var(--color-border, #e0e3e5);
-}
-
-/* ===========================
-   Empty State
-   =========================== */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 240rpx 0 120rpx;
-}
-
-.empty-state__icon {
-  font-size: 100rpx;
-  margin-bottom: 24rpx;
-}
-
-.empty-state__text {
-  font-size: 28rpx;
-  color: var(--color-text-tertiary, #848484);
-}
-
-/* ===========================
-   Bottom spacer (native tabBar)
-   =========================== */
 .bottom-spacer {
-  height: 200rpx;
+  height: 160rpx;
 }
 </style>

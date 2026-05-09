@@ -9,6 +9,7 @@ use app\model\user\UserGroup;
 use app\model\user\UserGroupRelation;
 use app\model\user\UserTag;
 use app\model\user\UserTagRelation;
+use app\service\UploadService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use mall_base\service\JwtCacheService;
@@ -488,6 +489,11 @@ class UserService extends BaseService
         // 只允许更新部分字段
         $allowFields = ['nickname', 'real_name', 'gender', 'birthday', 'province', 'city', 'district', 'bio', 'avatar'];
         $updateData = array_intersect_key($data, array_flip($allowFields));
+
+        if (array_key_exists('avatar', $updateData)) {
+            $updateData['avatar'] = app()->make(UploadService::class)
+                ->normalizeStoredImagePath((string) $updateData['avatar']);
+        }
 
         if (empty($updateData)) {
             return true;

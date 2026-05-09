@@ -9,33 +9,37 @@ const userStore = useUserStore()
 const logged = computed(() => userStore.isLoggedIn)
 
 const nickname = computed(() => userStore.userInfo?.nickname || '')
-const avatar = computed(() => userStore.userInfo?.avatar || '')
+const avatar = computed(() => userStore.userInfo?.avatar_full_url || userStore.userInfo?.avatar || '')
+const bio = computed(() => userStore.userInfo?.bio || '还没有填写个性签名')
 const mobile = computed(() => {
   const raw = userStore.userInfo?.mobile || ''
   if (!raw || raw.length < 7) return raw
   return raw.slice(0, 3) + ' **** ' + raw.slice(-4)
 })
-const levelLabel = computed(() => {
-  const level = userStore.userInfo?.level
-  if (!level) return ''
-  return `等级标签 TOP ${level}%`
-})
 
 // ---------- order shortcuts ----------
 const orderShortcuts = [
   { key: 'pending_pay', label: '待付款', icon: '¥' },
-  { key: 'pending_ship', label: '待发货', icon: '✉' },
-  { key: 'pending_receive', label: '待收货', icon: '✈' },
-  { key: 'refund', label: '退款售后', icon: '↩' },
+  { key: 'paid', label: '待发货', icon: '✉' },
+  { key: 'shipped', label: '待收货', icon: '✈' },
+  { key: 'refund', label: '退款售后', icon: '↩', path: '/pages-sub/refund/list' },
 ]
 
 // ---------- function cells ----------
 const menuCells = [
-  { key: 'address', label: '收货地址', path: '/pages-sub/address/list' },
+  { key: 'address', label: '地址管理', path: '/pages-sub/address/list' },
   { key: 'favorite', label: '我的收藏', path: '' },
   { key: 'theme', label: '主题设置', path: '' },
   { key: 'about', label: '关于我们', path: '' },
 ]
+
+function goEditProfile() {
+  if (userStore.isLoggedIn) {
+    uni.navigateTo({ url: '/pages-sub/user/edit-profile' })
+    return
+  }
+  goLogin()
+}
 
 // ---------- lifecycle ----------
 onShow(() => {
@@ -53,6 +57,10 @@ function goLogin() {
 function goOrders(shortcut) {
   if (!userStore.isLoggedIn) {
     goLogin()
+    return
+  }
+  if (shortcut?.path) {
+    uni.navigateTo({ url: shortcut.path })
     return
   }
   if (shortcut?.key) {
@@ -97,7 +105,7 @@ function handleLogout() {
 
 <template>
   <view class="page">
-    <mb-navbar title="我的" :back="false" bg-color="#f7f9fb" />
+    <mb-navbar title="MallBase" :back="false" bg-color="#ffffff" />
 
     <!-- ========== Profile Header (centered) ========== -->
     <view class="profile-header">
@@ -116,11 +124,13 @@ function handleLogout() {
           </view>
         </view>
 
-        <text class="profile-header__nickname">{{ nickname || '用户' }}</text>
-        <text v-if="mobile" class="profile-header__mobile">{{ mobile }}</text>
-
-        <view v-if="levelLabel" class="profile-header__badge">
-          <text class="profile-header__badge-text">{{ levelLabel }}</text>
+        <view class="profile-header__main">
+          <text class="profile-header__nickname">{{ nickname || 'MallBase 用户' }}</text>
+          <text v-if="mobile" class="profile-header__mobile">{{ mobile }}</text>
+          <text class="profile-header__bio">{{ bio }}</text>
+          <view class="profile-header__edit-btn" @tap.stop="goEditProfile">
+            <text class="profile-header__edit-text">资料编辑</text>
+          </view>
         </view>
       </view>
 
@@ -133,8 +143,11 @@ function handleLogout() {
           </view>
         </view>
 
-        <text class="profile-header__nickname">点击登录</text>
-        <text class="profile-header__mobile">登录后享受更多服务</text>
+        <view class="profile-header__main">
+          <text class="profile-header__nickname">点击登录</text>
+          <text class="profile-header__mobile">登录后享受更多服务</text>
+          <text class="profile-header__bio">完善资料后可展示个性签名</text>
+        </view>
       </view>
     </view>
 
@@ -223,22 +236,22 @@ function handleLogout() {
    Profile Header (centered)
    =========================== */
 .profile-header {
-  padding: $mb-spacing-lg $mb-spacing-page 56rpx;
-  background: $mb-color-bg-secondary;
+  padding: 28rpx $mb-spacing-page 36rpx;
+  background: linear-gradient(180deg, #e9edff 0%, #faf8ff 100%);
 }
 
 .profile-header__body {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  gap: $mb-spacing-md;
 }
 
 .profile-header__avatar {
-  width: 160rpx;
-  height: 160rpx;
+  width: 92rpx;
+  height: 92rpx;
   border-radius: $mb-radius-full;
   flex-shrink: 0;
-  margin-bottom: $mb-spacing-md;
   background: #e8eaed;
 }
 
@@ -247,6 +260,13 @@ function handleLogout() {
   align-items: center;
   justify-content: center;
   background: #d5d8dc;
+}
+
+.profile-header__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Placeholder person silhouette */
@@ -279,8 +299,8 @@ function handleLogout() {
 }
 
 .profile-header__nickname {
-  font-size: $mb-font-xl;
-  font-weight: 700;
+  font-size: $mb-font-md;
+  font-weight: 600;
   color: $mb-color-text;
   line-height: 1.3;
 }
@@ -292,18 +312,35 @@ function handleLogout() {
   margin-top: 6rpx;
 }
 
-.profile-header__badge {
-  margin-top: 16rpx;
-  padding: 6rpx 24rpx;
-  background: $mb-color-text;
-  border-radius: $mb-radius-full;
+.profile-header__bio {
+  margin-top: 8rpx;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-secondary;
+  line-height: 1.5;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.profile-header__badge-text {
+.profile-header__edit-btn {
+  margin-top: 12rpx;
+  height: 48rpx;
+  padding: 0 20rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(13, 80, 213, 0.45);
+  background: rgba(13, 80, 213, 0.06);
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-header__edit-text {
   font-size: $mb-font-xs;
-  color: $mb-color-text-inverse;
-  font-weight: 500;
-  letter-spacing: 1rpx;
+  color: $mb-color-primary;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* ===========================
@@ -314,7 +351,7 @@ function handleLogout() {
   background: $mb-color-bg;
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
-  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+  border: 1rpx solid $mb-color-divider;
 }
 
 .order-card__title-row {
@@ -362,7 +399,7 @@ function handleLogout() {
 .order-dot {
   width: 80rpx;
   height: 80rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-lg;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -372,11 +409,11 @@ function handleLogout() {
   background: rgba(13, 80, 213, 0.06);
 }
 
-.order-dot--pending_ship {
+.order-dot--paid {
   background: rgba(240, 173, 78, 0.08);
 }
 
-.order-dot--pending_receive {
+.order-dot--shipped {
   background: rgba(240, 173, 78, 0.08);
 }
 
@@ -416,7 +453,7 @@ function handleLogout() {
   background: $mb-color-bg;
   border-radius: $mb-radius-lg;
   overflow: hidden;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.02);
+  border: 1rpx solid $mb-color-divider;
 }
 
 .cell {
@@ -632,8 +669,8 @@ function handleLogout() {
   align-items: center;
   justify-content: center;
   height: 88rpx;
-  border-radius: $mb-radius-lg;
-  border: 2rpx solid $mb-color-border;
+  border-radius: $mb-radius-sm;
+  border: 1rpx solid $mb-color-border;
   background: $mb-color-bg;
 
   &:active {

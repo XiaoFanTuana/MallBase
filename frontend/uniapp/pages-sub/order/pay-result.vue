@@ -36,7 +36,10 @@ function goRetryPay() {
     <view class="result">
       <!-- status icon -->
       <view class="result__icon" :class="isSuccess ? 'result__icon--success' : 'result__icon--fail'">
-        <text class="result__icon-symbol">{{ isSuccess ? '✓' : '✕' }}</text>
+        <text
+          class="result__icon-symbol"
+          :class="isSuccess ? 'result__icon-symbol--success' : 'result__icon-symbol--fail'"
+        >{{ isSuccess ? '✓' : '✕' }}</text>
       </view>
 
       <!-- status text -->
@@ -74,14 +77,18 @@ function goRetryPay() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background-color: $mb-color-bg;
+  background-color: $mb-color-bg-secondary;
 }
 
 .result {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 120rpx 48rpx 0;
+  margin: $mb-spacing-xl $mb-spacing-page 0;
+  padding: 96rpx 48rpx $mb-spacing-xl;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
 
   &__icon {
     display: flex;
@@ -92,19 +99,27 @@ function goRetryPay() {
     border-radius: 50%;
 
     &--success {
-      background-color: $mb-color-success;
+      background-color: rgba(52, 199, 89, 0.1);
     }
 
     &--fail {
-      background-color: $mb-color-error;
+      background-color: rgba(186, 26, 26, 0.1);
     }
   }
 
   &__icon-symbol {
     font-size: 56rpx;
     font-weight: 700;
-    color: #fff;
+    color: $mb-color-primary;
     line-height: 1;
+  }
+
+  &__icon-symbol--success {
+    color: $mb-color-success;
+  }
+
+  &__icon-symbol--fail {
+    color: $mb-color-error;
   }
 
   &__title {
@@ -143,7 +158,7 @@ function goRetryPay() {
     justify-content: center;
     width: 480rpx;
     height: 96rpx;
-    border-radius: $mb-radius-full;
+    border-radius: $mb-radius-sm;
     transition: opacity 0.15s, transform 0.15s;
 
     &:active {
@@ -152,7 +167,7 @@ function goRetryPay() {
     }
 
     &--primary {
-      background-color: $mb-color-text;
+      background-color: $mb-color-primary;
     }
 
     &--outline {

@@ -19,6 +19,6 @@ onLoad((query) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #fff;
+  background: #faf8ff;
 }
 </style>

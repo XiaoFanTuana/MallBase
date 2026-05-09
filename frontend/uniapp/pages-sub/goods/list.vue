@@ -1,6 +1,20 @@
 <template>
   <view class="goods-list">
-    <mb-navbar title="商品列表" />
+    <mb-navbar title="商品列表">
+      <template #right>
+        <view class="goods-list__cart-entry" @tap="goCart">
+          <view class="goods-list__cart-icon" />
+        </view>
+      </template>
+    </mb-navbar>
+
+    <!-- Search bar -->
+    <view class="goods-list__search" @tap="goSearch">
+      <view class="goods-list__search-icon" />
+      <text class="goods-list__search-text">
+        {{ query.keyword || '搜索商品、品牌等...' }}
+      </text>
+    </view>
 
     <!-- Filter bar -->
     <view class="goods-list__filter-bar">
@@ -34,18 +48,9 @@
           </view>
         </view>
       </scroll-view>
-      <view class="goods-list__view-toggle" @tap="toggleViewMode">
-        <view v-if="viewMode === 'grid'" class="goods-list__icon-list">
-          <view class="goods-list__icon-bar" />
-          <view class="goods-list__icon-bar" />
-          <view class="goods-list__icon-bar" />
-        </view>
-        <view v-else class="goods-list__icon-grid">
-          <view class="goods-list__icon-cell" />
-          <view class="goods-list__icon-cell" />
-          <view class="goods-list__icon-cell" />
-          <view class="goods-list__icon-cell" />
-        </view>
+      <view class="goods-list__filter-action" @tap="openFilterSheet">
+        <text class="goods-list__filter-text">筛选</text>
+        <view class="goods-list__filter-arrow" />
       </view>
     </view>
 
@@ -77,11 +82,43 @@
         :key="item.id"
         class="goods-list__grid-item"
       >
-        <mb-product-card
-          :goods="normalizeGoods(item)"
-          mode="grid"
-          @tap="goDetail(item.id)"
-        />
+        <view class="goods-card" @tap="goDetail(item.id)">
+          <view class="goods-card__image-wrap">
+            <image
+              v-if="getGoodsCover(item)"
+              class="goods-card__image"
+              :src="getGoodsCover(item)"
+              mode="aspectFill"
+              lazy-load
+            />
+            <view v-else class="goods-card__image-placeholder">
+              <view class="goods-card__placeholder-icon" />
+            </view>
+            <view v-if="getGoodsBadge(item)" class="goods-card__badge">
+              <text class="goods-card__badge-text">{{ getGoodsBadge(item) }}</text>
+            </view>
+          </view>
+          <view class="goods-card__body">
+            <text class="goods-card__name">{{ item.name }}</text>
+            <text class="goods-card__sub">{{ getGoodsSubtitle(item) }}</text>
+            <view class="goods-card__bottom">
+              <view class="goods-card__price-main">
+                <mb-price :value="item.price" size="md" color="var(--color-primary, #0d50d5)" />
+                <text v-if="item.market_price && Number(item.market_price) > Number(item.price)" class="goods-card__origin">
+                  ¥{{ Number(item.market_price).toFixed(0) }}
+                </text>
+              </view>
+              <view
+                class="goods-card__add"
+                :class="{ 'goods-card__add--loading': addingGoodsId === item.id }"
+                @tap.stop="quickAddCart(item)"
+              >
+                <text class="goods-card__add-symbol">+</text>
+              </view>
+            </view>
+            <text class="goods-card__sales">{{ formatSales(item) }}</text>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -95,11 +132,39 @@
         :key="item.id"
         class="goods-list__row-item"
       >
-        <mb-product-card
-          :goods="normalizeGoods(item)"
-          mode="list"
-          @tap="goDetail(item.id)"
-        />
+        <view class="goods-row" @tap="goDetail(item.id)">
+          <view class="goods-row__image-wrap">
+            <image
+              v-if="getGoodsCover(item)"
+              class="goods-row__image"
+              :src="getGoodsCover(item)"
+              mode="aspectFill"
+              lazy-load
+            />
+            <view v-else class="goods-row__image-placeholder">
+              <view class="goods-card__placeholder-icon" />
+            </view>
+          </view>
+          <view class="goods-row__body">
+            <view class="goods-row__top">
+              <text class="goods-row__name">{{ item.name }}</text>
+              <text class="goods-row__sub">{{ getGoodsSubtitle(item) }}</text>
+            </view>
+            <view class="goods-row__bottom">
+              <view class="goods-row__price-main">
+                <mb-price :value="item.price" size="md" color="var(--color-primary, #0d50d5)" />
+                <text class="goods-row__sales">{{ formatSales(item) }}</text>
+              </view>
+              <view
+                class="goods-card__add"
+                :class="{ 'goods-card__add--loading': addingGoodsId === item.id }"
+                @tap.stop="quickAddCart(item)"
+              >
+                <text class="goods-card__add-symbol">+</text>
+              </view>
+            </view>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -117,7 +182,11 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { getGoodsList } from '@/api/goods/goods'
+import { getGoodsDetail, getGoodsList } from '@/api/goods/goods'
+import { useCartStore } from '@/store/cart'
+import { requireLogin } from '@/utils/auth'
+
+const cartStore = useCartStore()
 
 // ---------- query params ----------
 const query = reactive({
@@ -135,6 +204,7 @@ const sortOptions = [
 const activeSortKey = ref('default')
 const sortField = ref('')
 const sortOrder = ref('')
+const activeFilter = ref('')
 
 // ---------- view mode ----------
 const viewMode = ref('grid')
@@ -146,6 +216,7 @@ const limit = 10
 const loading = ref(false)
 const initialLoading = ref(true)
 const noMore = ref(false)
+const addingGoodsId = ref(null)
 
 // ---------- lifecycle ----------
 onLoad((params) => {
@@ -191,6 +262,9 @@ async function fetchGoods(reset) {
   }
   if (query.keyword) {
     params.keyword = query.keyword
+  }
+  if (activeFilter.value) {
+    params[activeFilter.value] = 1
   }
   const sortBy = getSortBy()
   if (sortBy) {
@@ -250,18 +324,32 @@ function getSortBy() {
   return ''
 }
 
-// ---------- view toggle ----------
-function toggleViewMode() {
-  viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
-}
+// ---------- filters ----------
+function openFilterSheet() {
+  const nextViewText = viewMode.value === 'grid' ? '切换列表展示' : '切换双列展示'
+  const options = [
+    { label: '全部商品', filter: '' },
+    { label: '推荐商品', filter: 'is_recommend' },
+    { label: '新品上架', filter: 'is_new' },
+    { label: '热卖商品', filter: 'is_hot' },
+    { label: nextViewText, action: 'toggle_view' },
+  ]
 
-// ---------- normalize goods for card component ----------
-function normalizeGoods(item) {
-  return {
-    ...item,
-    cover: getGoodsCover(item),
-    original_price: item.market_price,
-  }
+  uni.showActionSheet({
+    itemList: options.map((item) => item.label),
+    success(res) {
+      const option = options[res.tapIndex]
+      if (!option) return
+
+      if (option.action === 'toggle_view') {
+        viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
+        return
+      }
+
+      activeFilter.value = option.filter
+      fetchGoods(true)
+    },
+  })
 }
 
 function getGoodsCover(item) {
@@ -276,11 +364,83 @@ function getGoodsCover(item) {
   return ''
 }
 
+function getGoodsSubtitle(item) {
+  return item.subtitle || item.description || item.category_name || '精选品质好物'
+}
+
+function getGoodsBadge(item) {
+  if (item.is_new || item.is_new_arrival) return '新品'
+  if (item.is_hot || Number(item.sales || item.sales_count || 0) > 500) return '热卖'
+  if (item.is_recommend || item.is_recommended) return '推荐'
+  return ''
+}
+
+function formatSales(item) {
+  const sales = Number(item.sales || item.sales_count || item.virtual_sales || 0)
+  if (sales >= 10000) return `月销 ${(sales / 10000).toFixed(1)}万+`
+  if (sales > 0) return `月销 ${sales}+`
+  return '月销 200+'
+}
+
+function getDirectSkuId(item) {
+  if (item.sku_id) return item.sku_id
+  if (item.default_sku_id) return item.default_sku_id
+  if (Array.isArray(item.skus) && item.skus.length === 1) return item.skus[0].id
+  return ''
+}
+
+async function quickAddCart(item) {
+  if (!requireLogin(`/pages-sub/goods/list${buildCurrentQuery()}`)) return
+  if (addingGoodsId.value) return
+
+  addingGoodsId.value = item.id
+  try {
+    let skuId = getDirectSkuId(item)
+
+    if (!skuId) {
+      const detail = await getGoodsDetail(item.id)
+      const goods = detail?.data ?? detail ?? {}
+      const skus = Array.isArray(goods.skus) ? goods.skus : []
+      if (skus.length === 1) {
+        skuId = skus[0].id
+      }
+    }
+
+    if (!skuId) {
+      uni.showToast({ title: '请选择规格', icon: 'none' })
+      setTimeout(() => goDetail(item.id), 500)
+      return
+    }
+
+    await cartStore.add(skuId, 1)
+    uni.showToast({ title: '已加入购物车', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '加入失败，请重试', icon: 'none' })
+  } finally {
+    addingGoodsId.value = null
+  }
+}
+
 // ---------- navigation ----------
 function goDetail(id) {
   uni.navigateTo({
     url: `/pages-sub/goods/detail?id=${id}`,
   })
+}
+
+function goSearch() {
+  uni.navigateTo({ url: '/pages-sub/search/index' })
+}
+
+function goCart() {
+  uni.switchTab({ url: '/pages/cart/index' })
+}
+
+function buildCurrentQuery() {
+  const params = []
+  if (query.category_id) params.push(`category_id=${encodeURIComponent(query.category_id)}`)
+  if (query.keyword) params.push(`keyword=${encodeURIComponent(query.keyword)}`)
+  return params.length > 0 ? `?${params.join('&')}` : ''
 }
 </script>
 
@@ -290,6 +450,88 @@ function goDetail(id) {
   background: $mb-color-bg-secondary;
 }
 
+// ---------- Navbar cart ----------
+.goods-list__cart-entry {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.goods-list__cart-icon {
+  position: relative;
+  width: 34rpx;
+  height: 34rpx;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 5rpx;
+    top: 10rpx;
+    width: 24rpx;
+    height: 16rpx;
+    border: 3rpx solid $mb-color-primary;
+    border-top: 0;
+    border-radius: 0 0 5rpx 5rpx;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 8rpx;
+    top: 4rpx;
+    width: 18rpx;
+    height: 12rpx;
+    border: 3rpx solid $mb-color-primary;
+    border-bottom: 0;
+    border-radius: 12rpx 12rpx 0 0;
+  }
+}
+
+// ---------- Search ----------
+.goods-list__search {
+  margin: $mb-spacing-sm $mb-spacing-page 0;
+  height: 64rpx;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  display: flex;
+  align-items: center;
+  padding: 0 $mb-spacing-md;
+  gap: $mb-spacing-sm;
+}
+
+.goods-list__search-icon {
+  width: 24rpx;
+  height: 24rpx;
+  border: 3rpx solid $mb-color-text-tertiary;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 10rpx;
+    height: 3rpx;
+    border-radius: $mb-radius-full;
+    background: $mb-color-text-tertiary;
+    right: -7rpx;
+    bottom: -3rpx;
+    transform: rotate(45deg);
+  }
+}
+
+.goods-list__search-text {
+  flex: 1;
+  font-size: $mb-font-sm;
+  color: $mb-color-text-tertiary;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 // ---------- Filter bar ----------
 .goods-list__filter-bar {
   position: sticky;
@@ -297,9 +539,9 @@ function goDetail(id) {
   z-index: 90;
   display: flex;
   align-items: center;
-  background: $mb-color-bg;
-  border-bottom: 1rpx solid $mb-color-divider;
-  padding-right: 0;
+  background: $mb-color-bg-secondary;
+  border-bottom: 0;
+  padding: 0 $mb-spacing-page;
 }
 
 .goods-list__sort-scroll {
@@ -311,16 +553,19 @@ function goDetail(id) {
 .goods-list__sort-group {
   display: inline-flex;
   align-items: center;
-  padding: 0 $mb-spacing-sm;
-  gap: $mb-spacing-xs;
+  padding: 0;
+  gap: $mb-spacing-md;
 }
 
 .goods-list__sort-item {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6rpx;
-  padding: $mb-spacing-md $mb-spacing-sm;
+  gap: 5rpx;
+  margin: 18rpx 0 14rpx;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   flex-shrink: 0;
 }
 
@@ -336,15 +581,19 @@ function goDetail(id) {
   font-weight: 600;
 }
 
+.goods-list__sort-item--active {
+  background: transparent;
+}
+
 .goods-list__sort-indicator {
   position: absolute;
-  bottom: 0;
   left: 50%;
-  transform: translateX(-50%);
-  width: 40rpx;
+  bottom: -12rpx;
+  width: 28rpx;
   height: 4rpx;
-  border-radius: 2rpx;
+  border-radius: $mb-radius-full;
   background: $mb-color-primary;
+  transform: translateX(-50%);
 }
 
 // ---------- Price sort arrows ----------
@@ -380,46 +629,35 @@ function goDetail(id) {
   }
 }
 
-// ---------- View toggle ----------
-.goods-list__view-toggle {
+.goods-list__filter-action {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 88rpx;
-  height: 88rpx;
-  border-left: 1rpx solid $mb-color-divider;
+  gap: 8rpx;
+  height: 72rpx;
+  padding-left: $mb-spacing-md;
 }
 
-// List icon (3 horizontal bars)
-.goods-list__icon-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-  width: 36rpx;
+.goods-list__filter-text {
+  font-size: $mb-font-sm;
+  color: $mb-color-text-secondary;
+  font-weight: 500;
 }
 
-.goods-list__icon-bar {
-  width: 100%;
-  height: 4rpx;
-  border-radius: 2rpx;
-  background: $mb-color-text-secondary;
+.goods-list__filter-arrow {
+  width: 10rpx;
+  height: 10rpx;
+  border-right: 2rpx solid $mb-color-text-tertiary;
+  border-bottom: 2rpx solid $mb-color-text-tertiary;
+  transform: rotate(45deg);
+  margin-top: -4rpx;
 }
 
-// Grid icon (2x2 cells)
-.goods-list__icon-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4rpx;
-  width: 32rpx;
-  height: 32rpx;
-}
-
-.goods-list__icon-cell {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 3rpx;
-  background: $mb-color-text-secondary;
+.goods-list__filter-action:active,
+.goods-list__sort-item:active,
+.goods-card__add:active {
+  opacity: 0.75;
 }
 
 // ---------- Skeleton ----------
@@ -434,6 +672,7 @@ function goDetail(id) {
   width: calc(50% - 8rpx);
   background: $mb-color-bg;
   border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
   overflow: hidden;
 }
 
@@ -442,12 +681,159 @@ function goDetail(id) {
   display: flex;
   flex-wrap: wrap;
   gap: $mb-spacing-sm;
-  padding: $mb-spacing-page;
+  padding: 0 $mb-spacing-page $mb-spacing-page;
   padding-top: $mb-spacing-sm;
 }
 
 .goods-list__grid-item {
   width: calc(50% - 8rpx);
+}
+
+// ---------- Design-card grid ----------
+.goods-card {
+  background: $mb-color-bg;
+  border-radius: $mb-radius-sm;
+  border: 1rpx solid $mb-color-divider;
+  overflow: hidden;
+  min-height: 100%;
+}
+
+.goods-card__image-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #f2f4f8;
+  overflow: hidden;
+}
+
+.goods-card__image,
+.goods-card__image-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.goods-card__image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f3fe;
+}
+
+.goods-card__placeholder-icon {
+  width: 52rpx;
+  height: 42rpx;
+  border: 4rpx solid $mb-color-primary;
+  border-radius: $mb-radius-sm;
+  position: relative;
+  opacity: 0.8;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 12rpx;
+    right: 12rpx;
+    top: 12rpx;
+    height: 4rpx;
+    border-radius: $mb-radius-full;
+    background: $mb-color-primary;
+  }
+}
+
+.goods-card__badge {
+  position: absolute;
+  left: 8rpx;
+  top: 8rpx;
+  height: 28rpx;
+  padding: 0 10rpx;
+  border-radius: 4rpx;
+  background: rgba(13, 80, 213, 0.1);
+  display: flex;
+  align-items: center;
+}
+
+.goods-card__badge-text {
+  font-size: 18rpx;
+  color: $mb-color-primary;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.goods-card__body {
+  padding: 12rpx 12rpx 14rpx;
+}
+
+.goods-card__name {
+  display: -webkit-box;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: $mb-color-text-title;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.goods-card__sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 19rpx;
+  color: $mb-color-text-tertiary;
+  line-height: 1.3;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.goods-card__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8rpx;
+  margin-top: 8rpx;
+}
+
+.goods-card__price-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6rpx;
+}
+
+.goods-card__origin {
+  font-size: 18rpx;
+  color: $mb-color-text-tertiary;
+  text-decoration: line-through;
+}
+
+.goods-card__add {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: $mb-radius-full;
+  background: $mb-color-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.goods-card__add--loading {
+  opacity: 0.45;
+}
+
+.goods-card__add-symbol {
+  font-size: 26rpx;
+  line-height: 1;
+  color: $mb-color-text-inverse;
+  font-weight: 600;
+  margin-top: -2rpx;
+}
+
+.goods-card__sales {
+  display: block;
+  margin-top: 5rpx;
+  font-size: 18rpx;
+  color: $mb-color-text-tertiary;
+  line-height: 1.3;
 }
 
 // ---------- List mode ----------
@@ -460,6 +846,86 @@ function goDetail(id) {
 
 .goods-list__row-item {
   width: 100%;
+}
+
+.goods-row {
+  display: flex;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-md;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-sm;
+}
+
+.goods-row__image-wrap,
+.goods-row__image,
+.goods-row__image-placeholder {
+  width: 164rpx;
+  height: 164rpx;
+  border-radius: $mb-radius-sm;
+  flex-shrink: 0;
+}
+
+.goods-row__image-wrap {
+  overflow: hidden;
+  background: #f3f3fe;
+}
+
+.goods-row__image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.goods-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.goods-row__top {
+  min-width: 0;
+}
+
+.goods-row__name {
+  display: -webkit-box;
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: $mb-color-text-title;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.goods-row__sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $mb-font-sm;
+  color: $mb-color-text-tertiary;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.goods-row__bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $mb-spacing-sm;
+}
+
+.goods-row__price-main {
+  min-width: 0;
+}
+
+.goods-row__sales {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
 }
 
 // ---------- Bottom status ----------

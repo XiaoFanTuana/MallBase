@@ -1,14 +1,5 @@
 <template>
   <view class="goods-detail">
-    <!-- Navbar -->
-    <mb-navbar title="商品详情">
-      <template #right>
-        <view class="goods-detail__share-btn" @tap="onShare">
-          <view class="goods-detail__share-icon" />
-        </view>
-      </template>
-    </mb-navbar>
-
     <!-- Loading skeleton -->
     <view v-if="loading" class="goods-detail__loading">
       <view class="goods-detail__skeleton-swiper" />
@@ -21,7 +12,7 @@
     <!-- Error / empty -->
     <mb-empty-state
       v-else-if="!goods"
-      icon="📦"
+      icon=""
       text="商品不存在或已下架"
       action-text="返回首页"
       @action="goHome"
@@ -31,6 +22,19 @@
     <scroll-view v-else scroll-y class="goods-detail__scroll">
       <!-- Media swiper -->
       <view class="goods-detail__swiper-wrap" :style="{ height: `${currentMediaHeight}rpx` }">
+        <view class="goods-detail__float-actions">
+          <view class="goods-detail__float-btn" @tap="goBack">
+            <view class="goods-detail__back-icon" />
+          </view>
+          <view class="goods-detail__float-right">
+            <view class="goods-detail__float-btn" @tap="onShare">
+              <view class="goods-detail__share-icon" />
+            </view>
+            <view class="goods-detail__float-btn" @tap="showMore">
+              <view class="goods-detail__more-icon" />
+            </view>
+          </view>
+        </view>
         <swiper
           class="goods-detail__swiper"
           :style="{ height: `${currentMediaHeight}rpx` }"
@@ -95,6 +99,18 @@
       <view class="goods-detail__title-section">
         <text class="goods-detail__name">{{ goods.name }}</text>
         <text v-if="goods.subtitle" class="goods-detail__subtitle">{{ goods.subtitle }}</text>
+      </view>
+
+      <!-- Guarantees -->
+      <view v-if="guarantees.length > 0" class="goods-detail__guarantees">
+        <view
+          v-for="item in guarantees"
+          :key="item.title"
+          class="goods-detail__guarantee"
+        >
+          <view class="goods-detail__guarantee-dot" />
+          <text class="goods-detail__guarantee-title">{{ item.title }}</text>
+        </view>
       </view>
 
       <!-- Divider -->
@@ -369,6 +385,7 @@ const descriptionNodes = computed(() => normalizeDescriptionHtml(goods.value?.de
 const displayPrice = computed(() => selectedSku.value?.price ?? goods.value?.price ?? '0')
 const displayMarketPrice = computed(() => selectedSku.value?.market_price ?? goods.value?.market_price ?? '')
 const displayStock = computed(() => selectedSku.value?.stock ?? goods.value?.stock ?? 0)
+const guarantees = computed(() => (Array.isArray(goods.value?.guarantees) ? goods.value.guarantees : []))
 
 const formattedPrice = computed(() => {
   const num = Number(displayPrice.value)
@@ -611,6 +628,20 @@ function contactService() {
   // #endif
 }
 
+function goBack() {
+  uni.navigateBack({ fail: () => goHome() })
+}
+
+function showMore() {
+  uni.showActionSheet({
+    itemList: ['返回首页', '购物车'],
+    success: (res) => {
+      if (res.tapIndex === 0) goHome()
+      if (res.tapIndex === 1) goCart()
+    },
+  })
+}
+
 function goHome() {
   uni.switchTab({ url: '/pages/index/index' })
 }
@@ -652,22 +683,52 @@ function onBuyNow({ sku, quantity }) {
 <style lang="scss" scoped>
 .goods-detail {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: $mb-color-bg-secondary;
 }
 
-// ---------- Share button ----------
-.goods-detail__share-btn {
+// ---------- Floating media actions ----------
+.goods-detail__float-actions {
+  position: absolute;
+  left: $mb-spacing-md;
+  right: $mb-spacing-md;
+  top: calc(24rpx + env(safe-area-inset-top));
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.goods-detail__float-right {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+}
+
+.goods-detail__float-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64rpx;
-  height: 64rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: $mb-radius-md;
+  background: rgba(25, 27, 35, 0.56);
+  color: $mb-color-text-inverse;
+  backdrop-filter: blur(12rpx);
+}
+
+.goods-detail__back-icon {
+  width: 20rpx;
+  height: 20rpx;
+  border-left: 4rpx solid currentColor;
+  border-bottom: 4rpx solid currentColor;
+  transform: rotate(45deg);
 }
 
 .goods-detail__share-icon {
   width: 36rpx;
   height: 36rpx;
   position: relative;
+  color: currentColor;
 
   &::before {
     content: '';
@@ -675,7 +736,7 @@ function onBuyNow({ sku, quantity }) {
     width: 16rpx;
     height: 16rpx;
     border-radius: 50%;
-    border: 3rpx solid $mb-color-text;
+    border: 3rpx solid currentColor;
     position: absolute;
     top: 0;
     right: 0;
@@ -686,13 +747,22 @@ function onBuyNow({ sku, quantity }) {
     display: block;
     width: 20rpx;
     height: 3rpx;
-    background: $mb-color-text;
+    background: currentColor;
     position: absolute;
     top: 8rpx;
     right: 12rpx;
     transform: rotate(-30deg);
     transform-origin: right center;
   }
+}
+
+.goods-detail__more-icon {
+  width: 34rpx;
+  height: 8rpx;
+  border-radius: $mb-radius-full;
+  background: currentColor;
+  box-shadow: -12rpx 0 0 currentColor, 12rpx 0 0 currentColor;
+  transform: scale(0.45);
 }
 
 // ---------- Loading skeleton ----------
@@ -706,7 +776,7 @@ function onBuyNow({ sku, quantity }) {
   background: linear-gradient(
     90deg,
     $mb-color-bg-secondary 25%,
-    #eef0f3 50%,
+    $mb-color-bg-surface 50%,
     $mb-color-bg-secondary 75%
   );
   background-size: 200% 100%;
@@ -725,13 +795,14 @@ function onBuyNow({ sku, quantity }) {
 // ---------- Scroll ----------
 .goods-detail__scroll {
   height: 100vh;
+  background: $mb-color-bg-secondary;
 }
 
 // ---------- Swiper ----------
 .goods-detail__swiper-wrap {
   position: relative;
   width: 100%;
-  background: $mb-color-bg-secondary;
+  background: #dce8ed;
   transition: height 0.2s ease;
 }
 
@@ -758,7 +829,8 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__swiper-img {
-  background: $mb-color-bg-secondary;
+  background: #dce8ed;
+  object-fit: cover;
 }
 
 .goods-detail__swiper-video {
@@ -783,8 +855,12 @@ function onBuyNow({ sku, quantity }) {
 
 // ---------- Price section ----------
 .goods-detail__price-section {
-  padding: $mb-spacing-lg $mb-spacing-page;
+  padding: $mb-spacing-lg $mb-spacing-page $mb-spacing-sm;
   background: $mb-color-bg;
+  margin: 0;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 0;
 }
 
 .goods-detail__price-row {
@@ -802,16 +878,16 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__price-symbol {
   font-size: $mb-font-xl;
   font-weight: 700;
-  color: $mb-color-text;
+  color: $mb-color-primary;
   line-height: 1;
 }
 
 .goods-detail__price-value {
-  font-size: $mb-font-display;
+  font-size: 46rpx;
   font-weight: 800;
-  color: $mb-color-text;
+  color: $mb-color-primary;
   line-height: 1;
-  letter-spacing: -2rpx;
+  letter-spacing: 0;
 }
 
 .goods-detail__original-price {
@@ -838,6 +914,9 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__title-section {
   padding: 0 $mb-spacing-page $mb-spacing-lg;
   background: $mb-color-bg;
+  margin: 0;
+  border-left: 0;
+  border-right: 0;
 }
 
 .goods-detail__name {
@@ -863,10 +942,44 @@ function onBuyNow({ sku, quantity }) {
   overflow: hidden;
 }
 
+// ---------- Guarantees ----------
+.goods-detail__guarantees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $mb-spacing-sm $mb-spacing-md;
+  padding: 0 $mb-spacing-lg $mb-spacing-lg;
+  background: $mb-color-bg;
+  margin: 0 0 $mb-spacing-md;
+  border: 0;
+  border-top: 1rpx solid $mb-color-divider;
+  border-radius: 0;
+}
+
+.goods-detail__guarantee {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 12rpx;
+  background: rgba(13, 80, 213, 0.08);
+  border-radius: $mb-radius-sm;
+}
+
+.goods-detail__guarantee-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: $mb-radius-full;
+  background: $mb-color-primary;
+}
+
+.goods-detail__guarantee-title {
+  font-size: $mb-font-sm;
+  color: $mb-color-primary;
+}
+
 // ---------- Divider ----------
 .goods-detail__divider {
-  height: 16rpx;
-  background: $mb-color-bg-secondary;
+  height: $mb-spacing-md;
+  background: transparent;
 }
 
 // ---------- Cell ----------
@@ -874,9 +987,11 @@ function onBuyNow({ sku, quantity }) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: $mb-spacing-lg $mb-spacing-page;
+  padding: $mb-spacing-lg;
   background: $mb-color-bg;
-  border-bottom: 1rpx solid $mb-color-divider;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
+  margin: 0 $mb-spacing-md;
 
   &:active {
     background: $mb-color-bg-secondary;
@@ -917,6 +1032,9 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__review-section {
   background: $mb-color-bg;
   padding: $mb-spacing-lg $mb-spacing-page;
+  margin: 0 $mb-spacing-md;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
 }
 
 .goods-detail__review-header {
@@ -1064,7 +1182,10 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__content-section {
   background: $mb-color-bg;
   padding: $mb-spacing-xl 0 $mb-spacing-xl;
-  width: 100%;
+  margin: 0 $mb-spacing-md;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-lg;
+  width: auto;
   max-width: 100vw;
   box-sizing: border-box;
   overflow: hidden;
@@ -1257,7 +1378,7 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__bar-btn {
   flex: 1;
   height: 76rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1269,12 +1390,12 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__bar-btn--cart {
-  background: $mb-color-bg;
-  border: 2rpx solid $mb-color-text;
+  background: $mb-color-bg-surface;
+  border: 1rpx solid $mb-color-border;
 }
 
 .goods-detail__bar-btn--buy {
-  background: $mb-color-text;
+  background: $mb-color-primary;
 }
 
 .goods-detail__bar-btn-text {

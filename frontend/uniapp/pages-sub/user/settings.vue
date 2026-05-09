@@ -103,7 +103,7 @@ const themeLabelMap = {
 
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 const nickname = computed(() => userStore.userInfo?.nickname || '')
-const avatar = computed(() => userStore.userInfo?.avatar || '')
+const avatar = computed(() => userStore.userInfo?.avatar_full_url || userStore.userInfo?.avatar || '')
 const uid = computed(() => userStore.userInfo?.id || '-----')
 const themeLabel = computed(() => themeLabelMap[themeMode.value])
 
@@ -202,15 +202,19 @@ function goAbout() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: #ffffff;
+  background: $mb-color-bg-secondary;
+  padding: $mb-spacing-md $mb-spacing-page 0;
 }
 
 // ---- User Card ----
 .user-card {
   display: flex;
   align-items: center;
-  padding: 48rpx;
+  padding: $mb-spacing-lg;
   gap: 24rpx;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
 
   &:active {
     background: $mb-color-bg-surface;
@@ -281,14 +285,16 @@ function goAbout() {
 
 // ---- Divider ----
 .divider {
-  height: 1rpx;
-  background: $mb-color-divider;
-  margin: 0 48rpx;
+  display: none;
 }
 
 // ---- Cell Group ----
 .cell-group {
-  padding: 0 48rpx;
+  margin-top: $mb-spacing-md;
+  padding: 0 $mb-spacing-lg;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
 }
 
 .cell {
@@ -342,14 +348,14 @@ function goAbout() {
 
 // ---- Logout ----
 .logout-section {
-  padding: 80rpx 48rpx 0;
+  padding: $mb-spacing-xl 0 0;
 }
 
 .logout-btn {
   height: 100rpx;
-  border-radius: $mb-radius-full;
-  border: 2rpx solid $mb-color-error;
-  background: transparent;
+  border-radius: $mb-radius-sm;
+  border: 0;
+  background: rgba(186, 26, 26, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -370,7 +376,7 @@ function goAbout() {
   font-size: 32rpx;
   font-weight: 600;
   color: $mb-color-error;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 
 // ---- Bottom safe ----

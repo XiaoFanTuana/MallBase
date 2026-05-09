@@ -17,7 +17,7 @@
       <text class="mb-card__name">{{ goods.name }}</text>
       <text v-if="goods.subtitle" class="mb-card__sub">{{ goods.subtitle }}</text>
       <view class="mb-card__bottom">
-        <mb-price :value="goods.price" :size="mode === 'grid' ? 'md' : 'md'" color="var(--color-text-title, #131b2e)" />
+        <mb-price :value="goods.price" :size="mode === 'grid' ? 'md' : 'md'" color="var(--color-primary, #0d50d5)" />
         <text v-if="goods.original_price && Number(goods.original_price) > Number(goods.price)" class="mb-card__original">
           ¥{{ Number(goods.original_price).toFixed(0) }}
         </text>
@@ -60,8 +60,9 @@ function onImageError(error) {
 
 <style scoped>
 .mb-card {
-  background: #ffffff;
-  border-radius: 24rpx;
+  background: var(--color-bg, #ffffff);
+  border-radius: var(--radius-lg, 20rpx);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
   overflow: hidden;
 }
 
@@ -83,15 +84,15 @@ function onImageError(error) {
   height: 0;
   padding-bottom: 100%;
   overflow: hidden;
-  background: #eef0f3;
+  background: var(--color-bg-secondary, #faf8ff);
 }
 
 .mb-card__img-wrap--list {
   width: 200rpx;
   height: 200rpx;
-  border-radius: 16rpx;
+  border-radius: var(--radius-md, 12rpx);
   overflow: hidden;
-  background: #eef0f3;
+  background: var(--color-bg-secondary, #faf8ff);
   flex-shrink: 0;
 }
 
@@ -120,8 +121,8 @@ function onImageError(error) {
 
 .mb-card__name {
   font-size: 26rpx;
-  font-weight: 500;
-  color: var(--color-text, #1b1b1b);
+  font-weight: 600;
+  color: var(--color-text, #191b23);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -132,7 +133,7 @@ function onImageError(error) {
 
 .mb-card__sub {
   font-size: 22rpx;
-  color: var(--color-text-tertiary, #848484);
+  color: var(--color-text-tertiary, #737686);
   margin-top: 4rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -148,7 +149,7 @@ function onImageError(error) {
 
 .mb-card__original {
   font-size: 22rpx;
-  color: var(--color-text-tertiary, #848484);
+  color: var(--color-text-tertiary, #737686);
   text-decoration: line-through;
 }
 </style>

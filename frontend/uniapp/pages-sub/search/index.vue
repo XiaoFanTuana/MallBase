@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAppStore } from '@/store/app'
 import { getGoodsRecommend } from '@/api/goods/goods'
+import { getHotSearch, recordSearch } from '@/api/search/search'
+import { getPlatform } from '@/utils/platform'
 
 const STORAGE_KEY = 'search_history'
 const MAX_HISTORY = 20
@@ -9,29 +11,26 @@ const MAX_HISTORY = 20
 const appStore = useAppStore()
 const brandName = computed(() => appStore.siteConfig?.site_name || 'MallBase')
 
-const systemInfo = uni.getSystemInfoSync()
-const statusBarHeight = systemInfo.statusBarHeight || 0
-
-const hotSearchTags = ['手机', '耳机', '手表', '笔记本', '平板']
-
-const hotTopics = [
+const DEFAULT_HOT_TOPICS = [
   { title: '高级成衣系列', subtitle: '探索极简主义与舒适的完美平衡' },
   { title: '基础松软面料', subtitle: '柔软触感，四季百搭' },
   { title: '手工匠心配饰', subtitle: '精工细作，彰显品位' },
 ]
 
 const quickCategories = [
-  { label: '午参之旅', icon: '☕' },
-  { label: '国货精选', icon: '✨' },
-  { label: '全部分类', icon: '☰' },
+  { label: '新品上架', icon: 'new' },
+  { label: '国货精选', icon: 'star' },
+  { label: '全部分类', icon: 'grid' },
 ]
 
 const keyword = ref('')
 const historyList = ref([])
 const featuredList = ref([])
+const hotTopics = ref([...DEFAULT_HOT_TOPICS])
 
 onMounted(() => {
   loadHistory()
+  fetchHotSearch()
   fetchFeatured()
   nextTick(() => {})
 })
@@ -73,6 +72,7 @@ function doSearch(word) {
     return
   }
   saveHistory(trimmed)
+  recordSearch(trimmed, getPlatform()).catch(() => {})
   uni.navigateTo({
     url: `/pages-sub/goods/list?keyword=${encodeURIComponent(trimmed)}`,
   })
@@ -100,9 +100,30 @@ async function fetchFeatured() {
   }
 }
 
+async function fetchHotSearch() {
+  try {
+    const data = await getHotSearch(6)
+    const list = Array.isArray(data?.list) ? data.list : []
+    if (list.length === 0) {
+      hotTopics.value = [...DEFAULT_HOT_TOPICS]
+      return
+    }
+    hotTopics.value = list.map((item, index) => ({
+      title: item.keyword,
+      subtitle: `近 7 天热度 ${item.search_count || index + 1}`,
+    }))
+  } catch {
+    hotTopics.value = [...DEFAULT_HOT_TOPICS]
+  }
+}
+
 function getFirstImage(item) {
   if (item.cover) return item.cover
-  if (Array.isArray(item.images) && item.images.length > 0) return item.images[0]
+  if (Array.isArray(item.images) && item.images.length > 0) {
+    const first = item.images[0]
+    if (typeof first === 'string') return first
+    return first.full_url || first.url || ''
+  }
   return ''
 }
 
@@ -123,15 +144,20 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 <template>
   <view class="page">
-    <!-- ========== Top Bar ========== -->
-    <view class="top-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
-      <view class="top-bar__inner">
-        <text class="top-bar__brand">{{ brandName }}</text>
-        <view class="top-bar__search-wrap">
-          <text class="top-bar__search-icon">&#x1F50D;</text>
+    <mb-navbar title="搜索" />
+
+    <!-- ========== Search Header ========== -->
+    <view class="search-head">
+      <view class="search-head__brand">
+        <view class="search-head__brand-mark" />
+        <text class="search-head__brand-text">{{ brandName }}</text>
+      </view>
+      <view class="search-head__row">
+        <view class="search-head__input-wrap">
+          <view class="search-head__search-icon" />
           <input
             v-model="keyword"
-            class="top-bar__input"
+            class="search-head__input"
             type="text"
             placeholder="搜索商品、品牌"
             :focus="true"
@@ -139,21 +165,21 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
             @confirm="onConfirm"
           />
         </view>
-        <view class="top-bar__cancel" @tap="goBack">
-          <text class="top-bar__cancel-text">取消</text>
+        <view class="search-head__cancel" @tap="goBack">
+          <text class="search-head__cancel-text">取消</text>
         </view>
       </view>
     </view>
 
     <!-- ========== Scrollable Content ========== -->
-    <view class="content" :style="{ paddingTop: (statusBarHeight + 56) + 'px' }">
+    <view class="content">
 
       <!-- Search History -->
       <view v-if="historyList.length > 0" class="section">
         <view class="section__header">
           <text class="section__title">搜索历史</text>
           <view class="section__action" @tap="clearHistory">
-            <text class="section__action-icon">&#x1F5D1;</text>
+            <view class="section__trash-icon" />
           </view>
         </view>
         <view class="tag-flow">
@@ -256,7 +282,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
           @tap="goGoodsList('?keyword=' + cat.label)"
         >
           <view class="quick-cat__circle">
-            <text class="quick-cat__icon">{{ cat.icon }}</text>
+            <view class="quick-cat__icon" :class="'quick-cat__icon--' + cat.icon" />
           </view>
           <text class="quick-cat__label">{{ cat.label }}</text>
         </view>
@@ -273,69 +299,106 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
    =========================== */
 .page {
   min-height: 100vh;
-  background: $mb-color-bg;
+  background: $mb-color-bg-secondary;
 }
 
 /* ===========================
    Top Bar (Search)
    =========================== */
-.top-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: 999;
-  background: $mb-color-bg;
+.search-head {
+  padding: $mb-spacing-sm $mb-spacing-page $mb-spacing-lg;
+  background: $mb-color-bg-secondary;
 }
 
-.top-bar__inner {
+.search-head__brand {
   display: flex;
   align-items: center;
-  padding: $mb-spacing-sm $mb-spacing-page;
+  gap: $mb-spacing-xs;
+  margin-bottom: $mb-spacing-sm;
+}
+
+.search-head__brand-mark {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 6rpx;
+  border: 4rpx solid $mb-color-primary;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 6rpx;
+    top: 6rpx;
+    width: 4rpx;
+    height: 4rpx;
+    border-radius: $mb-radius-full;
+    background: $mb-color-primary;
+    box-shadow: 9rpx 0 0 $mb-color-primary, 0 9rpx 0 $mb-color-primary, 9rpx 9rpx 0 $mb-color-primary;
+  }
+}
+
+.search-head__brand-text {
+  font-size: $mb-font-md;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.search-head__row {
+  display: flex;
+  align-items: center;
   gap: $mb-spacing-sm;
 }
 
-.top-bar__brand {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: $mb-color-text-tertiary;
-  flex-shrink: 0;
-  letter-spacing: 1rpx;
-  opacity: 0.5;
-}
-
-.top-bar__search-wrap {
+.search-head__input-wrap {
   flex: 1;
   display: flex;
   align-items: center;
   height: 72rpx;
   padding: 0 $mb-spacing-md;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-full;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-sm;
+  min-width: 0;
 }
 
-.top-bar__search-icon {
-  font-size: 26rpx;
+.search-head__search-icon {
+  width: 24rpx;
+  height: 24rpx;
+  border: 3rpx solid $mb-color-text-tertiary;
+  border-radius: 50%;
+  position: relative;
   margin-right: $mb-spacing-sm;
   flex-shrink: 0;
-  opacity: 0.5;
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 10rpx;
+    height: 3rpx;
+    border-radius: $mb-radius-full;
+    background: $mb-color-text-tertiary;
+    right: -7rpx;
+    bottom: -3rpx;
+    transform: rotate(45deg);
+  }
 }
 
-.top-bar__input {
+.search-head__input {
   flex: 1;
   font-size: $mb-font-md;
   color: $mb-color-text;
   height: 72rpx;
 }
 
-.top-bar__cancel {
+.search-head__cancel {
   flex-shrink: 0;
-  padding: $mb-spacing-xs $mb-spacing-xs;
+  padding: $mb-spacing-xs 0 $mb-spacing-xs $mb-spacing-xs;
 }
 
-.top-bar__cancel-text {
+.search-head__cancel-text {
   font-size: $mb-font-md;
-  color: $mb-color-text-secondary;
+  color: $mb-color-primary;
+  font-weight: 600;
 }
 
 /* ===========================
@@ -370,9 +433,35 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   padding: $mb-spacing-xs;
 }
 
-.section__action-icon {
-  font-size: 32rpx;
-  opacity: 0.35;
+.section__trash-icon {
+  position: relative;
+  width: 32rpx;
+  height: 34rpx;
+  opacity: 0.45;
+}
+
+.section__trash-icon::before {
+  content: '';
+  position: absolute;
+  left: 6rpx;
+  top: 10rpx;
+  width: 20rpx;
+  height: 20rpx;
+  border: 3rpx solid $mb-color-text-tertiary;
+  border-top: 0;
+  border-radius: 0 0 5rpx 5rpx;
+}
+
+.section__trash-icon::after {
+  content: '';
+  position: absolute;
+  left: 4rpx;
+  top: 5rpx;
+  width: 24rpx;
+  height: 4rpx;
+  border-radius: $mb-radius-full;
+  background: $mb-color-text-tertiary;
+  box-shadow: 8rpx -5rpx 0 -1rpx $mb-color-text-tertiary;
 }
 
 /* ===========================
@@ -386,8 +475,9 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 
 .tag {
   padding: 14rpx 28rpx;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-full;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: $mb-radius-sm;
   transition: opacity 0.15s;
 
   &:active {
@@ -413,6 +503,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   border-radius: $mb-radius-lg;
   overflow: hidden;
   margin-bottom: $mb-spacing-md;
+  border: 1rpx solid $mb-color-divider;
 }
 
 .hero-card__img {
@@ -514,6 +605,7 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
   overflow: hidden;
   height: 240rpx;
   background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-divider;
 }
 
 .bento-cell--tall {
@@ -588,15 +680,71 @@ const gridItems = computed(() => featuredList.value.slice(1, 5))
 .quick-cat__circle {
   width: 96rpx;
   height: 96rpx;
-  border-radius: 50%;
-  background: $mb-color-bg-secondary;
+  border-radius: $mb-radius-lg;
+  background: $mb-color-bg;
+  border: 1rpx solid $mb-color-divider;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .quick-cat__icon {
-  font-size: 36rpx;
+  position: relative;
+  width: 34rpx;
+  height: 34rpx;
+  color: $mb-color-primary;
+}
+
+.quick-cat__icon::before,
+.quick-cat__icon::after {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.quick-cat__icon--new::before {
+  inset: 3rpx;
+  border: 4rpx solid currentColor;
+  border-radius: 8rpx;
+}
+
+.quick-cat__icon--new::after {
+  left: 10rpx;
+  top: 15rpx;
+  width: 14rpx;
+  height: 4rpx;
+  border-radius: $mb-radius-full;
+  background: currentColor;
+  box-shadow: 0 -8rpx 0 currentColor, 0 8rpx 0 currentColor;
+}
+
+.quick-cat__icon--star::before {
+  left: 5rpx;
+  top: 2rpx;
+  width: 24rpx;
+  height: 24rpx;
+  border: 4rpx solid currentColor;
+  transform: rotate(45deg);
+  border-radius: 4rpx;
+}
+
+.quick-cat__icon--star::after {
+  left: 14rpx;
+  top: 14rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: $mb-radius-full;
+  background: currentColor;
+}
+
+.quick-cat__icon--grid::before {
+  left: 3rpx;
+  top: 3rpx;
+  width: 10rpx;
+  height: 10rpx;
+  background: currentColor;
+  border-radius: 3rpx;
+  box-shadow: 18rpx 0 0 currentColor, 0 18rpx 0 currentColor, 18rpx 18rpx 0 currentColor;
 }
 
 .quick-cat__label {

@@ -414,14 +414,14 @@ async function handleSubmit() {
   padding: 24rpx 48rpx;
   padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
   background: $mb-color-bg;
-  box-shadow: 0 -2rpx 16rpx rgba(0, 0, 0, 0.05);
+  box-shadow: $mb-shadow-bar;
   z-index: 100;
 }
 
 .submit-bar__btn {
   height: 88rpx;
-  border-radius: $mb-radius-full;
-  background: #000000;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;

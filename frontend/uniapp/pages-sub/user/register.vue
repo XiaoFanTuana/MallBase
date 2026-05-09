@@ -180,7 +180,7 @@ function openAgreement(type) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: $mb-color-bg-secondary;
+  background: $mb-color-bg-secondary;
   position: relative;
 
   &::before {
@@ -188,8 +188,7 @@ function openAgreement(type) {
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(13, 80, 213, 0.04) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(13, 80, 213, 0.03) 0%, transparent 50%);
+      linear-gradient(180deg, rgba(13, 80, 213, 0.08) 0%, rgba(247, 249, 251, 0) 42%);
     pointer-events: none;
   }
 }
@@ -202,7 +201,7 @@ function openAgreement(type) {
   align-items: center;
   position: relative;
   z-index: 1;
-  padding: 0 48rpx;
+  padding: $mb-spacing-lg $mb-spacing-page calc(80rpx + env(safe-area-inset-bottom));
 }
 
 // ---- Brand ----
@@ -216,12 +215,9 @@ function openAgreement(type) {
 .logo-box {
   width: 120rpx;
   height: 120rpx;
-  border-radius: 40rpx;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 2rpx solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.06), 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  border-radius: $mb-radius-lg;
+  background: $mb-color-bg;
+  border: 1rpx solid rgba(13, 80, 213, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -259,8 +255,8 @@ function openAgreement(type) {
 .brand-title {
   font-size: 52rpx;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  color: #000000;
+  letter-spacing: 0;
+  color: $mb-color-text-title;
   line-height: 1.2;
   margin-bottom: 12rpx;
 }
@@ -277,25 +273,26 @@ function openAgreement(type) {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-lg;
+  background: $mb-color-bg;
+  border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-border;
 }
 
 .input-pill {
   display: flex;
   align-items: center;
   height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 2rpx solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04), 0 1rpx 4rpx rgba(0, 0, 0, 0.02);
+  border-radius: $mb-radius-sm;
+  background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-border;
   padding: 0 36rpx;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
     border-color: rgba(13, 80, 213, 0.3);
-    box-shadow: 0 4rpx 16rpx rgba(13, 80, 213, 0.08), 0 1rpx 4rpx rgba(0, 0, 0, 0.02);
+    background: $mb-color-bg;
   }
 }
 
@@ -373,13 +370,13 @@ function openAgreement(type) {
 // ---- Buttons ----
 .primary-btn {
   height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: #000000;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-top: 16rpx;
-  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.2), 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   transition: opacity 0.15s, transform 0.15s;
 
   &:active {
@@ -397,7 +394,7 @@ function openAgreement(type) {
   font-size: 32rpx;
   font-weight: 600;
   color: #ffffff;
-  letter-spacing: 0.2em;
+  letter-spacing: 0;
 }
 
 .mode-switch {

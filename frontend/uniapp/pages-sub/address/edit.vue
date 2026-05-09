@@ -455,7 +455,7 @@ function confirmDelete() {
 .form-group {
   background: $mb-color-bg; border-radius: $mb-radius-lg;
   padding: $mb-spacing-sm $mb-spacing-lg $mb-spacing-md;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+  border: 1rpx solid $mb-color-border;
 }
 .form-field { padding-top: $mb-spacing-md; }
 .form-field__label {
@@ -518,7 +518,7 @@ function confirmDelete() {
   display: flex; align-items: center; justify-content: space-between;
   background: $mb-color-bg; border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg; margin-top: $mb-spacing-lg;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+  border: 1rpx solid $mb-color-border;
 }
 .default-toggle__left { flex: 1; min-width: 0; }
 .default-toggle__title { display: block; font-size: $mb-font-md; font-weight: 600; color: $mb-color-text-title; }
@@ -526,15 +526,16 @@ function confirmDelete() {
 
 // Switch
 .form-switch {
-  flex-shrink: 0; width: 88rpx; height: 48rpx; border-radius: 24rpx;
+  flex-shrink: 0; width: 88rpx; height: 48rpx; border-radius: $mb-radius-full;
   background: $mb-color-border; position: relative;
   transition: background 0.2s; margin-left: $mb-spacing-md;
 }
-.form-switch--on { background: $mb-color-text-title; }
+.form-switch--on { background: $mb-color-primary; }
 .form-switch__thumb {
   position: absolute; top: 4rpx; left: 4rpx; width: 40rpx; height: 40rpx;
   border-radius: 50%; background: $mb-color-bg;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15); transition: transform 0.2s;
+  border: 1rpx solid $mb-color-border;
+  transition: transform 0.2s;
   .form-switch--on & { transform: translateX(40rpx); }
 }
 
@@ -545,21 +546,22 @@ function confirmDelete() {
   background: $mb-color-bg; display: flex; gap: $mb-spacing-md;
   padding: $mb-spacing-md $mb-spacing-page;
   padding-bottom: calc(#{$mb-spacing-md} + env(safe-area-inset-bottom));
+  box-shadow: $mb-shadow-bar;
 }
 .addr-edit__delete-btn {
-  height: 96rpx; flex: 1; border-radius: $mb-radius-full;
+  height: 96rpx; flex: 1; border-radius: $mb-radius-sm;
   background: $mb-color-bg-secondary; border: 2rpx solid $mb-color-border;
   display: flex; align-items: center; justify-content: center;
   &:active { opacity: 0.85; }
 }
 .addr-edit__delete-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-error; }
 .addr-edit__save-btn {
-  height: 96rpx; flex: 2; border-radius: $mb-radius-full;
-  background: $mb-color-text-title; display: flex; align-items: center; justify-content: center;
+  height: 96rpx; flex: 2; border-radius: $mb-radius-sm;
+  background: $mb-color-primary; display: flex; align-items: center; justify-content: center;
   &:active { opacity: 0.85; transform: scale(0.98); }
 }
 .addr-edit__save-btn--full { flex: 1; }
-.addr-edit__save-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-text-inverse; letter-spacing: 0.08em; }
+.addr-edit__save-text { font-size: $mb-font-md; font-weight: 600; color: $mb-color-text-inverse; letter-spacing: 0; }
 
 // Region picker
 .region-mask {
@@ -568,7 +570,7 @@ function confirmDelete() {
 }
 .region-panel {
   width: 100%; max-height: 70vh; background: $mb-color-bg;
-  border-radius: $mb-radius-xl $mb-radius-xl 0 0;
+  border-radius: $mb-radius-lg $mb-radius-lg 0 0;
   display: flex; flex-direction: column;
   transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -589,11 +591,11 @@ function confirmDelete() {
 .region-tab { padding-bottom: $mb-spacing-sm; position: relative; }
 .region-tab--active::after {
   content: ''; position: absolute; bottom: 0; left: 0; right: 0;
-  height: 4rpx; background: $mb-color-text-title; border-radius: 2rpx;
+  height: 4rpx; background: $mb-color-primary; border-radius: 2rpx;
 }
 .region-tab__text {
   font-size: $mb-font-md; color: $mb-color-text-secondary; white-space: nowrap;
-  .region-tab--active & { color: $mb-color-text-title; font-weight: 600; }
+  .region-tab--active & { color: $mb-color-primary; font-weight: 600; }
 }
 
 // Region list
@@ -605,7 +607,7 @@ function confirmDelete() {
   padding: $mb-spacing-md $mb-spacing-lg;
   &:active { background: $mb-color-bg-secondary; }
 }
-.region-item--selected .region-item__text { color: $mb-color-text-title; font-weight: 600; }
+.region-item--selected .region-item__text { color: $mb-color-primary; font-weight: 600; }
 .region-item__text { font-size: $mb-font-md; color: $mb-color-text; }
-.region-item__check { font-size: $mb-font-md; color: $mb-color-text-title; font-weight: 700; }
+.region-item__check { font-size: $mb-font-md; color: $mb-color-primary; font-weight: 700; }
 </style>

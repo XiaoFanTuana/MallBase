@@ -7,8 +7,8 @@ const STATUS_CONFIG = {
   0: { label: '待审核', color: '#e08a00', bg: 'rgba(224, 138, 0, 0.08)' },
   1: { label: '已同意', color: '#25a350', bg: 'rgba(37, 163, 80, 0.08)' },
   2: { label: '已拒绝', color: '#ba1a1a', bg: 'rgba(186, 26, 26, 0.08)' },
-  3: { label: '已退款', color: '#848484', bg: 'rgba(132, 132, 132, 0.08)' },
-  4: { label: '已取消', color: '#848484', bg: 'rgba(132, 132, 132, 0.08)' },
+  3: { label: '已退款', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' },
+  4: { label: '已取消', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' },
 }
 
 const list = ref([])
@@ -68,7 +68,7 @@ async function fetchList(reset = false) {
 }
 
 function getStatusConfig(status) {
-  return STATUS_CONFIG[status] || { label: '未知', color: '#848484', bg: 'rgba(132, 132, 132, 0.08)' }
+  return STATUS_CONFIG[status] || { label: '未知', color: '#737686', bg: 'rgba(115, 118, 134, 0.08)' }
 }
 
 function formatPrice(val) {
@@ -174,9 +174,9 @@ function goDetail(id) {
 // ---- Refund card ----
 .refund-card {
   background: $mb-color-bg;
-  border-radius: $mb-radius-xl;
+  border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid $mb-color-border;
   transition: opacity 0.15s;
 
   &:active {
@@ -280,7 +280,7 @@ function goDetail(id) {
 .refund-card__amount {
   font-size: $mb-font-lg;
   font-weight: 700;
-  color: $mb-color-text-title;
+  color: $mb-color-primary;
 }
 
 // ---- Load state ----

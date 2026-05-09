@@ -1,18 +1,18 @@
 <template>
   <view class="login-page">
-    <mb-navbar title="登录" />
+    <mb-navbar title="" bgColor="transparent" />
 
     <view class="login-content">
       <view class="brand">
-        <view class="logo-box">
-          <image v-if="loginLogo" class="logo-image" :src="loginLogo" mode="aspectFit" />
-          <view v-else class="logo-bag">
-            <view class="bag-body" />
-            <view class="bag-handle" />
+        <view class="brand-mark">
+          <image v-if="loginLogo" class="brand-mark__image" :src="loginLogo" mode="aspectFit" />
+          <view v-else class="brand-mark__bag">
+            <view class="brand-mark__bag-body" />
+            <view class="brand-mark__bag-handle" />
           </view>
         </view>
         <text class="brand-title">{{ brandName }}</text>
-        <text v-if="brandSubtitle" class="brand-subtitle">{{ brandSubtitle }}</text>
+        <text class="brand-subtitle">{{ brandSubtitle }}</text>
       </view>
 
       <!-- #ifdef MP-WEIXIN -->
@@ -25,8 +25,8 @@
       <view v-else-if="wechatBindStep === 'bind'" class="form-section">
         <text class="bind-hint">请绑定手机号以完成登录</text>
         <view v-if="wechatNeedUserInfo" class="profile-card">
-          <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
-            <image v-if="wechatAvatar" class="avatar-image" :src="wechatAvatar" mode="aspectFill" />
+          <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="onChooseAvatar" :disabled="wechatAvatarUploading">
+            <image v-if="wechatAvatarPreview || wechatAvatar" class="avatar-image" :src="wechatAvatarPreview || wechatAvatar" mode="aspectFill" />
             <text v-else class="avatar-plus">+</text>
           </button>
           <input
@@ -73,8 +73,8 @@
       <view v-else-if="wechatBindStep === 'profile'" class="form-section">
         <text class="bind-hint">请完善头像昵称以完成登录</text>
         <view class="profile-card">
-          <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
-            <image v-if="wechatAvatar" class="avatar-image" :src="wechatAvatar" mode="aspectFill" />
+          <button class="avatar-picker" open-type="chooseAvatar" @chooseavatar="onChooseAvatar" :disabled="wechatAvatarUploading">
+            <image v-if="wechatAvatarPreview || wechatAvatar" class="avatar-image" :src="wechatAvatarPreview || wechatAvatar" mode="aspectFill" />
             <text v-else class="avatar-plus">+</text>
           </button>
           <input
@@ -114,67 +114,79 @@
         </view>
       </view>
 
-      <view v-else-if="loginMode === 'sms'" class="form-section">
-        <view class="input-line">
-          <text class="area-code">+86</text>
-          <text class="chevron">&#x25BE;</text>
-          <input v-model="phone" class="line-input" type="number" maxlength="11"
-            placeholder="请输入手机号" placeholder-class="placeholder" />
-        </view>
-        <view class="input-line">
-          <text class="input-label">验证码</text>
-          <input v-model="smsCode" class="line-input" type="number" maxlength="6"
-            placeholder="" placeholder-class="placeholder" />
-          <text class="sms-btn" :class="{ 'sms-btn--off': countdown > 0 }"
-            @tap="handleSendCode('login')">
-            {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
-          </text>
-        </view>
-        <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handleSmsLogin">
-          <text class="primary-btn-text">{{ loading ? '登录中...' : '登 录' }}</text>
-        </view>
-        <view class="mode-switch" @tap="loginMode = 'password'">
-          <text class="link-text">密码登录</text>
-        </view>
-      </view>
-
-      <view v-else class="form-section">
-        <view class="input-line">
-          <input v-model="account" class="line-input line-input--full" type="text"
-            placeholder="手机号 / 用户名" placeholder-class="placeholder" />
-        </view>
-        <view class="input-line">
-          <input v-model="password" class="line-input line-input--full"
-            :type="showPassword ? 'text' : 'password'"
-            placeholder="密码" placeholder-class="placeholder" />
-          <view class="eye-toggle" @tap="showPassword = !showPassword">
-            <view class="eye-shape" />
-            <view v-if="!showPassword" class="eye-slash" />
+      <view v-else class="form-section auth-panel">
+        <view class="login-tabs">
+          <view class="login-tabs__item" :class="{ 'login-tabs__item--active': loginMode === 'sms' }" @tap="loginMode = 'sms'">
+            <text class="login-tabs__text">手机号登录</text>
+          </view>
+          <view class="login-tabs__item" :class="{ 'login-tabs__item--active': loginMode === 'password' }" @tap="loginMode = 'password'">
+            <text class="login-tabs__text">账号密码</text>
           </view>
         </view>
+
+        <view v-if="loginMode === 'sms'" class="login-fields">
+          <view class="input-line input-line--icon">
+            <view class="field-icon field-icon--phone" />
+            <input v-model="phone" class="line-input" type="number" maxlength="11"
+              placeholder="请输入手机号" placeholder-class="placeholder" />
+          </view>
+          <view class="input-line input-line--icon">
+            <view class="field-icon field-icon--code" />
+            <input v-model="smsCode" class="line-input" type="number" maxlength="6"
+              placeholder="验证码" placeholder-class="placeholder" />
+            <text class="sms-btn" :class="{ 'sms-btn--off': countdown > 0 }"
+              @tap="handleSendCode('login')">
+              {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+            </text>
+          </view>
+        </view>
+
+        <view v-else class="login-fields">
+          <view class="input-line input-line--icon">
+            <view class="field-icon field-icon--user" />
+            <input v-model="account" class="line-input line-input--full" type="text"
+              placeholder="手机号 / 用户名" placeholder-class="placeholder" />
+          </view>
+          <view class="input-line input-line--icon">
+            <view class="field-icon field-icon--lock" />
+            <input v-model="password" class="line-input line-input--full"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="密码" placeholder-class="placeholder" />
+            <view class="eye-toggle" @tap="showPassword = !showPassword">
+              <view class="eye-shape" />
+              <view v-if="!showPassword" class="eye-slash" />
+            </view>
+          </view>
+        </view>
+
         <view class="primary-btn" :class="{ 'primary-btn--loading': loading }" @tap="handlePasswordLogin">
-          <text class="primary-btn-text">{{ loading ? '登录中...' : '登 录' }}</text>
+          <text class="primary-btn-text">{{ loading ? '登录中...' : '登录' }}</text>
         </view>
-        <view class="mode-switch" @tap="loginMode = 'sms'">
-          <text class="link-text">验证码登录</text>
-        </view>
-      </view>
 
-      <view class="other-methods">
-        <text class="other-methods-label">其他登录方式</text>
-        <view class="social-row">
-          <view class="social-btn" @tap="handleWechatOfficialLogin">
-            <view class="wechat-icon">
-              <view class="wc-bubble" />
-              <view class="wc-bubble wc-bubble--r" />
-            </view>
-          </view>
-          <view v-if="!isWechatH5" class="social-btn">
-            <view class="fp-icon">
-              <view class="fp-oval" />
-            </view>
-          </view>
+        <view class="secondary-actions">
+          <text class="secondary-action" @tap="handleForgotPassword">忘记密码</text>
+          <text class="secondary-divider">·</text>
+          <text class="secondary-action" @tap="goRegister">立即注册</text>
         </view>
+
+        <!-- #ifdef MP-WEIXIN -->
+        <view class="wechat-entry" @tap="handleWechatMiniLogin">
+          <view class="wechat-entry__icon">
+            <view class="wechat-entry__bubble" />
+            <view class="wechat-entry__bubble wechat-entry__bubble--r" />
+          </view>
+          <text class="wechat-entry__text">微信一键登录</text>
+        </view>
+        <!-- #endif -->
+        <!-- #ifndef MP-WEIXIN -->
+        <view v-if="isWechatH5" class="wechat-entry" @tap="handleWechatOfficialLogin">
+          <view class="wechat-entry__icon">
+            <view class="wechat-entry__bubble" />
+            <view class="wechat-entry__bubble wechat-entry__bubble--r" />
+          </view>
+          <text class="wechat-entry__text">微信一键登录</text>
+        </view>
+        <!-- #endif -->
       </view>
       <!-- #endif -->
 
@@ -186,9 +198,9 @@
           <text class="agree-text">我已阅读并同意</text>
         </view>
         <view class="agree-links">
-          <text class="agree-link" @tap.stop="openAgreement('service')">服务协议</text>
+          <text class="agree-link" @tap.stop="openAgreement('service')">用户协议</text>
           <text class="agree-sep">与</text>
-          <text class="agree-link" @tap.stop="openAgreement('privacy')">隐私权政策</text>
+          <text class="agree-link" @tap.stop="openAgreement('privacy')">隐私政策</text>
         </view>
       </view>
     </view>
@@ -197,7 +209,7 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUserStore } from '@/store/user'
 import {
@@ -209,6 +221,7 @@ import {
   wechatBindMobile,
   wechatBindByPhoneCode,
   wechatBindUserInfo,
+  uploadWechatBindAvatar,
   getWechatOfficialOauthUrl,
   wechatOfficialLogin,
   wechatOfficialBindMobile,
@@ -232,6 +245,8 @@ const wechatForcePhone = ref(false)
 const wechatNeedUserInfo = ref(false)
 const wechatNickname = ref('')
 const wechatAvatar = ref('')
+const wechatAvatarPreview = ref('')
+const wechatAvatarUploading = ref(false)
 const isWechatH5 = ref(false)
 const redirectUrl = ref('')
 
@@ -243,7 +258,7 @@ const brandName = computed(() => (
   || appStore.siteConfig?.site_name
   || 'MallBase'
 ))
-const brandSubtitle = computed(() => appStore.siteConfig?.site_slogan || '探索极致生活美学')
+const brandSubtitle = computed(() => appStore.siteConfig?.site_slogan || '欢迎回来，继续你的品质购物体验')
 const loginLogo = computed(() => appStore.siteConfig?.client_auth_logo || appStore.siteConfig?.client_logo || '')
 
 onLoad((query) => {
@@ -261,6 +276,13 @@ onMounted(() => {
   isWechatH5.value = /micromessenger/i.test(navigator.userAgent)
   handleWechatH5Callback()
   // #endif
+})
+
+onUnload(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
 })
 
 function startCountdown() {
@@ -282,6 +304,10 @@ function validatePhone() {
   return true
 }
 
+function handleForgotPassword() {
+  uni.showToast({ title: '请先登录后再修改密码', icon: 'none' })
+}
+
 function checkAgreement() {
   if (!agreed.value) {
     uni.showToast({ title: '请先同意服务协议与隐私政策', icon: 'none' })
@@ -292,6 +318,10 @@ function checkAgreement() {
 
 function validateWechatProfile() {
   if (!wechatNeedUserInfo.value) return true
+  if (wechatAvatarUploading.value) {
+    uni.showToast({ title: '头像上传中，请稍后', icon: 'none' })
+    return false
+  }
   if (!wechatAvatar.value) {
     uni.showToast({ title: '请先选择微信头像', icon: 'none' })
     return false
@@ -411,6 +441,9 @@ async function handleWechatMiniLogin() {
       wechatBindToken.value = data.bind_token || ''
       wechatForcePhone.value = !!data.force_phone_number
       wechatNeedUserInfo.value = !!data.need_userinfo
+      wechatAvatar.value = ''
+      wechatAvatarPreview.value = ''
+      wechatAvatarUploading.value = false
       wechatBindStep.value = data.need_mobile ? 'bind' : 'profile'
     } else {
       await onLoginSuccess(data)
@@ -443,8 +476,30 @@ async function onBindPhoneNumber(e) {
   finally { loading.value = false }
 }
 
-function onChooseAvatar(e) {
-  wechatAvatar.value = e.detail.avatarUrl || ''
+async function onChooseAvatar(e) {
+  const avatarUrl = e.detail?.avatarUrl || ''
+  if (!avatarUrl) return
+  if (!wechatBindToken.value) {
+    uni.showToast({ title: '登录态已过期，请重新登录', icon: 'none' })
+    wechatBindStep.value = 'none'
+    return
+  }
+
+  wechatAvatarPreview.value = avatarUrl
+  wechatAvatar.value = ''
+  wechatAvatarUploading.value = true
+  try {
+    const uploadRes = await uploadWechatBindAvatar(wechatBindToken.value, avatarUrl)
+    if (!uploadRes?.url) {
+      throw new Error('上传结果缺少头像路径')
+    }
+    wechatAvatar.value = uploadRes.url
+  } catch (_) {
+    wechatAvatarPreview.value = ''
+    wechatAvatar.value = ''
+  } finally {
+    wechatAvatarUploading.value = false
+  }
 }
 // #endif
 
@@ -560,51 +615,27 @@ function openAgreement(type) {
     url: `/pages-sub/user/agreement?type=${type === 'privacy' ? 'privacy' : 'service'}`,
   })
 }
+
+function goRegister() {
+  uni.navigateTo({ url: '/pages-sub/user/register' })
+}
 </script>
 
 <style lang="scss" scoped>
 .login-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: $mb-color-bg;
-  position: relative;
-  overflow: hidden;
-
-  // Subtle marble/silk texture via layered radial gradients
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 120% 80% at 20% 10%, rgba(0, 0, 0, 0.018) 0%, transparent 50%),
-      radial-gradient(ellipse 100% 60% at 80% 20%, rgba(0, 0, 0, 0.012) 0%, transparent 40%),
-      radial-gradient(ellipse 80% 100% at 90% 80%, rgba(0, 0, 0, 0.02) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 80% at 10% 90%, rgba(0, 0, 0, 0.015) 0%, transparent 45%);
-    pointer-events: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(135deg, rgba(245, 245, 245, 0.4) 0%, transparent 40%),
-      linear-gradient(315deg, rgba(240, 240, 240, 0.3) 0%, transparent 35%);
-    pointer-events: none;
-  }
+  background: $mb-color-bg-secondary;
 }
 
 .login-content {
   width: 100%;
-  max-width: 620rpx;
+  max-width: 750rpx;
   display: flex;
   flex-direction: column;
-  align-items: center;
   position: relative;
   z-index: 1;
-  padding: 0 $mb-spacing-page;
+  padding: 24rpx $mb-spacing-page calc(40rpx + env(safe-area-inset-bottom));
 }
 
 // ---- Brand ----
@@ -612,129 +643,485 @@ function openAgreement(type) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 100rpx;
-}
-
-.logo-box {
-  width: 120rpx;
-  height: 120rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
   margin-bottom: 32rpx;
 }
 
-.logo-image { width: 120rpx; height: 120rpx; border-radius: $mb-radius-lg; }
-
-.logo-bag { position: relative; width: 72rpx; height: 80rpx; }
-
-.bag-body {
-  position: absolute; bottom: 0; left: 6rpx; right: 6rpx; height: 56rpx;
-  background: $mb-color-text;
-  border-radius: 4rpx 4rpx 10rpx 10rpx;
+.brand-mark {
+  width: 104rpx;
+  height: 104rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(13, 80, 213, 0.12);
 }
 
-.bag-handle {
-  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-  width: 34rpx; height: 30rpx;
-  border: 4rpx solid $mb-color-text;
+.brand-mark__image {
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 28rpx;
+}
+
+.brand-mark__bag {
+  position: relative;
+  width: 68rpx;
+  height: 76rpx;
+}
+
+.brand-mark__bag-body {
+  position: absolute;
+  bottom: 0;
+  left: 4rpx;
+  right: 4rpx;
+  height: 54rpx;
+  border: 3rpx solid $mb-color-primary;
+  border-radius: 8rpx 8rpx 14rpx 14rpx;
+  background: rgba(13, 80, 213, 0.06);
+}
+
+.brand-mark__bag-handle {
+  position: absolute;
+  top: 2rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30rpx;
+  height: 24rpx;
+  border: 3rpx solid $mb-color-primary;
   border-bottom: none;
-  border-radius: 17rpx 17rpx 0 0;
+  border-radius: 16rpx 16rpx 0 0;
 }
 
-.brand-title { font-size: 72rpx; font-weight: 700; letter-spacing: -0.02em; color: $mb-color-text; line-height: 1.1; margin-bottom: 16rpx; }
-.brand-subtitle { font-size: 26rpx; color: $mb-color-text-tertiary; letter-spacing: 0.16em; }
+.brand-title {
+  max-width: 100%;
+  font-size: 52rpx;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: $mb-color-text-title;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.brand-subtitle {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: $mb-color-text-tertiary;
+  letter-spacing: 0;
+  line-height: 1.45;
+}
 
 // ---- Form ----
 .form-section {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 20rpx;
+  padding: 28rpx;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 24rpx;
+  border: 1rpx solid $mb-color-divider;
+}
+
+.auth-panel {
+  margin-bottom: 24rpx;
+}
+
+.login-tabs {
+  display: flex;
+  align-items: center;
+  padding: 6rpx;
+  background: $mb-color-bg-secondary;
+  border: 1rpx solid $mb-color-divider;
+  border-radius: 18rpx;
+}
+
+.login-tabs__item {
+  flex: 1;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14rpx;
+  color: $mb-color-text-tertiary;
+}
+
+.login-tabs__item--active {
+  background: #ffffff;
+  color: $mb-color-primary;
+  box-shadow: 0 1rpx 4rpx rgba(13, 80, 213, 0.08);
+}
+
+.login-tabs__text {
+  font-size: 24rpx;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.login-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
 }
 
 .input-line {
   display: flex;
   align-items: center;
-  height: 108rpx;
-  border-bottom: 2rpx solid $mb-color-border;
-  padding: 0 4rpx;
-  transition: border-color 0.2s;
+  min-height: 88rpx;
+  border: 1rpx solid $mb-color-border;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-bg-surface;
+  padding: 0 24rpx;
+  transition: border-color 0.2s, background-color 0.2s;
 
   &:focus-within {
-    border-bottom-color: $mb-color-text;
+    border-color: rgba(13, 80, 213, 0.45);
+    background: #ffffff;
   }
 }
 
-.area-code { font-size: 30rpx; font-weight: 500; color: $mb-color-text; flex-shrink: 0; }
-.chevron { font-size: 20rpx; color: $mb-color-text-tertiary; margin-left: 4rpx; flex-shrink: 0; }
-.input-label { font-size: 30rpx; color: $mb-color-text-tertiary; flex-shrink: 0; }
-.line-input { flex: 1; font-size: 30rpx; color: $mb-color-text; height: 100%; margin-left: 24rpx; }
-.line-input--full { margin-left: 0; }
-.placeholder { color: $mb-color-border-light; }
-.sms-btn { flex-shrink: 0; font-size: 26rpx; font-weight: 500; color: $mb-color-text; white-space: nowrap; letter-spacing: 0.04em; }
-.sms-btn--off { color: $mb-color-border-light; }
-
-// ---- Eye toggle ----
-.eye-toggle { flex-shrink: 0; width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; position: relative; }
-
-.eye-shape {
-  width: 36rpx; height: 24rpx; border: 2rpx solid $mb-color-text-tertiary; border-radius: 50%; position: relative;
-  &::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 10rpx; height: 10rpx; border-radius: 50%; background: $mb-color-text-tertiary; }
+.area-code {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: $mb-color-text;
+  flex-shrink: 0;
 }
 
-.eye-slash { position: absolute; top: 12rpx; left: 50%; width: 2rpx; height: 32rpx; background: $mb-color-text-tertiary; transform: translateX(-50%) rotate(45deg); }
+.chevron {
+  font-size: 20rpx;
+  color: $mb-color-text-tertiary;
+  margin-left: 4rpx;
+  flex-shrink: 0;
+}
 
-// ---- Buttons ----
-.primary-btn {
-  height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: $mb-color-text;
+.input-label {
+  font-size: 28rpx;
+  color: $mb-color-text-tertiary;
+  flex-shrink: 0;
+}
+
+.input-line--icon {
+  gap: 16rpx;
+}
+
+.field-icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 32rpx;
+  height: 32rpx;
+  color: $mb-color-text-tertiary;
+}
+
+.field-icon--phone::before {
+  content: '';
+  position: absolute;
+  inset: 2rpx 6rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 8rpx;
+}
+
+.field-icon--phone::after {
+  content: '';
+  position: absolute;
+  left: 13rpx;
+  bottom: 3rpx;
+  width: 6rpx;
+  height: 4rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+}
+
+.field-icon--user::before {
+  content: '';
+  position: absolute;
+  top: 2rpx;
+  left: 7rpx;
+  width: 18rpx;
+  height: 18rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 50%;
+}
+
+.field-icon--user::after {
+  content: '';
+  position: absolute;
+  left: 4rpx;
+  bottom: 2rpx;
+  width: 24rpx;
+  height: 12rpx;
+  border: 3rpx solid currentColor;
+  border-top: none;
+  border-radius: 0 0 12rpx 12rpx;
+}
+
+.field-icon--lock::before {
+  content: '';
+  position: absolute;
+  left: 7rpx;
+  top: 12rpx;
+  width: 18rpx;
+  height: 14rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 4rpx;
+}
+
+.field-icon--lock::after {
+  content: '';
+  position: absolute;
+  left: 11rpx;
+  top: 4rpx;
+  width: 10rpx;
+  height: 10rpx;
+  border: 3rpx solid currentColor;
+  border-bottom: none;
+  border-radius: 8rpx 8rpx 0 0;
+}
+
+.field-icon--code::before {
+  content: '';
+  position: absolute;
+  inset: 6rpx 4rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 6rpx;
+}
+
+.field-icon--code::after {
+  content: '';
+  position: absolute;
+  left: 10rpx;
+  top: 13rpx;
+  width: 12rpx;
+  height: 3rpx;
+  background: currentColor;
+  box-shadow: 0 -7rpx 0 currentColor;
+}
+
+.line-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  font-size: 28rpx;
+  color: $mb-color-text;
+  margin-left: 0;
+}
+
+.line-input--full {
+  margin-left: 0;
+}
+
+.placeholder {
+  color: $mb-color-border-light;
+}
+
+.sms-btn {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: $mb-color-primary;
+  white-space: nowrap;
+  letter-spacing: 0;
+  padding-left: 18rpx;
+}
+
+.sms-btn--off {
+  color: $mb-color-border-light;
+}
+
+// ---- Eye toggle ----
+.eye-toggle {
+  flex-shrink: 0;
+  width: 56rpx;
+  height: 56rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 56rpx;
+  position: relative;
+}
+
+.eye-shape {
+  width: 36rpx;
+  height: 24rpx;
+  border: 2rpx solid $mb-color-text-tertiary;
+  border-radius: 50%;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10rpx;
+    height: 10rpx;
+    border-radius: 50%;
+    background: $mb-color-text-tertiary;
+  }
+}
+
+.eye-slash {
+  position: absolute;
+  top: 12rpx;
+  left: 50%;
+  width: 2rpx;
+  height: 32rpx;
+  background: $mb-color-text-tertiary;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+// ---- Buttons ----
+.primary-btn {
+  height: 92rpx;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4rpx;
   transition: opacity 0.15s, transform 0.15s;
 
   &:active {
     opacity: 0.85;
-    transform: scale(0.98);
+    transform: scale(0.985);
   }
 }
 
-.primary-btn--loading { opacity: 0.7; pointer-events: none; }
-.primary-btn-text { font-size: $mb-font-lg; font-weight: 600; color: $mb-color-text-inverse; letter-spacing: 0.4em; }
+.primary-btn--loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.primary-btn-text {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: $mb-color-text-inverse;
+  letter-spacing: 0;
+}
 
 .btn-wechat {
   width: 100%;
-  height: 100rpx;
-  border-radius: $mb-radius-full;
-  background: #07c160;
+  height: 92rpx;
+  border-radius: $mb-radius-sm;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: $mb-spacing-sm;
-  border: none;
+  gap: 14rpx;
+  border: 1rpx solid rgba(7, 193, 96, 0.16);
   padding: 0;
   margin: 0;
 
-  &::after { display: none; }
-  &:active { opacity: 0.85; }
+  &::after {
+    display: none;
+  }
+
+  &:active {
+    opacity: 0.88;
+  }
 }
 
-.btn-wechat--loading { opacity: 0.7; pointer-events: none; }
-.btn-wechat-label { font-size: $mb-font-lg; font-weight: 500; color: $mb-color-text-inverse; letter-spacing: 0.1em; }
-.mode-switch { display: flex; justify-content: center; padding-top: 28rpx; }
-.link-text { font-size: $mb-font-sm; color: $mb-color-text-tertiary; font-weight: 400; }
-.bind-hint { font-size: $mb-font-md; color: $mb-color-text-secondary; text-align: center; margin-bottom: $mb-spacing-md; }
+.btn-wechat--loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.btn-wechat-label {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: $mb-color-text;
+  letter-spacing: 0;
+}
+
+.secondary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding-top: 4rpx;
+}
+
+.secondary-action {
+  font-size: 22rpx;
+  color: $mb-color-text-secondary;
+}
+
+.secondary-divider {
+  font-size: 20rpx;
+  color: $mb-color-border-light;
+}
+
+.wechat-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  height: 84rpx;
+  border-radius: $mb-radius-sm;
+  border: 1rpx solid $mb-color-border;
+  background: $mb-color-bg;
+}
+
+.wechat-entry__icon {
+  position: relative;
+  width: 34rpx;
+  height: 28rpx;
+}
+
+.wechat-entry__bubble {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 22rpx;
+  height: 18rpx;
+  border-radius: 999rpx;
+  background: #07c160;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -3rpx;
+    left: 4rpx;
+    width: 8rpx;
+    height: 6rpx;
+    background: #07c160;
+    clip-path: polygon(0 0, 100% 0, 35% 100%);
+  }
+}
+
+.wechat-entry__bubble--r {
+  left: auto;
+  right: 0;
+  bottom: 6rpx;
+  width: 18rpx;
+  height: 14rpx;
+
+  &::after {
+    left: auto;
+    right: 3rpx;
+    clip-path: polygon(0 0, 100% 0, 65% 100%);
+  }
+}
+
+.wechat-entry__text {
+  font-size: 24rpx;
+  color: $mb-color-text;
+  font-weight: 500;
+}
+
+.bind-hint {
+  font-size: 24rpx;
+  color: $mb-color-text-secondary;
+  text-align: center;
+  margin-bottom: $mb-spacing-sm;
+}
 
 .profile-card {
   display: flex;
   align-items: center;
   gap: 24rpx;
-  margin-bottom: 36rpx;
-  padding: 24rpx 0;
-  border-bottom: 2rpx solid $mb-color-border;
+  margin-bottom: 20rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid $mb-color-divider;
 }
 
 .avatar-picker {
@@ -750,79 +1137,65 @@ function openAgreement(type) {
   margin: 0;
   overflow: hidden;
 
-  &::after { display: none; }
-}
-
-.avatar-image { width: 96rpx; height: 96rpx; }
-.avatar-plus { font-size: 44rpx; color: $mb-color-text-tertiary; line-height: 1; }
-.nickname-input { flex: 1; height: 80rpx; font-size: 30rpx; color: $mb-color-text; }
-
-// ---- Dividers (WeChat bind only) ----
-.methods-divider { display: flex; align-items: center; gap: $mb-spacing-md; margin-bottom: 40rpx; }
-.divider-line { flex: 1; height: 2rpx; background: $mb-color-divider; }
-.divider-label { font-size: $mb-font-sm; color: $mb-color-border-light; white-space: nowrap; }
-
-// ---- Social ----
-.other-methods {
-  width: 100%;
-  margin-top: 72rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.other-methods-label { font-size: $mb-font-sm; color: $mb-color-border-light; margin-bottom: 36rpx; }
-.social-row { display: flex; justify-content: center; gap: $mb-spacing-xl; }
-
-.social-btn {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: $mb-radius-full;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s;
-
-  &:active { transform: scale(0.92); }
-}
-
-.wechat-icon { position: relative; width: 44rpx; height: 38rpx; }
-
-.wc-bubble {
-  position: absolute; bottom: 0; left: 0;
-  width: 30rpx; height: 26rpx;
-  background: #07c160;
-  border-radius: 50%;
-
   &::after {
-    content: '';
-    position: absolute;
-    bottom: -4rpx;
-    left: 6rpx;
-    width: 10rpx;
-    height: 8rpx;
-    background: #07c160;
-    clip-path: polygon(0 0, 100% 0, 30% 100%);
+    display: none;
   }
 }
 
-.wc-bubble--r {
-  left: auto; right: 0; bottom: 8rpx; width: 24rpx; height: 20rpx;
-  &::after { left: auto; right: 4rpx; clip-path: polygon(0 0, 100% 0, 70% 100%); }
+.avatar-image {
+  width: 96rpx;
+  height: 96rpx;
 }
 
-.fp-icon { display: flex; align-items: center; justify-content: center; width: 44rpx; height: 52rpx; }
+.avatar-plus {
+  font-size: 44rpx;
+  color: $mb-color-text-tertiary;
+  line-height: 1;
+}
 
-.fp-oval {
-  width: 32rpx; height: 40rpx; border: 3rpx solid $mb-color-text; border-radius: 50%; position: relative;
-  &::before { content: ''; position: absolute; top: 6rpx; right: -2rpx; width: 16rpx; height: 22rpx; border: 2rpx solid $mb-color-text; border-left: none; border-radius: 0 50% 50% 0; }
-  &::after { content: ''; position: absolute; top: 10rpx; left: -2rpx; width: 12rpx; height: 16rpx; border: 2rpx solid $mb-color-text; border-right: none; border-radius: 50% 0 0 50%; }
+.nickname-input {
+  flex: 1;
+  height: 80rpx;
+  font-size: 30rpx;
+  color: $mb-color-text;
+}
+
+// ---- Dividers (WeChat bind only) ----
+.methods-divider {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-md;
+  margin-bottom: 24rpx;
+}
+
+.divider-line {
+  flex: 1;
+  height: 2rpx;
+  background: $mb-color-divider;
+}
+
+.divider-label {
+  font-size: $mb-font-sm;
+  color: $mb-color-border-light;
+  white-space: nowrap;
 }
 
 // ---- Agreement ----
-.agreement { display: flex; flex-direction: column; align-items: center; margin-top: 80rpx; padding: 0 20rpx; }
-.agree-toggle { display: flex; align-items: center; gap: 10rpx; margin-bottom: 8rpx; }
+.agreement {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16rpx;
+  padding: 0 20rpx;
+}
+
+.agree-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 8rpx;
+}
+
 .agree-box {
   width: 28rpx;
   height: 28rpx;
@@ -833,17 +1206,39 @@ function openAgreement(type) {
   justify-content: center;
   box-sizing: border-box;
 }
+
 .agree-box--checked {
-  background: $mb-color-text;
-  border-color: $mb-color-text;
+  background: $mb-color-primary;
+  border-color: $mb-color-primary;
 }
+
 .agree-mark {
   font-size: 20rpx;
   line-height: 1;
   color: $mb-color-text-inverse;
 }
-.agree-text { font-size: $mb-font-xs; color: $mb-color-text-tertiary; }
-.agree-links { display: flex; align-items: center; gap: 8rpx; }
-.agree-link { font-size: $mb-font-xs; color: $mb-color-text; font-weight: 500; }
-.agree-sep { font-size: $mb-font-xs; color: $mb-color-text-tertiary; }
+
+.agree-text {
+  font-size: 20rpx;
+  color: $mb-color-text-tertiary;
+}
+
+.agree-links {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.agree-link {
+  font-size: 20rpx;
+  color: $mb-color-primary;
+  font-weight: 500;
+}
+
+.agree-sep {
+  font-size: 20rpx;
+  color: $mb-color-text-tertiary;
+}
 </style>

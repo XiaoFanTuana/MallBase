@@ -45,7 +45,7 @@ class User extends BaseModel
         if (strpos($data['avatar'], 'http') === 0) {
             return $data['avatar'];
         }
-        return request()->domain() . $data['avatar'];
+        return buildUploadUrl((string) $data['avatar']);
     }
 
     /**

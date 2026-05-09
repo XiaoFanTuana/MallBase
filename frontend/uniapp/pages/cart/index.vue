@@ -151,7 +151,7 @@ function goGoodsDetail(item) {
     <!-- ========== Empty State ========== -->
     <mb-empty-state
       v-if="isEmpty"
-      icon="🛒"
+      icon=""
       text="购物车是空的"
       actionText="去逛逛"
       paddingTop="360rpx"
@@ -213,7 +213,7 @@ function goGoodsDetail(item) {
               <mb-price
                 :value="item.unit_price"
                 size="md"
-                color="#131b2e"
+                color="var(--color-primary, #0d50d5)"
               />
               <mb-quantity-stepper
                 v-if="!isEditing"
@@ -303,7 +303,7 @@ function goGoodsDetail(item) {
         <!-- Total price or delete selected (edit mode) -->
         <view v-if="!isEditing" class="bottom-bar__total">
           <text class="bottom-bar__total-label">合计</text>
-          <mb-price :value="totalPrice" size="lg" color="#1b1b1b" />
+          <mb-price :value="totalPrice" size="lg" color="var(--color-primary, #0d50d5)" />
         </view>
         <view v-else class="bottom-bar__total" />
 
@@ -368,18 +368,14 @@ function goGoodsDetail(item) {
 /* ===========================
    Cart Card
    =========================== */
-.cart-card {
-  margin-bottom: $mb-spacing-md;
-  border-radius: $mb-radius-lg;
-  overflow: hidden;
-}
-
 .cart-card__body {
   display: flex;
   align-items: center;
   padding: $mb-spacing-md;
   background-color: $mb-color-bg;
   border-radius: $mb-radius-lg;
+  border: 1rpx solid $mb-color-divider;
+  margin-bottom: $mb-spacing-md;
 }
 
 /* Checkbox */
@@ -400,8 +396,8 @@ function goGoodsDetail(item) {
 }
 
 .checkbox--checked {
-  background-color: $mb-color-text;
-  border-color: $mb-color-text;
+  background-color: $mb-color-primary;
+  border-color: $mb-color-primary;
 }
 
 .checkbox--disabled {
@@ -422,9 +418,9 @@ function goGoodsDetail(item) {
   flex-shrink: 0;
   width: 180rpx;
   height: 180rpx;
-  border-radius: $mb-radius-md;
+  border-radius: $mb-radius-lg;
   overflow: hidden;
-  background-color: #1a1a2e;
+  background-color: $mb-color-bg-surface;
   margin-right: $mb-spacing-md;
 }
 
@@ -482,7 +478,7 @@ function goGoodsDetail(item) {
 .cart-card__spec {
   font-size: $mb-font-sm;
   color: $mb-color-text-tertiary;
-  background-color: $mb-color-bg-secondary;
+  background-color: $mb-color-bg-surface;
   padding: 4rpx 14rpx;
   border-radius: $mb-radius-sm;
   align-self: flex-start;
@@ -500,7 +496,7 @@ function goGoodsDetail(item) {
 /* Delete button inside card (edit mode / invalid) */
 .cart-card__delete-btn {
   padding: 8rpx 24rpx;
-  border-radius: $mb-radius-full;
+  border-radius: $mb-radius-sm;
   border: 2rpx solid $mb-color-border;
   background-color: transparent;
 }
@@ -622,7 +618,7 @@ function goGoodsDetail(item) {
   bottom: 0;
   z-index: 100;
   background-color: $mb-color-bg;
-  border-top: 1rpx solid rgba(0, 0, 0, 0.04);
+  border-top: 1rpx solid $mb-color-divider;
 }
 
 .bottom-bar__inner {
@@ -663,7 +659,6 @@ function goGoodsDetail(item) {
   margin-right: 4rpx;
 }
 
-/* Checkout button — black as in design v5 */
 .bottom-bar__checkout {
   flex-shrink: 0;
   height: 76rpx;
@@ -671,8 +666,8 @@ function goGoodsDetail(item) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: $mb-color-text;
-  border-radius: $mb-radius-full;
+  background-color: $mb-color-primary;
+  border-radius: $mb-radius-sm;
   transition: opacity 0.15s;
 }
 

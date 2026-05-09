@@ -28,36 +28,38 @@
         class="order-card"
         @tap="goDetail(order.id)"
       >
-        <!-- Card header: order number + status -->
+        <!-- Card header: store + status -->
         <view class="order-card__header">
-          <text class="order-card__sn">订单号：{{ order.sn }}</text>
-          <view
-            class="order-card__status-tag"
-            :class="statusTagClass(order.status)"
-          >
-            <text class="order-card__status-text" :class="statusTagClass(order.status)">
-              {{ statusLabel(order.status) }}
-            </text>
+          <view class="order-card__store">
+            <view class="order-card__store-icon" />
+            <text class="order-card__store-name">{{ getStoreName(order) }}</text>
           </view>
+          <text class="order-card__status-text" :class="statusTagClass(order.status)">
+            {{ statusLabel(order.status) }}
+          </text>
         </view>
 
         <!-- Product items -->
         <view
-          v-for="item in order.items"
+          v-for="item in getOrderItems(order)"
           :key="item.id"
           class="order-card__item"
         >
           <image
+            v-if="getOrderItemImage(item)"
             class="order-card__img"
-            :src="item.goods_image || item.cover"
+            :src="getOrderItemImage(item)"
             mode="aspectFill"
           />
+          <view v-else class="order-card__img order-card__img--placeholder">
+            <view class="order-card__placeholder-box" />
+          </view>
           <view class="order-card__info">
-            <text class="order-card__name">{{ item.goods_name || item.name }}</text>
-            <text v-if="item.sku_spec" class="order-card__spec">{{ item.sku_spec }}</text>
+            <text class="order-card__name">{{ item.goods_name || item.name || '商品信息' }}</text>
+            <text v-if="getItemSpec(item)" class="order-card__spec">{{ getItemSpec(item) }}</text>
             <view class="order-card__price-row">
               <mb-price :value="item.unit_price" size="sm" />
-              <text v-if="item.quantity > 1" class="order-card__qty">&times;{{ item.quantity }}</text>
+              <text class="order-card__qty">x{{ item.quantity || 1 }}</text>
             </view>
           </view>
         </view>
@@ -65,12 +67,12 @@
         <!-- Footer: total summary -->
         <view class="order-card__footer">
           <text class="order-card__total">
-            共{{ order.total_quantity || order.items?.length || 0 }}件 合计
+            共{{ getOrderQuantity(order) }}件商品 实付款
           </text>
           <mb-price
-            :value="order.total_amount"
+            :value="order.pay_amount || order.total_amount"
             size="md"
-            color="var(--color-text-title, #131b2e)"
+            color="var(--color-text-title, #191b23)"
           />
         </view>
 
@@ -101,7 +103,7 @@
     <!-- Empty state -->
     <mb-empty-state
       v-else
-      icon="📋"
+      icon=""
       :text="'暂无' + currentTabLabel + '订单'"
       actionText="去逛逛"
       @action="goShopping"
@@ -113,6 +115,7 @@
 import { ref, computed } from 'vue'
 import { onShow, onReachBottom } from '@dcloudio/uni-app'
 import { getOrderList, payOrder, cancelOrder, confirmReceive } from '@/api/order/order'
+import config from '@/config/index'
 import { isLoggedIn } from '@/utils/auth'
 
 const STATUS_MAP = {
@@ -159,19 +162,64 @@ function statusTagClass(status) {
   return `order-card__status--${theme}`
 }
 
+function normalizeImageUrl(url) {
+  if (!url) return ''
+  const value = String(url)
+  if (/^(https?:)?\/\//.test(value) || value.startsWith('data:') || value.startsWith('blob:')) {
+    return value.startsWith('//') ? `https:${value}` : value
+  }
+  if (value.startsWith('/') && config.baseUrl) {
+    return `${config.baseUrl}${value}`
+  }
+  return value
+}
+
+function getOrderItems(order) {
+  if (Array.isArray(order?.items)) return order.items
+  if (Array.isArray(order?.order_items)) return order.order_items
+  return []
+}
+
+function getOrderItemImage(item) {
+  return normalizeImageUrl(
+    item?.goods_image_full_url
+      || item?.goods_image_url
+      || item?.main_image_full_url
+      || item?.image_full_url
+      || item?.cover_full_url
+      || item?.goods_image
+      || item?.main_image
+      || item?.cover
+      || '',
+  )
+}
+
+function getItemSpec(item) {
+  return item?.sku_spec_text || item?.sku_spec || item?.spec_text || item?.spec || ''
+}
+
+function getStoreName(order) {
+  return order?.store_name || order?.shop_name || 'Mall Official Store'
+}
+
+function getOrderQuantity(order) {
+  const items = getOrderItems(order)
+  if (Number(order?.total_quantity) > 0) return Number(order.total_quantity)
+  return items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || items.length
+}
+
 function getActions(order) {
   const actions = []
   if (order.status === 0) {
     actions.push({ key: 'cancel', label: '取消订单', primary: false })
     actions.push({ key: 'pay', label: '去付款', primary: true })
   } else if (order.status === 10) {
+    actions.push({ key: 'refund', label: '申请售后', primary: false })
+  } else if (order.status === 20) {
     actions.push({ key: 'logistics', label: '查看物流', primary: false })
     actions.push({ key: 'confirm', label: '确认收货', primary: true })
-  } else if (order.status === 20) {
-    actions.push({ key: 'refund', label: '申请售后', primary: false })
-    actions.push({ key: 'review', label: '评价', primary: false })
-    actions.push({ key: 'rebuy', label: '再次购买', primary: true })
   } else if (order.status === 30 || order.status === 40) {
+    actions.push({ key: 'refund', label: '申请售后', primary: false })
     actions.push({ key: 'review', label: '去评价', primary: false })
     actions.push({ key: 'rebuy', label: '再次购买', primary: true })
   }
@@ -269,9 +317,18 @@ async function handleAction(key, order) {
   } else if (key === 'review') {
     uni.navigateTo({ url: `/pages-sub/review/post?order_id=${order.id}` })
   } else if (key === 'logistics') {
-    uni.navigateTo({ url: `/pages-sub/order/logistics?order_id=${order.id}` })
+    uni.navigateTo({ url: `/pages-sub/logistics/detail?order_id=${order.id}` })
   } else if (key === 'refund') {
-    uni.navigateTo({ url: `/pages-sub/order/refund?order_id=${order.id}` })
+    const firstItem = getOrderItems(order)[0] || null
+    const query = [
+      `order_id=${order.id}`,
+      firstItem?.goods_name ? `goods_name=${encodeURIComponent(firstItem.goods_name)}` : '',
+      getOrderItemImage(firstItem) ? `goods_image=${encodeURIComponent(getOrderItemImage(firstItem))}` : '',
+      getItemSpec(firstItem) ? `sku_spec_text=${encodeURIComponent(getItemSpec(firstItem))}` : '',
+      firstItem?.unit_price ? `price=${encodeURIComponent(firstItem.unit_price)}` : '',
+      firstItem?.quantity ? `quantity=${encodeURIComponent(firstItem.quantity)}` : '',
+    ].filter(Boolean).join('&')
+    uni.navigateTo({ url: `/pages-sub/refund/apply?${query}` })
   } else if (key === 'rebuy') {
     // Re-add items to cart
     uni.showToast({ title: '已加入购物车', icon: 'none' })
@@ -308,7 +365,7 @@ onReachBottom(() => {
    ============================================================ */
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
+  background: #faf8ff;
 }
 
 .page__tabs {
@@ -316,7 +373,7 @@ onReachBottom(() => {
   height: 88rpx;
   align-items: stretch;
   padding: 0 $mb-spacing-sm;
-  border-bottom: 1rpx solid $mb-color-divider;
+  border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
   background: $mb-color-bg;
 }
 
@@ -337,7 +394,7 @@ onReachBottom(() => {
 }
 
 .page__tab--active .page__tab-label {
-  color: $mb-color-text;
+  color: $mb-color-primary;
   font-weight: 600;
 }
 
@@ -346,7 +403,7 @@ onReachBottom(() => {
   bottom: 0;
   width: 48rpx;
   height: 4rpx;
-  background: $mb-color-text;
+  background: $mb-color-primary;
   border-radius: 2rpx;
 }
 
@@ -360,11 +417,11 @@ onReachBottom(() => {
 
 /* --- List container ---------------------------------------- */
 .page__list {
-  padding: $mb-spacing-md;
+  padding: 18rpx $mb-spacing-md;
   padding-bottom: 120rpx;
   display: flex;
   flex-direction: column;
-  gap: $mb-spacing-md;
+  gap: 18rpx;
 }
 
 .page__load-more {
@@ -383,9 +440,9 @@ onReachBottom(() => {
    ============================================================ */
 .order-card {
   background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  padding: $mb-spacing-lg;
-  box-shadow: 0 2rpx 12rpx $mb-color-bg-surface;
+  border-radius: 16rpx;
+  padding: 18rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
 }
 
 /* --- Header: order number + status tag --------------------- */
@@ -393,20 +450,52 @@ onReachBottom(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: $mb-spacing-md;
+  gap: $mb-spacing-sm;
+  margin-bottom: 18rpx;
 }
 
-.order-card__sn {
-  font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
-}
-
-.order-card__status-tag {
-  display: inline-flex;
+.order-card__store {
+  display: flex;
   align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.order-card__store-icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 26rpx;
+  height: 24rpx;
+  border: 2rpx solid #1f2430;
+  border-radius: 4rpx;
+  box-sizing: border-box;
+}
+
+.order-card__store-icon::before {
+  content: '';
+  position: absolute;
+  left: 4rpx;
+  right: 4rpx;
+  top: -8rpx;
+  height: 8rpx;
+  border: 2rpx solid #1f2430;
+  border-bottom: 0;
+  border-radius: 6rpx 6rpx 0 0;
+}
+
+.order-card__store-name {
+  flex: 1;
+  min-width: 0;
+  font-size: $mb-font-sm;
+  font-weight: 600;
+  color: $mb-color-text-title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order-card__status-text {
+  flex-shrink: 0;
   font-size: $mb-font-sm;
   font-weight: 600;
 }
@@ -417,11 +506,11 @@ onReachBottom(() => {
 }
 
 .order-card__status--warning {
-  color: $mb-color-warning;
+  color: $mb-color-primary;
 }
 
 .order-card__status--success {
-  color: $mb-color-success;
+  color: $mb-color-text-tertiary;
 }
 
 .order-card__status--muted {
@@ -431,20 +520,33 @@ onReachBottom(() => {
 /* --- Product item row -------------------------------------- */
 .order-card__item {
   display: flex;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-sm 0;
+  gap: 18rpx;
+  padding: 10rpx 0 16rpx;
 
   & + & {
-    border-top: 1rpx solid $mb-color-divider;
+    border-top: 1rpx solid rgba(25, 27, 35, 0.06);
   }
 }
 
 .order-card__img {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: $mb-radius-md;
-  background: #2c2c2e; // dark placeholder matching design
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: 10rpx;
+  background: #f3f5f9;
   flex-shrink: 0;
+}
+
+.order-card__img--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.order-card__placeholder-box {
+  width: 54rpx;
+  height: 38rpx;
+  border-radius: 8rpx;
+  background: linear-gradient(135deg, rgba(13, 80, 213, 0.14), rgba(25, 27, 35, 0.06));
 }
 
 .order-card__info {
@@ -457,9 +559,9 @@ onReachBottom(() => {
 }
 
 .order-card__name {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: $mb-color-text;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: $mb-color-text-title;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -470,11 +572,15 @@ onReachBottom(() => {
   font-size: $mb-font-xs;
   color: $mb-color-text-tertiary;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order-card__price-row {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: $mb-spacing-xs;
   margin-top: auto;
 }
@@ -490,9 +596,9 @@ onReachBottom(() => {
   justify-content: flex-end;
   align-items: center;
   gap: $mb-spacing-xs;
-  padding-top: $mb-spacing-sm;
-  margin-top: $mb-spacing-xs;
-  border-top: 1rpx solid $mb-color-divider;
+  padding-top: 14rpx;
+  margin-top: 0;
+  border-top: 1rpx solid rgba(25, 27, 35, 0.06);
 }
 
 .order-card__total {
@@ -505,15 +611,20 @@ onReachBottom(() => {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: $mb-spacing-sm;
-  margin-top: $mb-spacing-md;
+  gap: 14rpx;
+  margin-top: 18rpx;
 }
 
 .order-card__btn {
-  padding: 14rpx 36rpx;
-  border-radius: $mb-radius-full;
-  border: 2rpx solid $mb-color-border;
-  background: transparent;
+  min-width: 132rpx;
+  height: 58rpx;
+  padding: 0 24rpx;
+  border-radius: 18rpx;
+  border: 1rpx solid rgba(13, 80, 213, 0.45);
+  background: $mb-color-bg;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &:active {
     opacity: 0.7;
@@ -521,14 +632,14 @@ onReachBottom(() => {
 }
 
 .order-card__btn--primary {
-  background: $mb-color-text;
-  border-color: $mb-color-text;
+  background: $mb-color-primary;
+  border-color: $mb-color-primary;
 }
 
 .order-card__btn-text {
   font-size: $mb-font-sm;
   font-weight: 500;
-  color: $mb-color-text;
+  color: $mb-color-primary;
   line-height: 1;
 }
 

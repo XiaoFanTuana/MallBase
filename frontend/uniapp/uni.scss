@@ -6,14 +6,14 @@ $mb-color-primary-light: #386bef;
 
 /* Background */
 $mb-color-bg: #ffffff;
-$mb-color-bg-secondary: #f7f9fb;
-$mb-color-bg-surface: rgba(0, 0, 0, 0.03);
+$mb-color-bg-secondary: #faf8ff;
+$mb-color-bg-surface: #f3f3fe;
 
 /* Text */
-$mb-color-text: #1b1b1b;
-$mb-color-text-title: #131b2e;
-$mb-color-text-secondary: #5e5e5e;
-$mb-color-text-tertiary: #848484;
+$mb-color-text: #191b23;
+$mb-color-text-title: #191b23;
+$mb-color-text-secondary: #434654;
+$mb-color-text-tertiary: #737686;
 $mb-color-text-inverse: #ffffff;
 
 /* Functional */
@@ -22,15 +22,15 @@ $mb-color-warning: #f0ad4e;
 $mb-color-error: #ba1a1a;
 
 /* Border */
-$mb-color-border: #e0e3e5;
-$mb-color-border-light: #c6c6cd;
-$mb-color-divider: #f0f0f0;
+$mb-color-border: #e0e4e8;
+$mb-color-border-light: #c3c5d7;
+$mb-color-divider: #f0f2f5;
 
 /* Radius */
 $mb-radius-sm: 8rpx;
-$mb-radius-md: 16rpx;
-$mb-radius-lg: 24rpx;
-$mb-radius-xl: 32rpx;
+$mb-radius-md: 12rpx;
+$mb-radius-lg: 20rpx;
+$mb-radius-xl: 20rpx;
 $mb-radius-full: 999rpx;
 
 /* Spacing */
@@ -49,3 +49,7 @@ $mb-font-lg: 32rpx;
 $mb-font-xl: 36rpx;
 $mb-font-xxl: 44rpx;
 $mb-font-display: 64rpx;
+
+/* Shared commerce surface: Stitch uses tonal layering, not card shadows. */
+$mb-shadow-card: none;
+$mb-shadow-bar: 0 -1rpx 0 rgba(224, 228, 232, 0.9);

@@ -95,7 +95,7 @@
       <view class="submit-bar__inner">
         <view class="submit-bar__price">
           <text class="submit-bar__sup">TOTAL AMOUNT</text>
-          <mb-price :value="goodsTotal" size="lg" color="var(--color-text-title, #131b2e)" />
+          <mb-price :value="goodsTotal" size="lg" color="var(--color-primary, #0d50d5)" />
         </view>
         <view
           class="submit-bar__btn"
@@ -296,7 +296,7 @@ async function handleSubmit() {
 <style lang="scss" scoped>
 .confirm-page {
   min-height: 100vh;
-  background-color: var(--color-bg-secondary, #f7f9fb);
+  background-color: $mb-color-bg-secondary;
   padding: 0 $mb-spacing-page $mb-spacing-lg;
 }
 
@@ -306,7 +306,7 @@ async function handleSubmit() {
   border-radius: $mb-radius-lg;
   padding: $mb-spacing-lg;
   margin-bottom: $mb-spacing-md;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid $mb-color-divider;
 }
 
 // ---- Address card ----
@@ -432,14 +432,7 @@ async function handleSubmit() {
   height: 4rpx;
   margin-bottom: $mb-spacing-md;
   border-radius: 0 0 $mb-radius-lg $mb-radius-lg;
-  background: repeating-linear-gradient(
-    90deg,
-    $mb-color-text 0,
-    $mb-color-text 16rpx,
-    $mb-color-bg-secondary 16rpx,
-    $mb-color-bg-secondary 24rpx
-  );
-  opacity: 0.15;
+  background: rgba($mb-color-primary, 0.12);
 }
 
 // ---- Goods card ----
@@ -471,8 +464,8 @@ async function handleSubmit() {
   flex-shrink: 0;
   width: 160rpx;
   height: 160rpx;
-  border-radius: $mb-radius-md;
-  background: $mb-color-bg-secondary;
+  border-radius: $mb-radius-lg;
+  background: $mb-color-bg-surface;
 }
 
 .goods-item__info {
@@ -498,7 +491,7 @@ async function handleSubmit() {
 .goods-item__spec {
   font-size: $mb-font-sm;
   color: $mb-color-text-tertiary;
-  background: $mb-color-bg-secondary;
+  background: $mb-color-bg-surface;
   border-radius: $mb-radius-sm;
   padding: 4rpx 12rpx;
   align-self: flex-start;
@@ -613,7 +606,7 @@ async function handleSubmit() {
   bottom: 0;
   z-index: 100;
   background: $mb-color-bg;
-  box-shadow: 0 -2rpx 16rpx rgba(0, 0, 0, 0.05);
+  box-shadow: $mb-shadow-bar;
 }
 
 .submit-bar__inner {
@@ -640,13 +633,13 @@ async function handleSubmit() {
 .submit-bar__btn {
   height: 88rpx;
   min-width: 260rpx;
-  border-radius: $mb-radius-full;
-  background: #000000;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 $mb-spacing-xl;
-  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.18);
+  box-shadow: none;
   transition: opacity 0.15s, transform 0.15s;
 
   &:active {
@@ -664,7 +657,7 @@ async function handleSubmit() {
   font-size: $mb-font-lg;
   font-weight: 600;
   color: $mb-color-text-inverse;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 
 // ---- Bottom spacer for fixed bar ----

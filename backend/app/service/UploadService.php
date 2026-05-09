@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace app\service;
 
+use app\service\client\WechatService;
 use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
 use mall_base\exception\BusinessException;
@@ -422,6 +423,48 @@ class UploadService extends BaseService
         }
 
         return ['results' => $results, 'errors' => $errors];
+    }
+
+    /**
+     * 客户端单图上传。
+     */
+    public function uploadClientImage($file): array
+    {
+        $rules = $this->resolveUploadRules('image', '', 0);
+        return $this->upload($file, $rules, 'client');
+    }
+
+    /**
+     * 微信绑定阶段临时头像上传，仅校验 bind_token，不签发登录态。
+     */
+    public function uploadWechatAvatar($file, string $bindToken): array
+    {
+        app()->make(WechatService::class)->assertMiniappBindToken($bindToken);
+        return $this->uploadClientImage($file);
+    }
+
+    /**
+     * 头像等图片入库前的路径校验。
+     *
+     * 头像文件应先通过上传接口进入平台上传系统，再保存返回的 url/path。
+     */
+    public function normalizeStoredImagePath(string $image): string
+    {
+        $image = trim($image);
+        if ($image === '') {
+            return '';
+        }
+
+        if (str_starts_with($image, '//') || preg_match('#^https?://#i', $image)) {
+            throw new BusinessException('请先上传头像后再保存平台上传路径');
+        }
+
+        $scheme = (string) (parse_url($image, PHP_URL_SCHEME) ?: '');
+        if ($scheme !== '') {
+            throw new BusinessException('头像地址格式不正确');
+        }
+
+        return $image;
     }
 
     // ==================== 验证 ====================
