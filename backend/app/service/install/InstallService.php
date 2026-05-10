@@ -599,8 +599,30 @@ class InstallService extends BaseService
                 $emit('import_demo', 'error', '导入演示数据失败：' . $e->getMessage());
                 return $this->buildFailureResponse('import_demo', '导入演示数据失败：' . $e->getMessage(), $steps);
             }
+
+            try {
+                $emit('copy_demo_static', 'running', '正在拷贝演示静态资源…');
+                $copyResult = $this->copyDemoStatics();
+                if ($copyResult['copied'] > 0 || $copyResult['skipped'] > 0) {
+                    $emit(
+                        'copy_demo_static',
+                        'success',
+                        sprintf(
+                            '演示静态资源就绪（新增 %d，跳过 %d）',
+                            $copyResult['copied'],
+                            $copyResult['skipped']
+                        ),
+                        ['detail' => $copyResult]
+                    );
+                } else {
+                    $emit('copy_demo_static', 'warning', '未找到演示静态资源源目录，跳过拷贝', ['detail' => $copyResult]);
+                }
+            } catch (\Throwable $e) {
+                $emit('copy_demo_static', 'warning', '拷贝演示静态资源异常（不影响安装）：' . $e->getMessage());
+            }
         } else {
             $emit('import_demo', 'skipped', '已跳过演示数据导入');
+            $emit('copy_demo_static', 'skipped', '已跳过演示静态资源拷贝');
         }
 
         $pdo = null;
@@ -756,7 +778,7 @@ class InstallService extends BaseService
         $publicRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'public';
 
         if ($target === 'client') {
-            $path = $publicRoot . DIRECTORY_SEPARATOR . 'index.php';
+            $path = $publicRoot . DIRECTORY_SEPARATOR . 'client' . DIRECTORY_SEPARATOR . 'index.html';
 
             return [
                 'label'  => '客户端',
@@ -765,12 +787,12 @@ class InstallService extends BaseService
             ];
         }
 
-        $path = $publicRoot . DIRECTORY_SEPARATOR . 'admin';
+        $path = $publicRoot . DIRECTORY_SEPARATOR . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
 
         return [
             'label'  => '后台管理',
             'path'   => $path,
-            'exists' => is_dir($path),
+            'exists' => is_file($path),
         ];
     }
 
@@ -1010,6 +1032,82 @@ class InstallService extends BaseService
         }
     }
 
+    /**
+     * 把演示用静态图（deploy/install/static/demo/*）拷贝到 backend/public/static/demo/。
+     *
+     * 行为：
+     * - 源目录不存在：返回 ['source_missing' => true]，调用方按 warning 提示。
+     * - 目标目录不存在：自动创建（0755）。
+     * - 同名文件已存在：跳过，避免覆盖用户已替换的图。
+     * - 单文件拷贝失败：记录到 errors 数组并继续，整体不抛异常。
+     *
+     * @return array{copied:int,skipped:int,source_missing:bool,errors:array<int,string>}
+     */
+    private function copyDemoStatics(): array
+    {
+        $result = [
+            'copied'         => 0,
+            'skipped'        => 0,
+            'source_missing' => false,
+            'errors'         => [],
+        ];
+
+        $sourceDir = $this->installStaticPath('demo');
+        if (!is_dir($sourceDir)) {
+            $result['source_missing'] = true;
+            return $result;
+        }
+
+        $targetDir = rtrim(public_path(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR
+            . 'static' . DIRECTORY_SEPARATOR . 'demo';
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+            $result['errors'][] = '目标目录创建失败：' . $targetDir;
+            return $result;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            /** @var \SplFileInfo $item */
+            $relative = ltrim(substr($item->getPathname(), strlen($sourceDir)), DIRECTORY_SEPARATOR);
+            if ($relative === '' || str_starts_with($relative, '.')) {
+                continue;
+            }
+            $targetPath = $targetDir . DIRECTORY_SEPARATOR . $relative;
+
+            if ($item->isDir()) {
+                if (!is_dir($targetPath) && !mkdir($targetPath, 0755, true) && !is_dir($targetPath)) {
+                    $result['errors'][] = '子目录创建失败：' . $relative;
+                }
+                continue;
+            }
+
+            if (is_file($targetPath)) {
+                $result['skipped']++;
+                continue;
+            }
+
+            $parent = dirname($targetPath);
+            if (!is_dir($parent) && !mkdir($parent, 0755, true) && !is_dir($parent)) {
+                $result['errors'][] = '父目录创建失败：' . $relative;
+                continue;
+            }
+
+            if (@copy($item->getPathname(), $targetPath)) {
+                @chmod($targetPath, 0644);
+                $result['copied']++;
+            } else {
+                $err = error_get_last();
+                $result['errors'][] = $relative . ' → ' . ($err['message'] ?? '未知原因');
+            }
+        }
+
+        return $result;
+    }
+
     private function writeLockFile(): void
     {
         $content = json_encode([
@@ -1049,6 +1147,20 @@ class InstallService extends BaseService
         }
 
         return root_path() . 'install' . DIRECTORY_SEPARATOR . 'data'
+            . DIRECTORY_SEPARATOR . $subdir;
+    }
+
+    private function installStaticPath(string $subdir): string
+    {
+        $projectRoot = dirname(rtrim(root_path(), DIRECTORY_SEPARATOR));
+        $deployPath = $projectRoot . DIRECTORY_SEPARATOR . 'deploy'
+            . DIRECTORY_SEPARATOR . 'install' . DIRECTORY_SEPARATOR . 'static'
+            . DIRECTORY_SEPARATOR . $subdir;
+        if (is_dir($deployPath)) {
+            return $deployPath;
+        }
+
+        return root_path() . 'install' . DIRECTORY_SEPARATOR . 'static'
             . DIRECTORY_SEPARATOR . $subdir;
     }
 

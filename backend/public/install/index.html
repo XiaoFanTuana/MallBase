@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MallBase - 系统安装</title>
+<link rel="icon" href="/static/admin/favicon.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--primary:#185dbe;--primary-hover:#124eab;--success:#237700;--success-hover:#1d6200;--warning:#d97706;--danger:#dc2626;--bg:#f7f7f7;--card:#ffffff;--border:#e8edf3;--border-strong:#d9e2ec;--text:#111111;--text-secondary:#4b5563;--muted:#8c98a4;--shadow:0 10px 28px rgba(15,23,42,.04);--radius:22px}
@@ -171,7 +172,7 @@ body.complete-mode .container{max-width:1220px}
             <div class="pulse-ring"></div>
           </div>
           <div class="done-title">系统已安装</div>
-          <p class="done-text">MallBase 已完成部署，后台管理和客户端 H5 入口都已经准备好。入口按钮固定放在最上方，内容再多也不会把它们压到视线之外。</p>
+          <p class="done-text">MallBase 已完成部署，安装配置已应用。可以先尝试进入系统；如入口检测提示运行态未刷新，再按下方命令重启 Swoole。</p>
         </div>
         <div class="entry-panel">
           <div class="entry-panel-title">快速进入系统</div>
@@ -191,7 +192,8 @@ body.complete-mode .container{max-width:1220px}
         </div>
         <div class="command-guide" id="installedRestartGuide">
           <span class="section-badge">系统维护</span>
-          <h3>重启 Swoole 后再进入后台</h3>
+          <h3>运行态刷新指引</h3>
+          <div class="command-desc">当前安装流程会把配置应用到运行进程；如果入口检测提示运行态未刷新，再按你的部署方式重启 Swoole。</div>
           <div class="command-item">
             <div class="command-title">方式二 / 方式三：Docker 开发</div>
             <div class="command-desc">在项目根目录执行：<code class="mono" id="projectRootDev">-</code></div>
@@ -210,7 +212,7 @@ body.complete-mode .container{max-width:1220px}
           </div>
           <div class="command-item">
             <div class="command-title">方式一：宿主机直跑</div>
-            <div class="command-desc">先在项目根目录停止当前端口的 Swoole，再进入 backend 目录重新启动。</div>
+            <div class="command-desc">如入口检测提示需要刷新运行态，先在项目根目录停止当前端口的 Swoole，再进入 backend 目录重新启动。</div>
             <div class="command-box">
               <pre id="cmd-manual-restart">-</pre>
               <button class="btn-copy" onclick="copyCommand('cmd-manual-restart', this)">复制命令</button>
@@ -374,7 +376,7 @@ body.complete-mode .container{max-width:1220px}
               <div class="pulse-ring"></div>
             </div>
             <div class="done-title">安装完成</div>
-            <p class="done-text">配置文件、数据库结构、管理员账号和权限数据都已准备就绪。入口按钮放在首屏最显眼的位置，先完成 Swoole 重启，再进入后台或客户端。</p>
+            <p class="done-text">配置文件、数据库结构、管理员账号和权限数据都已准备就绪。可以先尝试进入系统；如入口检测提示运行态未刷新，再按下方命令重启 Swoole。</p>
           </div>
           <div class="entry-panel">
             <div class="entry-panel-title">安装完成后常用入口</div>
@@ -394,7 +396,8 @@ body.complete-mode .container{max-width:1220px}
           </div>
           <div class="command-guide" id="successRestartGuide">
             <span class="section-badge">系统维护</span>
-            <h3>先按你的部署方式重启 Swoole</h3>
+            <h3>运行态刷新指引</h3>
+            <div class="command-desc">当前安装流程会把配置应用到运行进程；如果入口检测提示运行态未刷新，再按你的部署方式重启 Swoole。</div>
             <div class="command-item">
               <div class="command-title">方式二 / 方式三：Docker 开发</div>
               <div class="command-desc">在项目根目录执行，也就是包含 <code>docker-compose.dev.yml</code> 的目录。</div>
@@ -469,7 +472,12 @@ const installStepOrder = [
   { step: 'import_sql', title: '导入表结构' },
   { step: 'create_admin', title: '创建管理员' },
   { step: 'import_demo', title: '导入演示数据' },
+  { step: 'copy_demo_static', title: '拷贝演示静态资源' },
   { step: 'sync_permissions', title: '同步权限数据' },
+  { step: 'sync_setting_permissions', title: '同步系统设置菜单' },
+  { step: 'import_regions', title: '导入地区数据' },
+  { step: 'seed_site_url', title: '写入站点域名' },
+  { step: 'verify_default_assets', title: '检查默认静态资源' },
   { step: 'write_lock', title: '写入安装锁' },
 ];
 const validationState = {
@@ -518,6 +526,33 @@ function setText(id, value) {
   const el = document.getElementById(id);
   if (el) {
     el.textContent = value;
+  }
+}
+
+function setFavicon(href) {
+  if (!href) {
+    return;
+  }
+
+  let link = document.querySelector('link[rel*="icon"]');
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  link.href = href;
+}
+
+async function updateInstalledFavicon() {
+  try {
+    const res = await fetch('/admin/api/config/appMeta', {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const json = await res.json();
+    const meta = json && json.data ? json.data : {};
+    setFavicon(meta.admin_favicon || '/static/admin/favicon.png');
+  } catch (e) {
+    setFavicon('/static/admin/favicon.png');
   }
 }
 
@@ -604,6 +639,7 @@ function showInstalledCard(data) {
   installMeta = data.meta || null;
   document.body.classList.add('complete-mode');
   document.getElementById('headerSubtitle').textContent = '系统状态';
+  updateInstalledFavicon();
   syncEntryActions();
   renderInstallMeta();
   document.getElementById('installedCard').hidden = false;
@@ -958,14 +994,14 @@ function finishInstallSuccess(message) {
   installCompleted = true;
   document.body.classList.add('complete-mode');
   document.getElementById('installStateTitle').textContent = '5. 安装完成';
-  document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成。请先重启 Swoole，然后按上方按钮进入后台或客户端。';
+  document.getElementById('installStateText').textContent = message || '所有关键步骤都已完成。可以先尝试进入系统；如入口检测提示运行态未刷新，再按下方命令重启 Swoole。';
   document.getElementById('installStateTitle').hidden = true;
   document.getElementById('installStateText').hidden = true;
   document.getElementById('wizardSteps').hidden = true;
   document.getElementById('installSuccessLayout').hidden = false;
   renderInstallMeta();
   pullInstallStatusData().catch(() => {});
-  showMsg('installMsg', '安装已完成。请先重启 Swoole；点击“立即进入后台管理”时会再次帮你检测。', true);
+  showMsg('installMsg', '安装已完成。点击入口按钮时会先检测运行态和构建产物；检测通过即可进入。', true);
 }
 
 function finishInstallFailure(message) {
@@ -1139,6 +1175,9 @@ function renderInstallMeta() {
     { label: '安装时间', value: installStatus && installStatus.installed_at ? installStatus.installed_at : '-' },
     { label: '系统版本', value: release && release.version ? release.version : '未提供' },
     { label: '发布日期', value: release && release.released_at ? release.released_at : '未提供' },
+    { label: '默认用户名', value: 'admin', mono: true },
+    { label: '默认密码', value: 'admin123', mono: true },
+    { label: '登录说明', value: '如果安装时自定义了账号或密码，请使用自定义账号密码登录。' },
   ];
   const runtimeRows = [
     { label: '监听主机', value: runtime.swoole_host || '0.0.0.0', mono: true },
@@ -1187,9 +1226,9 @@ async function enterAdmin(messageId = 'installMsg') {
       return;
     }
 
-    showMsg(messageId, (result.data && result.data.message) || '请先重启 Swoole，再进入后台管理', false);
+    showMsg(messageId, (result.data && result.data.message) || '入口检测失败，请按提示检查运行态或构建产物。', false);
   } catch (e) {
-    showMsg(messageId, e.message || '后台运行态检测失败，请先重启 Swoole 后重试', false);
+    showMsg(messageId, e.message || '后台入口检测失败，请按提示检查运行态或构建产物。', false);
   }
 }
 
@@ -1201,9 +1240,9 @@ async function enterClient(messageId = 'installMsg') {
       return;
     }
 
-    showMsg(messageId, (result.data && result.data.message) || '请先确认客户端构建产物已就绪后再进入客户端 H5', false);
+    showMsg(messageId, (result.data && result.data.message) || '入口检测失败，请按提示检查运行态或构建产物。', false);
   } catch (e) {
-    showMsg(messageId, e.message || '客户端运行态检测失败，请稍后重试', false);
+    showMsg(messageId, e.message || '客户端入口检测失败，请按提示检查运行态或构建产物。', false);
   }
 }
 

@@ -166,6 +166,10 @@ class InstallController extends BaseController
             }
         }
 
+        if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $params['db_name'])) {
+            return ['success' => false, 'message' => '数据库名只能包含字母、数字和下划线'];
+        }
+
         if (strlen((string) $params['admin_pass']) < 6) {
             return ['success' => false, 'message' => '管理员密码至少 6 位'];
         }

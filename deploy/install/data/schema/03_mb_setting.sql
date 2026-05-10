@@ -233,7 +233,7 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (105, '客户端站点名称', 'client_site_name', 'Mall Base', 'input', NULL, NULL, NULL, NULL, 10),
 (105, '客户端图标', 'client_logo', '/static/client/logo.png', 'image', NULL, NULL, NULL, '推荐 1:1，建议 512×512 PNG 透明，<200KB', 20),
 (105, '启动屏图', 'client_launch_image', '/static/client/launch.png', 'image', NULL, NULL, NULL, 'App 启动全屏图，推荐 9:16，建议 1080×2340 JPG，<500KB', 30),
-(105, '首页轮播图', 'client_home_banners', '', 'images', NULL, NULL, NULL, '推荐 16:9 或 2:1，建议 750×360 JPG/PNG，单张<300KB', 40),
+(105, '首页轮播图', 'client_home_banners', '["/static/client/banner-1.png","/static/client/banner-2.png","/static/client/banner-3.png"]', 'images', NULL, NULL, NULL, '推荐 16:9 或 2:1，建议 750×360 JPG/PNG，单张<300KB', 40),
 (105, '分享默认标题', 'client_share_title', '', 'input', NULL, NULL, NULL, NULL, 50),
 (105, '分享默认简介', 'client_share_desc', '', 'input', NULL, NULL, NULL, NULL, 60),
 (105, '分享默认封面', 'client_share_cover', '/static/client/share-cover.png', 'image', NULL, NULL, NULL, '推荐 5:4，建议 500×400 PNG/JPG，<200KB', 70),
