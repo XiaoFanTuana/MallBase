@@ -45,8 +45,44 @@ class UploadService extends BaseService
 
     private static array $defaultMime = [
         'image' => ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
-        'document' => ['application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/msword', 'application/vnd.ms-excel'],
+        'document' => [
+            'application/pdf',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/x-rar-compressed',
+            'application/vnd.rar',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ],
         'video' => ['video/mp4', 'video/webm', 'video/quicktime'],
+    ];
+
+    private static array $defaultExtensions = [
+        'image' => ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        'document' => ['pdf', 'zip', 'rar', 'doc', 'docx', 'xls', 'xlsx'],
+        'video' => ['mp4', 'webm', 'mov'],
+    ];
+
+    private static array $mimeExtensionMap = [
+        'image/jpeg' => 'jpg',
+        'image/jpg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+        'application/pdf' => 'pdf',
+        'application/zip' => 'zip',
+        'application/x-zip-compressed' => 'zip',
+        'application/x-rar-compressed' => 'rar',
+        'application/vnd.rar' => 'rar',
+        'application/msword' => 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.ms-excel' => 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'video/quicktime' => 'mov',
     ];
 
     private static array $defaultRules = [
@@ -371,7 +407,7 @@ class UploadService extends BaseService
         $uploadDriver = $this->getUploadDriver();
 
         // 生成文件名和路径（按 module 区分）
-        $extension = strtolower(pathinfo($file->getOriginalName(), PATHINFO_EXTENSION));
+        $extension = $this->resolveStorageExtension($file);
         $fileName = $this->generateFileName($extension);
         $subDir = $this->getSubDir($rules['accept_types'], $module);
         $objectName = $subDir . '/' . $this->generateDatePath() . '/' . $fileName;
@@ -490,6 +526,16 @@ class UploadService extends BaseService
             if (!in_array($mimeType, $acceptTypes, true)) {
                 throw new BusinessException('文件类型不允许，允许的类型: ' . implode(', ', $acceptTypes));
             }
+
+            if (!isset(self::$mimeExtensionMap[$mimeType])) {
+                throw new BusinessException('文件类型未配置安全扩展名映射');
+            }
+        }
+
+        $extension = strtolower(pathinfo((string)$file->getOriginalName(), PATHINFO_EXTENSION));
+        $allowedExtensions = $this->getAllowedExtensions($acceptTypes);
+        if ($extension === '' || !in_array($extension, $allowedExtensions, true)) {
+            throw new BusinessException('文件扩展名不允许，允许的扩展名: ' . implode(', ', $allowedExtensions));
         }
     }
 
@@ -624,6 +670,46 @@ class UploadService extends BaseService
         }
 
         return $fileType;
+    }
+
+    /**
+     * 根据 MIME 白名单计算扩展名白名单。
+     *
+     * @param string[] $acceptTypes
+     * @return string[]
+     */
+    private function getAllowedExtensions(array $acceptTypes): array
+    {
+        $extensions = [];
+        foreach ($acceptTypes as $mime) {
+            if (isset(self::$mimeExtensionMap[$mime])) {
+                $extensions[] = self::$mimeExtensionMap[$mime];
+            }
+
+            if ($mime === 'image/jpeg' || $mime === 'image/jpg') {
+                $extensions[] = 'jpeg';
+            }
+        }
+
+        if ($extensions === []) {
+            return array_values(array_unique(array_merge(
+                self::$defaultExtensions['image'],
+                self::$defaultExtensions['document'],
+                self::$defaultExtensions['video'],
+            )));
+        }
+
+        return array_values(array_unique($extensions));
+    }
+
+    private function resolveStorageExtension($file): string
+    {
+        $mimeType = (string)$file->getMime();
+        if (isset(self::$mimeExtensionMap[$mimeType])) {
+            return self::$mimeExtensionMap[$mimeType];
+        }
+
+        throw new BusinessException('文件类型未配置安全扩展名映射');
     }
 
     /**

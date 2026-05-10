@@ -15,3 +15,6 @@ backend/.env
 
 # Docker dev generated install state
 deploy/install/install.lock
+
+# 工作过程产生的临时目录（截图中转、调试输出等）
+.tmp/
