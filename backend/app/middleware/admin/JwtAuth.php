@@ -44,11 +44,15 @@ class JwtAuth
 
         // 验证 Token
         $jwtService = new JwtService();
-        
+
         try {
             $decoded = $jwtService->decode($token);
         } catch (\Exception $e) {
             throw new AuthException('Token 无效或已过期');
+        }
+
+        if (($decoded->data->type ?? null) !== 'access') {
+            throw new AuthException('Token 类型无效');
         }
 
         // 将用户信息存入请求对象

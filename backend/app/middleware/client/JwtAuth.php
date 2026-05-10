@@ -51,6 +51,10 @@ class JwtAuth
             throw new AuthException('Token 无效或已过期');
         }
 
+        if (($decoded->data->type ?? null) !== 'access') {
+            throw new AuthException('Token 类型无效');
+        }
+
         // 将用户信息存入请求对象
         $request->user_id = $decoded->data->user_id ?? null;
         $request->account = $decoded->data->account ?? null;
