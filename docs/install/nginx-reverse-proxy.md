@@ -12,7 +12,9 @@ MallBase 的前后端路径拆分规则如下：
 
 | 路径 | 处理方式 | 说明 |
 |------|----------|------|
-| `/` | Nginx 直接返回静态文件 | UniApp H5 入口与静态资源 |
+| `/` | Nginx 直接返回静态文件 | UniApp H5 入口，兜底到 `/client/index.html` |
+| `/assets/` | Nginx 直接返回静态文件 | UniApp H5 构建资源，映射到 `/client/assets/` |
+| `/static/images/tabbar/` | Nginx 直接返回静态文件 | UniApp H5 tabBar 图标，映射到 `/client/static/images/tabbar/` |
 | `/admin/` | Nginx 直接返回静态文件 | 后台前端入口与静态资源 |
 | `/admin/api/` | 反向代理到 Swoole | 后台 API |
 | `/install` | 反向代理到 Swoole | 安装向导 |
@@ -34,8 +36,8 @@ curl -I http://127.0.0.1:8080/
 ### 2. 前端静态文件已经存在
 
 ```bash
-ls /var/www/mallbase/client/index.html
-ls /var/www/mallbase/admin/index.html
+ls /var/www/mallbase/backend/public/client/index.html
+ls /var/www/mallbase/backend/public/admin/index.html
 ```
 
 如果文件不存在，先按 [index.md](./index.md) 选择对应安装方式，完成前端构建和上传。
@@ -77,7 +79,7 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
     gzip_vary on;
 
-    root /var/www/mallbase/client;
+    root /var/www/mallbase/backend/public;
     index index.html;
 
     location = /client/api {
@@ -101,7 +103,7 @@ server {
     }
 
     location ^~ /admin/ {
-        alias /var/www/mallbase/admin/;
+        alias /var/www/mallbase/backend/public/admin/;
         try_files $uri $uri/ /admin/index.html;
     }
 
@@ -128,8 +130,30 @@ server {
         proxy_pass http://127.0.0.1:8080;
     }
 
+    location ^~ /static/images/tabbar/ {
+        try_files /client$uri =404;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ^~ /assets/ {
+        try_files /client$uri =404;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ^~ /static/ {
+        try_files $uri =404;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location = / {
+        try_files /client/index.html =404;
+    }
+
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ /client/index.html;
     }
 }
 ```
@@ -141,20 +165,21 @@ server {
 - 80 → 443 自动跳转
 - `ssl_certificate` / `ssl_certificate_key`
 - 与 HTTP 版一致的路径拆分规则：根路径进入 H5，`/admin` 进入后台
+- 站点 `root` 指向 `backend/public`，H5 由 `/client/index.html` 承接
 
 ## 推荐部署步骤
 
 ### 方式一：手动安装
 
 1. 后端直接运行在宿主机，确认 `php think swoole` 已监听 `127.0.0.1:8080` 或 `0.0.0.0:8080`
-2. 将 H5 构建产物放到 `/var/www/mallbase/client/`，将后台构建产物放到 `/var/www/mallbase/admin/`
+2. 将 H5 构建产物放到 `/var/www/mallbase/backend/public/client/`，将后台构建产物放到 `/var/www/mallbase/backend/public/admin/`
 3. 把 `deploy/nginx/mallbase.conf` 复制到 Nginx 站点目录
 4. 按实际域名、证书路径、静态目录修改配置
 5. 执行 `nginx -t && systemctl reload nginx`
 
 ### 方式四：Docker 生产
 
-1. 先构建前端并上传到 `/var/www/mallbase/client/` 和 `/var/www/mallbase/admin/`
+1. 先构建前端并上传到 `/var/www/mallbase/backend/public/client/` 和 `/var/www/mallbase/backend/public/admin/`
 2. 再执行 `docker compose up -d --build` 启动后端容器
 3. Nginx 的 `/admin/api/`、`/install`、`/client/api/`、`/uploads/` 指向宿主机暴露的 `127.0.0.1:8080`
 4. 执行 `nginx -t && systemctl reload nginx`
@@ -192,8 +217,8 @@ curl -I http://mall.example.com/install
 
 优先检查两点：
 
-- `/var/www/mallbase/admin/index.html` 是否存在
-- `location /admin/` 里是否使用了 `alias /var/www/mallbase/admin/;`
+- `/var/www/mallbase/backend/public/admin/index.html` 是否存在
+- `location /admin/` 里是否使用了 `alias /var/www/mallbase/backend/public/admin/;`
 
 如果把 `alias` 误写成 `root`，或者目录少了尾部 `/`，很容易出现静态资源路径错位。
 
@@ -217,10 +242,12 @@ curl -I http://127.0.0.1:8080/
 
 优先检查两点：
 
-- `/var/www/mallbase/client/index.html` 是否存在
-- server 块里的 `root` 是否指向 `/var/www/mallbase/client`
+- `/var/www/mallbase/backend/public/client/index.html` 是否存在
+- server 块里的 `root` 是否指向 `/var/www/mallbase/backend/public`
 
-H5 生产构建默认使用根路径资源，例如 `/assets/...`，所以域名根路径应该由 H5 目录承载。
+H5 生产构建默认使用根路径资源，例如 `/assets/...`。tabBar 图标会请求 `/static/images/tabbar/...`。所以需要保留 `/assets/` 到 `/client/assets/`、`/static/images/tabbar/` 到 `/client/static/images/tabbar/` 的映射，并让根路径兜底到 `/client/index.html`。如果站点 `index` 中 `index.php` 排在 `index.html` 前面，还需要保留 `location = /`，避免根路径先进入后端入口。
+
+如果站点里同时配置了后端公共静态目录，例如 `location ^~ /static/`，必须把 `/static/images/tabbar/` 放在它前面。`^~ /static/` 会优先接管所有 `/static/...` 请求；顺序不正确时，H5 tabBar 图标会被错误地从 `backend/public/static` 查找。
 
 ### 前端能打开，但接口走成了错误地址
 
