@@ -21,7 +21,7 @@ MallBase 是一个面向中小型商城业务的基础后端框架，以 ThinkPH
 
 ### 部署
 
-- Docker / Docker Compose（单容器 / 双容器）
+- Docker / Docker Compose（单后端容器生产 / 多容器开发全套）
 - Swoole 原生部署
 
 ## 项目结构
@@ -53,9 +53,12 @@ mall-base/
 │
 ├── deploy/
 │   ├── docker/
-│   │   ├── Dockerfile              # Docker 相关脚本与镜像构建
-│   │   ├── frontend-build.sh       # 后台前端打包脚本
+│   │   ├── Dockerfile              # 后端镜像构建
+│   │   ├── frontend-build.sh       # 后台前端（Admin）打包脚本
 │   │   ├── uniapp-build.sh         # UniApp H5 打包脚本
+│   │   ├── cleanup-dev.sh          # 清理开发全套模式的容器与本地文件
+│   │   ├── prepare-data-dirs.sh    # 开发全套模式数据目录权限预检
+│   │   ├── ...                     # 其它内部辅助脚本（ensure-env / check-db-auth / 入口脚本等）
 │   │   └── mysql/                  # MySQL 初始化脚本
 │   ├── nginx/
 │   │   └── mallbase.conf           # Nginx 配置示例
@@ -63,29 +66,31 @@ mall-base/
 │   └── upload-frontend.local.sh.example  # 上传脚本本地配置示例（复制为 upload-frontend.local.sh，已被 git 忽略）
 │
 ├── docs/                           # 文档
-│   ├── install.md                  # 安装入口（兼容旧链接）
-│   ├── install/
-│   │   ├── index.md                # 安装与部署目录页
+│   ├── install/                    # 安装与部署（导航入口：install/index.md）
+│   │   ├── index.md                # 安装与部署导航
 │   │   ├── manual.md               # 方式一：手动安装（无 Docker）
 │   │   ├── docker-backend-only.md  # 方式二：Docker 开发（仅后端）
 │   │   ├── docker-fullstack.md     # 方式三：Docker 开发（全套）
 │   │   ├── docker-production.md    # 方式四：Docker 生产
 │   │   ├── commands.md             # 安装与部署命令集合
 │   │   ├── troubleshooting.md      # 安装与部署故障排查
-│   │   ├── env-files.md            # 环境文件职责与 Docker 全套模式配置说明
+│   │   ├── env-files.md            # 环境文件职责说明
 │   │   ├── nginx-reverse-proxy.md  # Nginx 反向代理配置说明
+│   │   ├── admin-build.md          # 后台前端（Admin）打包说明
+│   │   ├── uniapp-build.md         # UniApp H5 打包说明
 │   │   ├── upload-frontend.md      # 前端静态资源上传脚本说明
+│   │   ├── cleanup-dev.md          # 开发全套清理脚本说明
 │   │   └── issues/
-│   │       └── docker-fullstack-first-run.md  # Docker 全套模式首装问题排查记录
+│   │       └── docker-fullstack-first-run.md  # 方式三首装问题排查记录
+│   ├── uniapp-design-brief.md      # UniApp 移动端设计需求文档
 │   ├── freight-template-roadmap.md # 运费模板路线图
-│   ├── uniapp-h5-build.md          # UniApp H5 打包说明
 │   ├── claude-code-guide.md        # Claude Code 使用指南
 │   └── testing/
 │       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
-├── docker-compose.yml              # 单容器部署（默认）
-├── docker-compose.prod.yml         # 双容器生产部署
-├── docker-compose.dev.yml          # 开发环境（含 MySQL + Redis）
-├── docker-compose.uniapp-build.yml # UniApp H5 一键打包
+├── docker-compose.yml              # 单后端容器（生产，需外部 MySQL / Redis）
+├── docker-compose.dev.yml          # 开发全套（后端 + MySQL + Redis）
+├── docker-compose.frontend-build.yml  # 后台前端打包
+├── docker-compose.uniapp-build.yml # UniApp H5 打包
 └── README.md
 ```
 
@@ -124,25 +129,39 @@ docker compose restart
 
 重启后访问 `/admin` 进入后台。
 
-详细部署方式（双容器 / 开发环境 / 原生部署）见 [docs/install.md](docs/install.md)。
+其它安装方式（手动安装、开发全套、生产部署）与完整步骤见下方文档表，或直接看 [安装与部署导航](docs/install/index.md)。
 
 ## 文档
 
+### 安装与部署
+
 | 文档 | 说明 |
 |------|------|
-| [安装与部署入口](docs/install.md) | 安装总入口，指向新的安装目录结构 |
-| [安装与部署目录](docs/install/index.md) | 环境要求、安装方式总览、阅读顺序与专题入口 |
+| [安装与部署导航](docs/install/index.md) | 唯一入口：选择安装方式、环境要求、专题文档索引 |
 | [方式一：手动安装](docs/install/manual.md) | 无 Docker 场景的完整部署步骤 |
-| [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL/Redis + 后端容器的完整步骤 |
-| [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis 启动，以及前端独立打包的完整步骤 |
-| [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx 的完整部署步骤 |
-| [安装与部署命令集合](docs/install/commands.md) | 按用途整理的独立命令集合，含删除与清理命令 |
+| [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL / Redis + 后端容器 |
+| [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis 一键启动，前端打包单独执行 |
+| [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx |
+| [安装与部署命令集合](docs/install/commands.md) | 可独立执行的命令（构建、上传、清理、验证） |
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
 | [环境文件说明](docs/install/env-files.md) | 根 `.env`、`backend/.env` 与 Docker 全套模式配置职责 |
-| [Nginx 反向代理配置说明](docs/install/nginx-reverse-proxy.md) | `/admin/` 静态资源与 `/admin/api/` 等后端路径的代理规则 |
-| [前端静态资源上传脚本](docs/install/upload-frontend.md) | 本地打包 `backend/public/admin`，并在存在 H5 产物时同步上传 `backend/public/client` |
-| [Docker 首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
-| [UniApp H5 打包说明](docs/uniapp-h5-build.md) | 根目录 Docker Compose 一键打包 H5 与产物位置 |
+| [Nginx 反向代理配置](docs/install/nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径规则 |
+| [方式三首装问题记录](docs/install/issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题与修复结论 |
+
+### 前端构建与发布
+
+| 文档 | 说明 |
+|------|------|
+| [后台前端（Admin）打包](docs/install/admin-build.md) | 把 `frontend/admin` 打包到 `backend/public/admin`（Docker 一键 / 本地） |
+| [UniApp H5 打包](docs/install/uniapp-build.md) | 把 UniApp H5 打包到 `backend/public/client` |
+| [前端静态资源上传脚本](docs/install/upload-frontend.md) | 用 `deploy/upload-frontend.sh` 上传 admin / client 到服务器 |
+| [开发全套清理脚本](docs/install/cleanup-dev.md) | `deploy/docker/cleanup-dev.sh`：清理方式三的容器、镜像与本地文件 |
+
+### 其它
+
+| 文档 | 说明 |
+|------|------|
+| [UniApp 移动端设计需求](docs/uniapp-design-brief.md) | UniApp 端功能范围、页面清单、数据结构与设计方向 |
 | [运费模板路线图](docs/freight-template-roadmap.md) | 运费计算能力落地进度与订单接入计划 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |

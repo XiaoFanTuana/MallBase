@@ -260,8 +260,9 @@ MallBase 后续会新增以下前端端，同样约定产物落到 `backend/publ
 ## 相关文档
 
 - 项目总览：`../../README.md`
-- 一键部署指引：`../../docs/install.md`
-- `.env` 文件职责：`../../docs/env-files.md`
+- 安装与部署导航：`../../docs/install/index.md`
+- 后台前端打包：`../../docs/install/admin-build.md`
+- `.env` 文件职责：`../../docs/install/env-files.md`
 - 后端驱动路由规范：`../../.codex/skills/vbenAdmin/backend-driven-routing/SKILL.md`
 
 ## 上游参考

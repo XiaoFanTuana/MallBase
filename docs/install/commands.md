@@ -13,6 +13,8 @@
 
 ## 前端构建与重新打包
 
+> 后台前端（Admin）打包的完整说明见 [admin-build.md](./admin-build.md)，UniApp H5 打包见 [uniapp-build.md](./uniapp-build.md)。
+
 ### 本地构建生产前端
 
 适用：方式一、方式四
@@ -91,6 +93,8 @@ pnpm run dev:antd
 说明：`node:20-alpine` 基础镜像默认没有激活 `pnpm`。当前项目的前端工作区声明使用 `pnpm@10.28.2`，因此进入容器后需要先启用 `corepack`，再按项目声明激活对应版本的 `pnpm`。
 
 ## 静态资源上传
+
+> 上传脚本的完整说明（含本地配置文件、SSH 密钥与密码登录）见 [upload-frontend.md](./upload-frontend.md)。
 
 ### 构建 UniApp H5 到发布目录
 
@@ -220,6 +224,8 @@ pnpm --dir frontend/admin run test:e2e:install
 ```
 
 ## 删除与清理
+
+> 一键清理脚本的完整说明见 [cleanup-dev.md](./cleanup-dev.md)。
 
 ### 一键清理 Docker 开发全套状态
 

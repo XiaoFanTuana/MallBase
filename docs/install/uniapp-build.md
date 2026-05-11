@@ -8,11 +8,11 @@
 
 本项目对应文件为：
 
-- [`docker-compose.uniapp-build.yml`](../docker-compose.uniapp-build.yml)
+- [`docker-compose.uniapp-build.yml`](../../docker-compose.uniapp-build.yml)
 
 配套脚本：
 
-- [`deploy/docker/uniapp-build.sh`](../deploy/docker/uniapp-build.sh)
+- [`deploy/docker/uniapp-build.sh`](../../deploy/docker/uniapp-build.sh)
 
 ## 手动触发
 
@@ -68,3 +68,10 @@ VITE_UNIAPP_API_PREFIX=/client/api
 ```
 
 因此访问 `https://mall.example.com` 时，H5 会请求当前域名下的 `/client/api/...`，再由 Nginx 反向代理到后端 Swoole。
+
+`frontend/uniapp/vite.config.js` 里的 `base` 应保持 `/client/`，这样构建产物里的 JS/CSS 引用前缀是 `/client/assets/...`，与 Nginx 的 `/client/` 静态托管路径一致。
+
+## 相关文档
+
+- 部署到服务器：[upload-frontend.md](./upload-frontend.md)（`deploy/upload-frontend.sh` 会在存在 `backend/public/client` 时一并上传 H5）
+- Nginx 路径规则：[nginx-reverse-proxy.md](./nginx-reverse-proxy.md)（`/client/` 静态托管、`/client/api/` 反向代理）
