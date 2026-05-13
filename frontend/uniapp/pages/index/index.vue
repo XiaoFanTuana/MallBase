@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { onPullDownRefresh, onReachBottom, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getGoodsList, getGoodsRecommend } from '@/api/goods/goods'
 import { useAppStore } from '@/store/app'
 
@@ -24,9 +24,6 @@ const categoryEntries = [
   { label: '家居', query: '?keyword=家居', icon: 'sofa' },
   { label: '美食', query: '?keyword=美食', icon: 'food' },
 ]
-
-const heroTitle = computed(() => appStore.siteConfig?.site_slogan || '年度旗舰大赏')
-const heroSubtitle = computed(() => appStore.siteConfig?.site_name || '精选全球好货 限时特惠抢购')
 
 const banners = computed(() => {
   const raw = appStore.siteConfig?.client_home_banners
@@ -127,10 +124,6 @@ function goSearch() {
   uni.navigateTo({ url: '/pages-sub/search/index' })
 }
 
-function goCart() {
-  uni.switchTab({ url: '/pages/cart/index' })
-}
-
 function goGoodsDetail(id) {
   if (!id) return
   uni.navigateTo({ url: `/pages-sub/goods/detail?id=${id}` })
@@ -139,10 +132,28 @@ function goGoodsDetail(id) {
 function goGoodsList(query = '') {
   uni.navigateTo({ url: `/pages-sub/goods/list${query}` })
 }
+
+function shareConfig() {
+  const config = appStore.siteConfig || {}
+  const title = config.client_share_title || config.site_name || 'MallBase'
+  const imageUrl = config.client_share_cover || ''
+  return { title, imageUrl }
+}
+
+onShareAppMessage(() => {
+  const { title, imageUrl } = shareConfig()
+  return { title, path: '/pages/index/index', imageUrl }
+})
+
+onShareTimeline(() => {
+  const { title, imageUrl } = shareConfig()
+  return { title, imageUrl }
+})
 </script>
 
 <template>
   <view class="page">
+    <mb-splash />
     <view class="home" :style="{ paddingTop: statusBarHeight + 'px' }">
       <view class="header">
         <view class="brand">
@@ -150,12 +161,6 @@ function goGoodsList(query = '') {
             <view class="brand__icon-line" />
           </view>
           <text class="brand__text">MallBase</text>
-        </view>
-        <view class="cart-btn" @tap="goCart">
-          <view class="cart-icon">
-            <view class="cart-icon__handle" />
-          </view>
-          <text class="cart-badge">3</text>
         </view>
       </view>
 
@@ -185,11 +190,6 @@ function goGoodsList(query = '') {
             <view class="hero__shop hero__shop--right" />
             <view class="hero__floor" />
           </view>
-        </view>
-        <view class="hero__shade" />
-        <view class="hero__copy">
-          <text class="hero__title">{{ heroTitle }}</text>
-          <text class="hero__subtitle">{{ heroSubtitle }}</text>
         </view>
       </view>
 
@@ -367,51 +367,6 @@ function goGoodsList(query = '') {
   color: #2b5aed;
 }
 
-.cart-btn {
-  position: relative;
-  width: 48rpx;
-  height: 48rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cart-icon {
-  width: 30rpx;
-  height: 24rpx;
-  border: 4rpx solid #aab6d1;
-  border-top: 0;
-  border-radius: 0 0 7rpx 7rpx;
-  position: relative;
-}
-
-.cart-icon__handle {
-  position: absolute;
-  left: 6rpx;
-  top: -13rpx;
-  width: 12rpx;
-  height: 14rpx;
-  border: 4rpx solid #aab6d1;
-  border-bottom: 0;
-  border-radius: 12rpx 12rpx 0 0;
-}
-
-.cart-badge {
-  position: absolute;
-  right: 1rpx;
-  top: -4rpx;
-  min-width: 28rpx;
-  height: 28rpx;
-  padding: 0 6rpx;
-  border-radius: 18rpx;
-  background: #2b5aed;
-  color: #ffffff;
-  font-size: 18rpx;
-  font-weight: 800;
-  line-height: 28rpx;
-  text-align: center;
-}
-
 .search {
   height: 72rpx;
   margin-top: 14rpx;
@@ -509,34 +464,6 @@ function goGoodsList(query = '') {
   bottom: 0;
   height: 124rpx;
   background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(226, 222, 214, 0.75));
-}
-
-.hero__shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(25, 27, 35, 0.05), rgba(25, 27, 35, 0.25));
-}
-
-.hero__copy {
-  position: absolute;
-  left: 32rpx;
-  bottom: 42rpx;
-  display: flex;
-  flex-direction: column;
-}
-
-.hero__title {
-  font-size: 32rpx;
-  font-weight: 800;
-  color: #ffffff;
-  line-height: 1.2;
-}
-
-.hero__subtitle {
-  margin-top: 10rpx;
-  font-size: 22rpx;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
 }
 
 .category-row {
