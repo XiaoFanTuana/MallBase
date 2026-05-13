@@ -136,17 +136,7 @@ function goGoodsDetail(item) {
 <template>
   <view class="page">
     <!-- ========== Navbar ========== -->
-    <mb-navbar title="购物车" :back="false" :accent-line="false">
-      <template #right>
-        <text
-          v-if="!isEmpty"
-          class="navbar-edit"
-          @tap="toggleEditMode"
-        >
-          {{ isEditing ? '完成' : '编辑' }}
-        </text>
-      </template>
-    </mb-navbar>
+    <mb-navbar title="购物车" :back="false" :accent-line="false" />
 
     <!-- ========== Empty State ========== -->
     <mb-empty-state
