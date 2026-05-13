@@ -1,12 +1,6 @@
 <template>
   <view class="goods-list">
-    <mb-navbar title="商品列表">
-      <template #right>
-        <view class="goods-list__cart-entry" @tap="goCart">
-          <view class="goods-list__cart-icon" />
-        </view>
-      </template>
-    </mb-navbar>
+    <mb-navbar title="商品列表" />
 
     <!-- Search bar -->
     <view class="goods-list__search" @tap="goSearch">
@@ -432,10 +426,6 @@ function goSearch() {
   uni.navigateTo({ url: '/pages-sub/search/index' })
 }
 
-function goCart() {
-  uni.switchTab({ url: '/pages/cart/index' })
-}
-
 function buildCurrentQuery() {
   const params = []
   if (query.category_id) params.push(`category_id=${encodeURIComponent(query.category_id)}`)
@@ -448,45 +438,6 @@ function buildCurrentQuery() {
 .goods-list {
   min-height: 100vh;
   background: $mb-color-bg-secondary;
-}
-
-// ---------- Navbar cart ----------
-.goods-list__cart-entry {
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.goods-list__cart-icon {
-  position: relative;
-  width: 34rpx;
-  height: 34rpx;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 5rpx;
-    top: 10rpx;
-    width: 24rpx;
-    height: 16rpx;
-    border: 3rpx solid $mb-color-primary;
-    border-top: 0;
-    border-radius: 0 0 5rpx 5rpx;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    left: 8rpx;
-    top: 4rpx;
-    width: 18rpx;
-    height: 12rpx;
-    border: 3rpx solid $mb-color-primary;
-    border-bottom: 0;
-    border-radius: 12rpx 12rpx 0 0;
-  }
 }
 
 // ---------- Search ----------
