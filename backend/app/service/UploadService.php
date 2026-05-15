@@ -7,6 +7,7 @@ namespace app\service;
 use app\service\client\WechatService;
 use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
+use mall_base\drivers\upload\LocalUploadDriver;
 use mall_base\exception\BusinessException;
 
 /**
@@ -41,6 +42,18 @@ class UploadService extends BaseService
 {
     public const NGINX_413_HINT = '若仍报 413 Payload Too Large，请检查 Nginx client_max_body_size 并与 PHP 上传限制保持一致。';
 
+    /** 证书私有上传模块标记。文件落到 backend/storage/cert/，不进 public 目录，不返回外网可访问 URL。 */
+    public const MODULE_CERT = 'cert';
+
+    /** 证书存储相对路径（相对项目根 root_path()） */
+    public const CERT_STORAGE_SUBDIR = 'storage/cert';
+
+    /** 证书允许的文件扩展名 */
+    public const CERT_ALLOWED_EXTENSIONS = ['pem', 'key', 'crt', 'cer'];
+
+    /** 证书默认大小上限（MB）。PEM/CRT 通常 < 5KB，1MB 足够 */
+    public const CERT_DEFAULT_MAX_SIZE_MB = 1.0;
+
     // ==================== 统一配置获取入口（静态方法，供所有模块调用） ====================
 
     private static array $defaultMime = [
@@ -57,12 +70,15 @@ class UploadService extends BaseService
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ],
         'video' => ['video/mp4', 'video/webm', 'video/quicktime'],
+        // 证书/密钥按扩展名匹配（PEM/CRT 的 MIME 检测不稳定），存以 . 开头的扩展名
+        'cert' => ['.pem', '.key', '.crt', '.cer'],
     ];
 
     private static array $defaultExtensions = [
         'image' => ['jpg', 'jpeg', 'png', 'gif', 'webp'],
         'document' => ['pdf', 'zip', 'rar', 'doc', 'docx', 'xls', 'xlsx'],
         'video' => ['mp4', 'webm', 'mov'],
+        'cert' => ['pem', 'key', 'crt', 'cer'],
     ];
 
     private static array $mimeExtensionMap = [
@@ -92,6 +108,9 @@ class UploadService extends BaseService
         'files'  => ['max_size' => 10,  'max_count' => 5,  'mime_key' => 'document'],
         'video'  => ['max_size' => 200, 'max_count' => 1,  'mime_key' => 'video'],
         'videos' => ['max_size' => 200, 'max_count' => 5,  'mime_key' => 'video'],
+        // cert 是一种"虚拟"上传类型，专供 form_type=file/files 字段在 secure_upload 模式下使用；
+        // 它本身不作为前端的 form_type，但 accept_types 选项库会被合并进 file/files 字段
+        'cert'   => ['max_size' => 1,   'max_count' => 1,  'mime_key' => 'cert'],
     ];
 
     /**
@@ -99,7 +118,12 @@ class UploadService extends BaseService
      */
     private static function parseMimeTypes(string $mimeKey): array
     {
-        $dbKeys = ['image' => 'mime_image', 'document' => 'mime_document', 'video' => 'mime_video'];
+        $dbKeys = [
+            'image'    => 'mime_image',
+            'document' => 'mime_document',
+            'video'    => 'mime_video',
+            'cert'     => 'mime_cert',
+        ];
         $code = $dbKeys[$mimeKey] ?? null;
         if ($code === null) {
             return self::$defaultMime[$mimeKey] ?? [];
@@ -332,6 +356,11 @@ class UploadService extends BaseService
      */
     public function resolveUploadRules(string $type, string $module = '', int $relatedId = 0): array
     {
+        // cert 模块单独处理：从 mb_setting.rules 读取 accept_types/max_size，但 accept_types 按扩展名解析
+        if ($module === self::MODULE_CERT) {
+            return $this->resolveCertRules($relatedId);
+        }
+
         // 从 upload 配置获取默认规则（作为回退），type 不存在则报错
         $configRules = $this->getConfigByType($type);
 
@@ -396,6 +425,11 @@ class UploadService extends BaseService
             throw new BusinessException('文件不存在');
         }
 
+        // cert 模块走专用私有上传分支（不进 public/uploads，不暴露外网 URL）
+        if ($module === self::MODULE_CERT) {
+            return $this->uploadCert($file, $rules);
+        }
+
         // 没有传入规则则使用默认图片规则
         if (empty($rules)) {
             $rules = $this->getUploadConfig('image');
@@ -422,6 +456,168 @@ class UploadService extends BaseService
                 unlink($tempPath);
             }
         }
+    }
+
+    // ==================== 证书/密钥私有上传（cert module） ====================
+
+    /**
+     * 证书/密钥私有上传：写入 backend/storage/cert/，文件权限 0600，目录权限 0700。
+     * - 验证：扩展名白名单 + 大小上限 + 内容嗅探（必须含 "-----BEGIN" 标识）。
+     * - 不走 MIME 校验（PEM/CRT 等证书文件的 MIME 检测不稳定）。
+     * - 返回 FileInfo 的 url 形如 "storage/cert/abc.pem"（相对项目根），full_url 强制为空。
+     *
+     * @param mixed $file 上传文件对象（think\File）
+     * @param array $rules 验证规则，包含 max_size (MB) / accept_types (扩展名列表，形如 [".pem", ".key"])
+     */
+    private function uploadCert($file, array $rules = []): array
+    {
+        if (empty($rules)) {
+            $rules = $this->resolveCertRules(0);
+        }
+
+        $this->validateCertFile($file, $rules);
+
+        $driver = $this->buildCertDriver();
+
+        // 保留原始扩展名（已通过白名单校验），文件名走随机 md5
+        $extension = strtolower(pathinfo((string)$file->getOriginalName(), PATHINFO_EXTENSION));
+        $fileName = $this->generateFileName($extension);
+
+        $tempPath = $file->getPathname();
+        $targetAbsolute = root_path() . self::CERT_STORAGE_SUBDIR . '/' . $fileName;
+
+        try {
+            $driver->upload($tempPath, $fileName);
+
+            // 收紧文件权限至 0600（驱动默认 0644 对私钥不够安全）
+            if (file_exists($targetAbsolute)) {
+                @chmod($targetAbsolute, 0600);
+            }
+
+            $info = $driver->getFileInfo($fileName);
+            if (!is_array($info)) {
+                throw new BusinessException('证书上传失败：无法读取文件信息');
+            }
+
+            // 抹掉 full_url，避免前端误以为有公开访问入口
+            $info['full_url'] = '';
+            return $info;
+        } finally {
+            if (file_exists($tempPath)) {
+                @unlink($tempPath);
+            }
+        }
+    }
+
+    /**
+     * 解析 cert 模块的上传规则：
+     * - 默认值走 UploadConfig 联动（cert 类型规则 + mime_cert 白名单）
+     * - 单个字段在 mb_setting.rules 显式声明 accept_types/max_size 时按字段优先
+     *
+     * accept_types 按"扩展名"语义解析（与 file/image 模块的 MIME 语义不同）。
+     *
+     * @return array{max_size: float, max_count: int, accept_types: string[]}
+     */
+    private function resolveCertRules(int $relatedId): array
+    {
+        // 联动：cert 类型的 max_size 与 mime_cert 来自 UploadConfig
+        $certDefaults = self::getRuleByType('cert') ?? [
+            'max_size'     => self::CERT_DEFAULT_MAX_SIZE_MB,
+            'max_count'    => 1,
+            'accept_types' => array_map(static fn($ext) => '.' . $ext, self::CERT_ALLOWED_EXTENSIONS),
+        ];
+
+        $maxSize     = (float)($certDefaults['max_size'] ?? self::CERT_DEFAULT_MAX_SIZE_MB);
+        $acceptTypes = (array)($certDefaults['accept_types'] ?? []);
+        if (empty($acceptTypes)) {
+            $acceptTypes = array_map(static fn($ext) => '.' . $ext, self::CERT_ALLOWED_EXTENSIONS);
+        }
+
+        if ($relatedId > 0) {
+            $settingModel = $this->getSettingModel();
+            $setting = $settingModel->findOrEmpty($relatedId);
+            if (!$setting->isEmpty()) {
+                $settingRules = $setting->rules ?? [];
+                if (is_array($settingRules)) {
+                    $extracted = $this->extractUploadRules($settingRules);
+                    if (isset($extracted['max_size'])) {
+                        $maxSize = (float)$extracted['max_size'];
+                    }
+                    if (isset($extracted['accept_types']) && is_array($extracted['accept_types']) && !empty($extracted['accept_types'])) {
+                        $acceptTypes = $extracted['accept_types'];
+                    }
+                }
+            }
+        }
+
+        return [
+            'max_size'     => $maxSize,
+            'max_count'    => 1,
+            'accept_types' => $acceptTypes,
+        ];
+    }
+
+    /**
+     * 校验 cert 文件：扩展名白名单 + 大小 + BEGIN 标识。
+     */
+    private function validateCertFile($file, array $rules): void
+    {
+        $maxSize = isset($rules['max_size']) ? (float)$rules['max_size'] : self::CERT_DEFAULT_MAX_SIZE_MB;
+        if ($maxSize <= 0) {
+            $maxSize = self::CERT_DEFAULT_MAX_SIZE_MB;
+        }
+        $maxSizeBytes = $maxSize * 1024 * 1024;
+        if ($file->getSize() > $maxSizeBytes) {
+            throw new BusinessException("证书文件大小不能超过 {$maxSize}MB");
+        }
+
+        $accept = $rules['accept_types'] ?? [];
+        $allowedExt = [];
+        foreach ($accept as $entry) {
+            $normalized = strtolower(ltrim((string)$entry, '.'));
+            if ($normalized !== '') {
+                $allowedExt[] = $normalized;
+            }
+        }
+        if (empty($allowedExt)) {
+            $allowedExt = self::CERT_ALLOWED_EXTENSIONS;
+        }
+
+        $extension = strtolower(pathinfo((string)$file->getOriginalName(), PATHINFO_EXTENSION));
+        if ($extension === '' || !in_array($extension, $allowedExt, true)) {
+            throw new BusinessException(
+                '证书文件扩展名不允许，允许的扩展名：' . implode(', ', array_map(static fn($e) => '.' . $e, $allowedExt))
+            );
+        }
+
+        // 内容嗅探：前 256 字节内应出现 "-----BEGIN" 标识
+        $head = @file_get_contents($file->getPathname(), false, null, 0, 256);
+        if ($head === false || !str_contains($head, '-----BEGIN')) {
+            throw new BusinessException('文件内容不是有效的证书/密钥格式（缺少 -----BEGIN 标识）');
+        }
+    }
+
+    /**
+     * 构造 cert 专用 LocalUploadDriver。
+     * - root_path 指向项目根下 storage/cert（非 public，外网不可访问）
+     * - url_prefix 设为 storage/cert，使 getUrl 返回 "storage/cert/xxx.pem" 作为 DB value
+     * - base_url 留空，full_url 由 uploadCert() 单独抹空
+     * - 目录提前以 0700 创建
+     */
+    private function buildCertDriver(): LocalUploadDriver
+    {
+        $absRoot = root_path() . self::CERT_STORAGE_SUBDIR;
+        if (!is_dir($absRoot)) {
+            @mkdir($absRoot, 0700, true);
+        }
+        // 确保目录权限收紧（防止 .gitkeep 创建时留下的 0755）
+        @chmod($absRoot, 0700);
+
+        return new LocalUploadDriver([
+            'root_path'  => $absRoot,
+            'url_prefix' => self::CERT_STORAGE_SUBDIR,
+            'base_url'   => '',
+        ]);
     }
 
     /**

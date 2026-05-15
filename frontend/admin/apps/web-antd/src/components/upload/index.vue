@@ -63,6 +63,13 @@ interface Props {
   ) => Promise<FileInfo | undefined>;
   /** 自定义删除方法 */
   customRemove?: (index?: number) => Promise<void>;
+  /**
+   * 私有/证书模式：文件不进 public 目录，没有外网可访问 URL。
+   * 开启后：不渲染预览/打开链接，跳过基于 MIME 的前端校验，
+   * 上传响应里的 full_url 强制忽略，文件名保留用户原始选择的文件名。
+   * 配合 module='cert' 使用。
+   */
+  secure?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -79,6 +86,7 @@ const props = withDefaults(defineProps<Props>(), {
   multiple: undefined,
   customUpload: undefined,
   customRemove: undefined,
+  secure: false,
 });
 
 const emit = defineEmits<{
@@ -109,6 +117,11 @@ const remoteConfig = ref<null | {
 }>(null);
 
 const loadRemoteConfig = async () => {
+  // 私有/证书模式：accept/maxSize 全部走 dynamic-form 传入的 props，
+  // 后端 cert module 没有公开的上传规则配置接口，不需要远程拉取。
+  if (props.secure) {
+    return;
+  }
   if (
     props.maxSize !== undefined &&
     props.maxCount !== undefined &&
@@ -209,9 +222,19 @@ const uploadProps = computed<UploadProps>(() => ({
   name: 'file',
   maxCount: effectiveMaxCount.value,
   accept: effectiveAccept.value || undefined,
-  listType: isImageType.value || isVideoType.value ? 'picture-card' : 'text',
+  // 私有/证书模式：强制 text 列表（无缩略图），无预览图标（没有公开 URL）
+  listType:
+    props.secure
+      ? 'text'
+      : isImageType.value || isVideoType.value
+        ? 'picture-card'
+        : 'text',
   showUploadList: props.showUploadList
-    ? { showDownloadIcon: false, showPreviewIcon: true, showRemoveIcon: true }
+    ? {
+        showDownloadIcon: false,
+        showPreviewIcon: !props.secure,
+        showRemoveIcon: true,
+      }
     : false,
   directory: effectiveDirectory.value || undefined,
   multiple: effectiveMultiple.value,
@@ -224,12 +247,18 @@ const buildFileList = (): UploadFile[] => {
   const val = props.value;
   if (!val) return [];
 
+  // 私有/证书模式：不把 url 写到 UploadFile 上，避免 antd 渲染成可点击链接（链接 404）
+  const resolveItemUrl = (item: FileInfo): string | undefined => {
+    if (props.secure) return undefined;
+    return item.full_url || item.url;
+  };
+
   if (Array.isArray(val)) {
     return val.map((item: FileInfo, index: number) => ({
       uid: `${index}`,
       name: item.name || extractFileName(item.url),
       status: 'done' as const,
-      url: item.full_url || item.url,
+      url: resolveItemUrl(item),
     }));
   }
 
@@ -239,7 +268,7 @@ const buildFileList = (): UploadFile[] => {
         uid: '0',
         name: (val as FileInfo).name || extractFileName((val as FileInfo).url),
         status: 'done' as const,
-        url: (val as FileInfo).full_url || (val as FileInfo).url,
+        url: resolveItemUrl(val as FileInfo),
       },
     ];
   }
@@ -249,7 +278,7 @@ const buildFileList = (): UploadFile[] => {
       uid: '0',
       name: extractFileName(val),
       status: 'done' as const,
-      url: val,
+      url: props.secure ? undefined : val,
     },
   ];
 };
@@ -284,9 +313,21 @@ const handleBeforeUpload = (file: File) => {
 
   // 类型校验
   const acceptTypes = effectiveAcceptTypes.value;
-  if (acceptTypes.length > 0 && !acceptTypes.includes(file.type)) {
-    message.error('不支持的文件类型');
-    return false;
+  if (acceptTypes.length > 0) {
+    if (props.secure) {
+      // 私有/证书模式：accept 是扩展名列表（如 ['.pem', '.key']），按扩展名匹配
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const allowed = acceptTypes.map((t) =>
+        t.startsWith('.') ? t.slice(1).toLowerCase() : t.toLowerCase(),
+      );
+      if (ext === '' || !allowed.includes(ext)) {
+        message.error(`仅支持 ${acceptTypes.join('、')} 文件`);
+        return false;
+      }
+    } else if (!acceptTypes.includes(file.type)) {
+      message.error('不支持的文件类型');
+      return false;
+    }
   }
 
   // 校验通过，计入待上传数
@@ -318,8 +359,10 @@ const executeSingleUpload = async (
       if (res) {
         fileInfo = {
           url: res.url,
-          full_url: res.full_url || toFullUrl(res.url),
-          name: res.name || file.name,
+          // 私有/证书模式：不拼 full_url，文件不公开
+          full_url: props.secure ? '' : res.full_url || toFullUrl(res.url),
+          // 私有模式优先保留用户原始文件名，方便后台辨认（"apiclient_key.pem"）
+          name: props.secure ? file.name : res.name || file.name,
         };
       }
     }
@@ -491,6 +534,8 @@ const inlineVideoList = computed(() =>
 );
 
 const handlePreview = (file: UploadFile) => {
+  // 私有/证书模式：没有可访问的公开 URL，预览图标已隐藏；这里再加一道防线
+  if (props.secure) return;
   if (isVideoFile(file) && file.url) {
     videoPreviewUrl.value = file.url;
     videoPreviewTitle.value = file.name || '视频预览';

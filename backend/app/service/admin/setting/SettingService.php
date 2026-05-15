@@ -955,8 +955,17 @@ class SettingService extends BaseService
             $applicableRules = array_map(function ($rule) use ($keepKeys, $formType, $uploadRules) {
                 $item = array_intersect_key($rule, array_flip($keepKeys));
                 // 为 accept_types 规则添加 options（当前表单类型对应的 accept_types 列表）
-                if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES && isset($uploadRules[$formType]['accept_types'])) {
-                    $item['options'] = RuleType::formatAcceptTypeOptions((array)$uploadRules[$formType]['accept_types']);
+                if ($rule['type'] === RuleType::TYPE_ACCEPT_TYPES) {
+                    $merged = (array)($uploadRules[$formType]['accept_types'] ?? []);
+                    // file/files 字段在 secure_upload 模式下需要勾选证书扩展名，
+                    // 把 cert 上传类型的 accept_types 合并进来（来自 UploadConfig 的 mime_cert 联动）
+                    if (in_array($formType, ['file', 'files'], true) && isset($uploadRules['cert']['accept_types'])) {
+                        $merged = array_values(array_unique(array_merge(
+                            $merged,
+                            (array)$uploadRules['cert']['accept_types']
+                        )));
+                    }
+                    $item['options'] = RuleType::formatAcceptTypeOptions($merged);
                 }
                 return $item;
             }, $applicableRules);

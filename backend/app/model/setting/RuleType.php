@@ -52,6 +52,11 @@ class RuleType
         'video/x-ms-wmv' => 'WMV 视频 (.wmv)',
         'video/webm' => 'WEBM 视频 (.webm)',
         'video/mp2t' => 'TS 视频 (.ts)',
+        // 证书/密钥（按扩展名匹配，存以 . 开头）
+        '.pem' => 'PEM 证书/密钥 (.pem)',
+        '.key' => '私钥文件 (.key)',
+        '.crt' => '证书 (.crt)',
+        '.cer' => '证书 (.cer)',
     ];
 
     // ==================== 规则类型常量 ====================
@@ -118,6 +123,15 @@ class RuleType
 
     /** 文件类型限制，与 upload config key 一致 */
     const TYPE_ACCEPT_TYPES = 'accept_types';
+
+    /**
+     * 私有上传标记（仅作为前端钩子，无后端校验）
+     * 用于将 file 类型字段切换为「证书私有上传」模式：
+     *   - 前端 dynamic-form 检测到此 rule 后，把 Upload 组件的 module 切到 'cert'
+     *   - 后端 UploadService 收到 module=cert 时，落到 backend/storage/cert/ 而非 public/uploads/
+     * 不参与 SettingValueValidate 的实际校验。
+     */
+    const TYPE_SECURE_UPLOAD = 'secure_upload';
 
     /**
      * 获取所有规则类型定义
@@ -327,6 +341,16 @@ class RuleType
                 'default_message_template' => '支持的文件类型:{value}',
                 'applicable_types' => ['image', 'images', 'file', 'files', 'video', 'videos'],
                 'need_options' => true,
+            ],
+            [
+                'type' => self::TYPE_SECURE_UPLOAD,
+                'label' => '证书私有上传 (secure_upload)',
+                // 添加这条规则即视为开启，不需要再填 value
+                'need_value' => false,
+                'value_placeholder' => '',
+                'need_flags' => false,
+                'default_message_template' => '',
+                'applicable_types' => ['file', 'files'],
             ],
         ];
     }

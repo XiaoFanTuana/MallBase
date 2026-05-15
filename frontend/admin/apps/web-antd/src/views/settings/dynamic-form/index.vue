@@ -476,6 +476,38 @@ const getUploadConfigFromRules = (
   return result;
 };
 
+/**
+ * 检查字段 rules 是否含 secure_upload（证书/密钥私有上传标记）。
+ * secure_upload 规则不需要 value：添加即视为开启。
+ * 仅当 value 显式为 false / 0 / "false" / "0" 时视为禁用，便于将来开关用。
+ */
+const isSecureUpload = (item: SettingApi.SettingItem): boolean => {
+  if (!item.rules?.length) return false;
+  return item.rules.some((rule) => {
+    if (rule.type !== 'secure_upload') return false;
+    const val = rule.value as unknown;
+    // 仅显式禁用的几种值需要返回 false；其他（含 undefined/null/true/任意真值）一律视为开启
+    if (val === 'false' || val === '0') return false;
+    if (val === false || val === 0) return false;
+    return true;
+  });
+};
+
+/**
+ * 文件/多文件类型的 Upload 组件 props 解析。
+ * 私有上传字段把 module 切到 'cert'，并打开 secure 标志，让 Upload 组件不渲染公开链接。
+ */
+const resolveFileUploadProps = (
+  item: SettingApi.SettingItem,
+): Record<string, any> => {
+  const secure = isSecureUpload(item);
+  return {
+    module: secure ? 'cert' : 'dynamic_form',
+    secure,
+    ...getUploadConfigFromRules(item),
+  };
+};
+
 /** JSON 编辑器占位符 */
 const jsonPlaceholder = '{"key": "value"}';
 
@@ -749,14 +781,13 @@ onMounted(loadConfig);
               "
             />
 
-            <!-- file: 单文件上传 -->
+            <!-- file: 单文件上传（含 secure_upload 私有上传） -->
             <Upload
               v-else-if="item.type === 'file' || item.type === 'video'"
               :type="getUploadType(item.type)"
               :value="formValues[item.code]"
-              module="dynamic_form"
               :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
+              v-bind="resolveFileUploadProps(item)"
               @update:value="
                 (val: any) => {
                   formValues[item.code] = val;
@@ -765,14 +796,13 @@ onMounted(loadConfig);
               "
             />
 
-            <!-- files: 多文件上传 -->
+            <!-- files: 多文件上传（含 secure_upload 私有上传） -->
             <Upload
               v-else-if="item.type === 'files' || item.type === 'videos'"
               :type="getUploadType(item.type)"
               :value="formValues[item.code]"
-              module="dynamic_form"
               :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
+              v-bind="resolveFileUploadProps(item)"
               @update:value="
                 (val: any) => {
                   formValues[item.code] = val;
@@ -986,14 +1016,13 @@ onMounted(loadConfig);
               "
             />
 
-            <!-- file: 单文件上传 -->
+            <!-- file: 单文件上传（含 secure_upload 私有上传） -->
             <Upload
               v-else-if="item.type === 'file' || item.type === 'video'"
               :type="getUploadType(item.type)"
               :value="formValues[item.code]"
-              module="dynamic_form"
               :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
+              v-bind="resolveFileUploadProps(item)"
               @update:value="
                 (val: any) => {
                   formValues[item.code] = val;
@@ -1002,14 +1031,13 @@ onMounted(loadConfig);
               "
             />
 
-            <!-- files: 多文件上传 -->
+            <!-- files: 多文件上传（含 secure_upload 私有上传） -->
             <Upload
               v-else-if="item.type === 'files' || item.type === 'videos'"
               :type="getUploadType(item.type)"
               :value="formValues[item.code]"
-              module="dynamic_form"
               :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
+              v-bind="resolveFileUploadProps(item)"
               @update:value="
                 (val: any) => {
                   formValues[item.code] = val;
@@ -1221,14 +1249,13 @@ onMounted(loadConfig);
               "
             />
 
-            <!-- file: 单文件上传 -->
+            <!-- file: 单文件上传（含 secure_upload 私有上传） -->
             <Upload
               v-else-if="item.type === 'file' || item.type === 'video'"
               :type="getUploadType(item.type)"
               :value="formValues[item.code]"
-              module="dynamic_form"
               :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
+              v-bind="resolveFileUploadProps(item)"
               @update:value="
                 (val: any) => {
                   formValues[item.code] = val;
@@ -1237,14 +1264,13 @@ onMounted(loadConfig);
               "
             />
 
-            <!-- files: 多文件上传 -->
+            <!-- files: 多文件上传（含 secure_upload 私有上传） -->
             <Upload
               v-else-if="item.type === 'files' || item.type === 'videos'"
               :type="getUploadType(item.type)"
               :value="formValues[item.code]"
-              module="dynamic_form"
               :related-id="item.id"
-              v-bind="getUploadConfigFromRules(item)"
+              v-bind="resolveFileUploadProps(item)"
               @update:value="
                 (val: any) => {
                   formValues[item.code] = val;

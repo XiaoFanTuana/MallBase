@@ -126,6 +126,8 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1021, '图片 MIME 白名单', 'mime_image', 'image/jpeg,image/png,image/gif,image/webp', 'textarea', NULL, NULL, NULL, '以英文逗号分隔', 20),
 (1021, '文档压缩 MIME 白名单', 'mime_document', 'application/pdf,application/zip,application/x-rar-compressed,application/msword,application/vnd.ms-excel', 'textarea', NULL, NULL, NULL, NULL, 30),
 (1021, '视频 MIME 白名单', 'mime_video', 'video/mp4,video/webm,video/quicktime', 'textarea', NULL, NULL, NULL, NULL, 40),
+(1021, '证书/密钥 扩展名白名单', 'mime_cert', '.pem,.key,.crt,.cer', 'textarea', NULL, NULL, NULL, '以英文逗号分隔；以 . 开头按扩展名匹配。证书/密钥的 MIME 检测不稳定，统一用扩展名识别', 45),
+(1021, '单证书最大体积(MB)', 'upload_cert_max_size', '1', 'number', NULL, NULL, NULL, NULL, 145),
 (1021, '单图最大体积(MB)', 'upload_image_max_size', '2', 'number', NULL, NULL, NULL, NULL, 50),
 (1021, '多图单张最大体积(MB)', 'upload_images_max_size', '5', 'number', NULL, NULL, NULL, NULL, 60),
 (1021, '多图最大张数', 'upload_images_max_count', '9', 'number', NULL, NULL, NULL, NULL, 70),
