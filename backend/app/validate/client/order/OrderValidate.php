@@ -27,6 +27,7 @@ class OrderValidate extends Validate
         'buyer_remark'    => 'max:255',
         'idempotency_key' => 'max:64',
         'pay_method'      => 'require|integer|in:1,2,9',
+        'scene'           => 'in:mini,offi,h5',
         'reason'          => 'max:255',
     ];
 
@@ -42,12 +43,13 @@ class OrderValidate extends Validate
         'buyer_remark.max'   => '买家备注最长 255 字',
         'pay_method.require' => '请选择支付方式',
         'pay_method.in'      => '支付方式不合法',
+        'scene.in'           => '支付场景不合法（仅支持 mini/offi/h5）',
         'reason.max'         => '取消原因最长 255 字',
     ];
 
     protected $scene = [
         'create' => ['source', 'cart_ids', 'items', 'address_id', 'buyer_remark', 'idempotency_key'],
-        'pay'    => ['pay_method'],
+        'pay'    => ['pay_method', 'scene'],
         'cancel' => ['reason'],
     ];
 }

@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace app\controller\client\order;
 
+use app\common\enum\PayMethod;
 use app\service\client\order\OrderService;
+use app\service\client\payment\PrepayService;
 use app\validate\client\order\OrderValidate;
 use mall_base\base\BaseController;
+use mall_base\exception\BusinessException;
 
 /**
  * 买家订单控制器
@@ -71,15 +74,42 @@ class OrderController extends BaseController
     }
 
     /**
-     * Mock 支付（正式接入渠道后由 PaymentAdapter 转发）
+     * 支付入口
+     *
+     * - pay_method=9 (MOCK)：保留旧 Mock 路径，e2e 测试与本地开发用
+     * - pay_method=1 (WECHAT)：调 PrepayService 发起预下单，返回前端调起参数；
+     *   订单真正转 PAID 由微信回调走 NotifyService → OrderService::confirmPaid
+     *
+     * @param string $sn 订单号
      */
     public function pay($sn)
     {
-        $data = $this->request->param(['pay_method']);
+        $data = $this->request->param(['pay_method', 'scene']);
         $this->validate($data, OrderValidate::class . '.pay');
 
-        $result = $this->service()->pay((string) $sn, (int) $data['pay_method']);
-        return $this->success($result, '支付成功');
+        $payMethod = (int) $data['pay_method'];
+
+        if ($payMethod === PayMethod::MOCK) {
+            $result = $this->service()->pay((string) $sn, $payMethod);
+            return $this->success($result, '支付成功');
+        }
+
+        if ($payMethod === PayMethod::WECHAT) {
+            $scene = isset($data['scene']) ? (string) $data['scene'] : '';
+            if ($scene === '') {
+                throw new BusinessException('请指定支付场景');
+            }
+            $userId = (int) ($this->request->user_id ?? 0);
+            if ($userId <= 0) {
+                throw new BusinessException('未登录');
+            }
+            /** @var PrepayService $prepayService */
+            $prepayService = app()->make(PrepayService::class);
+            $result = $prepayService->prepay($userId, (string) $sn, $scene);
+            return $this->success($result, '支付参数已生成');
+        }
+
+        throw new BusinessException('该支付方式暂未开放');
     }
 
     /**

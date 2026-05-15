@@ -11,6 +11,19 @@ return [
         'LogLevel' => [],
         'LogWrite' => [],
 
+        // ==================== 支付告警事件 ====================
+        // 由 NotifyService 在验签失败 / 金额不一致 / 重放攻击命中时派发
+        // 监听器仅做日志落地 + 预留运维通道转发，不阻塞回调主链路
+        'payment.verify_failed' => [
+            app\listener\payment\PaymentAlertListener::class,
+        ],
+        'payment.amount_mismatch' => [
+            app\listener\payment\PaymentAlertListener::class,
+        ],
+        'payment.replay_attack' => [
+            app\listener\payment\PaymentAlertListener::class,
+        ],
+
         // ==================== Swoole 事件 ====================
 
         // Swoole 初始化事件
