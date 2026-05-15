@@ -114,8 +114,23 @@ function computeSkipPosition() {
   skipStyle.value = ''
 }
 
+// 小程序原生 tabBar 在 webview 之外，CSS 无法遮盖
+// 启动页显示期间需要主动隐藏，结束后恢复
+function setNativeTabBar(shown) {
+  // #ifdef MP
+  const fn = shown ? uni.showTabBar : uni.hideTabBar
+  if (typeof fn !== 'function') return
+  try {
+    fn({ animation: false, fail: () => {} })
+  } catch (e) {
+    // 非 tabBar 页调用会抛错，忽略
+  }
+  // #endif
+}
+
 function show() {
   visible.value = true
+  setNativeTabBar(false)
   computeSkipPosition()
 
   const total = durationMs.value
@@ -131,6 +146,7 @@ function show() {
 function skip() {
   clearAllTimers()
   visible.value = false
+  setNativeTabBar(true)
 }
 
 onMounted(() => {
@@ -160,6 +176,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearConfigWait()
   clearAllTimers()
+  setNativeTabBar(true)
 })
 </script>
 
