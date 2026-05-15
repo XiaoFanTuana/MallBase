@@ -26,7 +26,7 @@ class ClientGoodsCommentService extends BaseService
         $where = ['goods_id' => $goodsId, 'status' => 1];
         $total = $this->buildListQuery($where)->count();
         $list = $this->buildListQuery($where)
-            ->order('id', 'desc')
+            ->order('c.id', 'desc')
             ->page($page, $limit)
             ->select()
             ->toArray();
@@ -39,9 +39,16 @@ class ClientGoodsCommentService extends BaseService
     protected function buildListQuery(array $where)
     {
         return $this->model()
-            ->where('goods_id', (int) $where['goods_id'])
-            ->where('status', (int) $where['status'])
-            ->whereNull('delete_time');
+            ->alias('c')
+            ->leftJoin('mb_user u', 'u.id = c.user_id')
+            ->where('c.goods_id', (int) $where['goods_id'])
+            ->where('c.status', (int) $where['status'])
+            ->whereNull('c.delete_time')
+            ->field([
+                'c.*',
+                'u.nickname' => 'user_nickname_raw',
+                'u.avatar'   => 'user_avatar_raw',
+            ]);
     }
 
     /**
@@ -53,8 +60,19 @@ class ClientGoodsCommentService extends BaseService
         $imagePaths = $this->normalizeImages($comment['images'] ?? null);
         $comment['images'] = $imagePaths;
         $comment['images_full_urls'] = buildUploadUrls($imagePaths);
-        $comment['user_nickname'] = (int) ($comment['is_anonymous'] ?? 0) === 1 ? '匿名用户' : '用户';
-        $comment['user_avatar_full_url'] = '';
+
+        $isAnonymous = (int) ($comment['is_anonymous'] ?? 0) === 1;
+        $nicknameRaw = trim((string) ($comment['user_nickname_raw'] ?? ''));
+        $avatarRaw   = trim((string) ($comment['user_avatar_raw'] ?? ''));
+
+        $comment['user_nickname'] = $isAnonymous
+            ? '匿名用户'
+            : ($nicknameRaw !== '' ? $nicknameRaw : '用户');
+        $comment['user_avatar_full_url'] = $isAnonymous || $avatarRaw === ''
+            ? ''
+            : buildUploadUrl($avatarRaw);
+
+        unset($comment['user_nickname_raw'], $comment['user_avatar_raw']);
 
         return $comment;
     }

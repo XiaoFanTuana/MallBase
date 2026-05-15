@@ -153,20 +153,29 @@
           >
             <view class="goods-detail__review-user-row">
               <view class="goods-detail__review-avatar">
-                <text class="goods-detail__review-avatar-text">{{ review.userInitial }}</text>
+                <image
+                  v-if="review.avatarUrl"
+                  class="goods-detail__review-avatar-img"
+                  :src="review.avatarUrl"
+                  mode="aspectFill"
+                  @error="onReviewAvatarError(review)"
+                />
+                <text v-else class="goods-detail__review-avatar-text">{{ review.userInitial }}</text>
               </view>
               <view class="goods-detail__review-user-main">
-                <text class="goods-detail__review-user-name">{{ review.userName }}</text>
-                <view class="goods-detail__review-star-row">
-                  <text
-                    v-for="star in 5"
-                    :key="star"
-                    class="goods-detail__review-star"
-                    :class="{ 'goods-detail__review-star--active': star <= review.rating }"
-                  >★</text>
+                <view class="goods-detail__review-user-line">
+                  <text class="goods-detail__review-user-name">{{ review.userName }}</text>
+                  <view class="goods-detail__review-star-row">
+                    <text
+                      v-for="star in 5"
+                      :key="star"
+                      class="goods-detail__review-star"
+                      :class="{ 'goods-detail__review-star--active': star <= review.rating }"
+                    >★</text>
+                  </view>
                 </view>
+                <text class="goods-detail__review-meta">{{ review.metaText }}</text>
               </view>
-              <text class="goods-detail__review-time">{{ review.createTimeText }}</text>
             </view>
             <text v-if="review.content" class="goods-detail__review-content">{{ review.content }}</text>
             <view v-if="review.images.length > 0" class="goods-detail__review-images">
@@ -180,7 +189,8 @@
               />
             </view>
             <view v-if="review.replyContent" class="goods-detail__review-reply">
-              <text class="goods-detail__review-reply-text">商家回复：{{ review.replyContent }}</text>
+              <text class="goods-detail__review-reply-prefix">商家回复：</text>
+              <text class="goods-detail__review-reply-text">{{ review.replyContent }}</text>
             </view>
           </view>
         </block>
@@ -421,7 +431,21 @@ function resetSelection() {
 
   if (!hasMultiSpec.value && skuList.value.length === 1) {
     selectedSkuId.value = skuList.value[0].id
+    return
   }
+
+  // 多规格：默认选第一个有库存的 SKU（无可用则选首条）
+  const defaultSku = skuList.value.find((sku) => Number(sku.stock) > 0) || skuList.value[0]
+  if (!defaultSku) return
+
+  const specValues = String(defaultSku.spec_values || '').split(',')
+  const nextSpecs = {}
+  specGroups.value.forEach((group, idx) => {
+    const v = specValues[idx]
+    if (v) nextSpecs[group.name] = v
+  })
+  selectedSpecs.value = nextSpecs
+  selectedSkuId.value = defaultSku.id
 }
 
 function resetReviews() {
@@ -507,17 +531,29 @@ async function fetchReviews(goodsId) {
 
 function normalizeReview(review) {
   const userName = normalizeReviewUserName(review)
+  const avatarUrl = Number(review.is_anonymous || 0) === 1
+    ? ''
+    : (review.user_avatar_full_url || review.avatar_full_url || review.avatar || '')
+  const skuSpecText = review.sku_spec_text || review.spec_values_text || review.spec_values || ''
+  const createTimeText = formatReviewTime(review.create_time)
 
   return {
     id: review.id,
     userName,
     userInitial: userName.slice(0, 1),
+    avatarUrl,
     rating: Math.max(1, Math.min(5, Number(review.rating || 5))),
     content: review.content || '',
     images: normalizeReviewImages(review.images_full_urls || review.images),
     replyContent: review.reply_content || '',
-    createTimeText: formatReviewTime(review.create_time),
+    createTimeText,
+    skuSpecText,
+    metaText: skuSpecText ? `${createTimeText} | ${skuSpecText}` : createTimeText,
   }
+}
+
+function onReviewAvatarError(review) {
+  if (review) review.avatarUrl = ''
 }
 
 function normalizeReviewUserName(review) {
@@ -690,7 +726,11 @@ function goCart() {
 }
 
 function onViewAllReviews() {
-  uni.showToast({ title: '评论列表页待开发', icon: 'none' })
+  if (!goods.value?.id) return
+  const title = encodeURIComponent(goods.value.name || '')
+  uni.navigateTo({
+    url: `/pages-sub/goods/comments?goods_id=${goods.value.id}&title=${title}`,
+  })
 }
 
 function onOpenSpec(mode) {
@@ -747,48 +787,29 @@ function onBuyNow({ sku, quantity }) {
   justify-content: center;
   width: 72rpx;
   height: 72rpx;
-  border-radius: $mb-radius-md;
-  background: rgba(25, 27, 35, 0.56);
-  color: $mb-color-text-inverse;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.42);
+  color: #ffffff;
   backdrop-filter: blur(12rpx);
+  -webkit-backdrop-filter: blur(12rpx);
 }
 
+/* Icons sourced from Google Material Symbols Outlined (Apache 2.0)
+   per Stitch design v3 spec: arrow_back / share / headset_mic / shopping_cart */
 .goods-detail__back-icon {
-  width: 20rpx;
-  height: 20rpx;
-  border-left: 4rpx solid currentColor;
-  border-bottom: 4rpx solid currentColor;
-  transform: rotate(45deg);
+  width: 40rpx;
+  height: 40rpx;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGQ9Im0yNzQtNDUwIDI0OCAyNDgtNDIgNDItMzIwLTMyMCAzMjAtMzIwIDQyIDQyLTI0OCAyNDhoNTI2djYwSDI3NFoiLz48L3N2Zz4=");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 .goods-detail__share-icon {
-  width: 26rpx;
-  height: 26rpx;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 7rpx solid transparent;
-    border-right: 7rpx solid transparent;
-    border-bottom: 10rpx solid currentColor;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 8rpx;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4rpx;
-    height: 16rpx;
-    background: currentColor;
-  }
+  width: 40rpx;
+  height: 40rpx;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGQ9Ik02ODYtODBxLTQ3LjUgMC04MC43NS0zMy4yNVQ1NzItMTk0cTAtOCA1LTM0TDI3OC00MDNxLTE2LjI4IDE3LjM0LTM3LjY0IDI3LjE3UTIxOS0zNjYgMTk0LTM2NnEtNDcuNSAwLTgwLjc1LTMzVDgwLTQ4MHEwLTQ4IDMzLjI1LTgxVDE5NC01OTRxMjQgMCA0NSA5LjMgMjEgOS4yOSAzNyAyNS43bDMwMS0xNzNxLTItOC0zLjUtMTYuNVQ1NzItNzY2cTAtNDcuNSAzMy4yNS04MC43NVQ2ODYtODgwcTQ3LjUgMCA4MC43NSAzMy4yNVQ4MDAtNzY2cTAgNDcuNS0zMy4yNSA4MC43NVQ2ODYtNjUycS0yMy4yNyAwLTQzLjY0LTlRNjIyLTY3MCA2MDYtNjg1TDMwMi01MTZxMyA4IDQuNSAxNy41dDEuNSAxOHEwIDguNS0xIDE2dC0zIDE1LjVsMzAzIDE3M3ExNi0xNSAzNi4wOS0yMy41IDIwLjEtOC41IDQzLjA3LTguNVE3MzQtMzA4IDc2Ny0yNzQuNzVUODAwLTE5NHEwIDQ3LjUtMzMuMjUgODAuNzVUNjg2LTgwWm0uMDQtNjBxMjIuOTYgMCAzOC40Ni0xNS41NCAxNS41LTE1LjUzIDE1LjUtMzguNSAwLTIyLjk2LTE1LjU0LTM4LjQ2LTE1LjUzLTE1LjUtMzguNS0xNS41LTIyLjk2IDAtMzguNDYgMTUuNTQtMTUuNSAxNS41My0xNS41IDM4LjUgMCAyMi45NiAxNS41NCAzOC40NiAxNS41MyAxNS41IDM4LjUgMTUuNVptLTQ5Mi0yODZxMjIuOTYgMCAzOC40Ni0xNS41NCAxNS41LTE1LjUzIDE1LjUtMzguNSAwLTIyLjk2LTE1LjU0LTM4LjQ2LTE1LjUzLTE1LjUtMzguNS0xNS41LTIyLjk2IDAtMzguNDYgMTUuNTQtMTUuNSAxNS41My0xNS41IDM4LjUgMCAyMi45NiAxNS41NCAzOC40NiAxNS41MyAxNS41IDM4LjUgMTUuNVpNNzI0LjUtNzI3LjU0cTE1LjUtMTUuNTMgMTUuNS0zOC41IDAtMjIuOTYtMTUuNTQtMzguNDYtMTUuNTMtMTUuNS0zOC41LTE1LjUtMjIuOTYgMC0zOC40NiAxNS41NC0xNS41IDE1LjUzLTE1LjUgMzguNSAwIDIyLjk2IDE1LjU0IDM4LjQ2IDE1LjUzIDE1LjUgMzguNSAxNS41IDIyLjk2IDAgMzguNDYtMTUuNTRaTTY4Ni0xOTRaTTE5NC00ODBabTQ5Mi0yODZaIi8+PC9zdmc+");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 /* 微信小程序右上角胶囊已自带"转发"，分享按钮重复且会被胶囊遮挡，故隐藏 */
@@ -835,7 +856,7 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__swiper-wrap {
   position: relative;
   width: 100%;
-  background: #dce8ed;
+  background: linear-gradient(180deg, #f1f2ff 0%, #ffffff 100%);
   transition: height 0.2s ease;
 }
 
@@ -862,7 +883,7 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__swiper-img {
-  background: #dce8ed;
+  background: transparent;
   object-fit: cover;
 }
 
@@ -911,14 +932,14 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__price-symbol {
   font-size: $mb-font-xl;
   font-weight: 700;
-  color: $mb-color-primary;
+  color: $mb-color-price;
   line-height: 1;
 }
 
 .goods-detail__price-value {
   font-size: 46rpx;
   font-weight: 800;
-  color: $mb-color-primary;
+  color: $mb-color-price;
   line-height: 1;
   letter-spacing: 0;
 }
@@ -936,11 +957,15 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__stock-tag {
   flex-shrink: 0;
+  padding: 4rpx 16rpx;
+  border-radius: $mb-radius-sm;
+  background: $mb-color-bg-secondary;
 }
 
 .goods-detail__stock-text {
   font-size: $mb-font-sm;
   color: $mb-color-text-tertiary;
+  line-height: 1.4;
 }
 
 // ---------- Title section ----------
@@ -978,13 +1003,14 @@ function onBuyNow({ sku, quantity }) {
 // ---------- Guarantees ----------
 .goods-detail__guarantees {
   display: flex;
-  flex-wrap: wrap;
-  gap: $mb-spacing-sm $mb-spacing-md;
-  padding: 0 $mb-spacing-lg $mb-spacing-lg;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-sm;
+  padding: $mb-spacing-md $mb-spacing-page;
   background: $mb-color-bg;
-  margin: 0 0 $mb-spacing-md;
-  border: 0;
+  margin: 0;
   border-top: 1rpx solid $mb-color-divider;
+  border-bottom: 1rpx solid $mb-color-divider;
   border-radius: 0;
 }
 
@@ -992,9 +1018,9 @@ function onBuyNow({ sku, quantity }) {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  padding: 8rpx 12rpx;
-  background: rgba(13, 80, 213, 0.08);
-  border-radius: $mb-radius-sm;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .goods-detail__guarantee-dot {
@@ -1006,13 +1032,13 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__guarantee-title {
   font-size: $mb-font-sm;
-  color: $mb-color-primary;
+  color: $mb-color-text-secondary;
 }
 
 // ---------- Divider ----------
 .goods-detail__divider {
-  height: $mb-spacing-md;
-  background: transparent;
+  height: $mb-spacing-sm;
+  background: $mb-color-bg-secondary;
 }
 
 // ---------- Cell ----------
@@ -1020,11 +1046,11 @@ function onBuyNow({ sku, quantity }) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: $mb-spacing-lg;
+  padding: $mb-spacing-lg $mb-spacing-page;
   background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
-  border-radius: $mb-radius-lg;
-  margin: 0 $mb-spacing-md;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
 
   &:active {
     background: $mb-color-bg-secondary;
@@ -1063,8 +1089,8 @@ function onBuyNow({ sku, quantity }) {
 
 // ---------- Review section ----------
 .goods-detail__review-section {
-  background: transparent;
-  padding: 0 $mb-spacing-md $mb-spacing-md;
+  background: $mb-color-bg;
+  padding: $mb-spacing-md $mb-spacing-page $mb-spacing-lg;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -1075,7 +1101,7 @@ function onBuyNow({ sku, quantity }) {
   align-items: center;
   justify-content: space-between;
   margin: 0 0 $mb-spacing-md;
-  padding: 0 $mb-spacing-sm;
+  padding: 0;
 }
 
 .goods-detail__review-title-wrap {
@@ -1137,7 +1163,8 @@ function onBuyNow({ sku, quantity }) {
   background: $mb-color-bg;
   border: 1rpx solid $mb-color-divider;
   border-radius: $mb-radius-lg;
-  margin-bottom: $mb-spacing-sm;
+  margin-bottom: $mb-spacing-md;
+  box-shadow: 0 4rpx 24rpx rgba(25, 27, 35, 0.04);
 }
 
 .goods-detail__review-user-row {
@@ -1147,14 +1174,21 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__review-avatar {
-  width: 80rpx;
-  height: 80rpx;
+  width: 88rpx;
+  height: 88rpx;
   border-radius: $mb-radius-full;
   background: linear-gradient(135deg, $mb-color-primary 0%, $mb-color-primary-light 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.goods-detail__review-avatar-img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .goods-detail__review-avatar-text {
@@ -1169,20 +1203,28 @@ function onBuyNow({ sku, quantity }) {
   min-width: 0;
 }
 
+.goods-detail__review-user-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-sm;
+}
+
 .goods-detail__review-user-name {
-  display: block;
   font-size: $mb-font-md;
   font-weight: 700;
   color: $mb-color-text;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .goods-detail__review-star-row {
   display: flex;
   gap: 4rpx;
-  margin-top: 6rpx;
+  flex-shrink: 0;
 }
 
 .goods-detail__review-star {
@@ -1192,15 +1234,15 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__review-star--active {
-  color: $mb-color-warning;
+  color: $mb-color-star;
 }
 
-.goods-detail__review-time {
+.goods-detail__review-meta {
+  display: block;
+  margin-top: 6rpx;
   font-size: $mb-font-xs;
   color: $mb-color-text-tertiary;
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 4rpx;
+  line-height: 1.4;
 }
 
 .goods-detail__review-content {
@@ -1233,9 +1275,16 @@ function onBuyNow({ sku, quantity }) {
   background: $mb-color-bg-surface;
 }
 
+.goods-detail__review-reply-prefix {
+  font-size: $mb-font-sm;
+  font-weight: 700;
+  color: $mb-color-primary;
+  line-height: 1.5;
+}
+
 .goods-detail__review-reply-text {
   font-size: $mb-font-sm;
-  color: $mb-color-text-secondary;
+  color: $mb-color-primary;
   line-height: 1.5;
 }
 
@@ -1243,9 +1292,9 @@ function onBuyNow({ sku, quantity }) {
 .goods-detail__content-section {
   background: $mb-color-bg;
   padding: $mb-spacing-xl 0 $mb-spacing-xl;
-  margin: 0 $mb-spacing-md;
+  margin: 0 $mb-spacing-md $mb-spacing-md;
   border: 1rpx solid $mb-color-divider;
-  border-radius: $mb-radius-lg;
+  border-radius: $mb-radius-xl;
   width: auto;
   max-width: 100vw;
   box-sizing: border-box;
@@ -1298,7 +1347,7 @@ function onBuyNow({ sku, quantity }) {
 
 // ---------- Bottom spacer ----------
 .goods-detail__bottom-spacer {
-  height: 200rpx;
+  height: 220rpx;
 }
 
 // ---------- Bottom bar ----------
@@ -1311,12 +1360,13 @@ function onBuyNow({ sku, quantity }) {
   background: $mb-color-bg;
   border-top: 1rpx solid $mb-color-divider;
   padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -4rpx 12rpx rgba(25, 27, 35, 0.04);
 }
 
 .goods-detail__bar-inner {
   display: flex;
   align-items: center;
-  height: 108rpx;
+  height: 120rpx;
   padding: 0 $mb-spacing-page;
   gap: $mb-spacing-md;
 }
@@ -1337,66 +1387,19 @@ function onBuyNow({ sku, quantity }) {
 
 // ---------- CSS icons ----------
 .goods-detail__icon-service {
-  width: 40rpx;
-  height: 40rpx;
-  position: relative;
-
-  &::before {
-    content: '';
-    display: block;
-    width: 32rpx;
-    height: 24rpx;
-    border: 3rpx solid $mb-color-text;
-    border-radius: 8rpx 8rpx 0 8rpx;
-    position: absolute;
-    top: 2rpx;
-    left: 4rpx;
-  }
-
-  &::after {
-    content: '';
-    display: block;
-    width: 0;
-    height: 0;
-    border-left: 8rpx solid $mb-color-text;
-    border-bottom: 8rpx solid transparent;
-    position: absolute;
-    bottom: 4rpx;
-    right: 6rpx;
-  }
+  width: 44rpx;
+  height: 44rpx;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiPjxwYXRoIGZpbGw9IiM0MzQ2NTQiIGQ9Ik00ODItNDB2LTYwaDI5OHYtNTRINjMydi0yOTZoMTQ4di02OHEwLTEyNC04Ny0yMTMuNVQ0ODItODIxcS0xMjQgMC0yMTMgODkuNVQxODAtNTE4djY4aDE0OHYyOTZIMTgwcS0yNCAwLTQyLTE4dC0xOC00MnYtMzA0cTAtNzQuNzMgMjguNS0xNDAuODhRMTc3LTcyNS4wMyAyMjYtNzc0LjUxIDI3NS04MjQgMzQxLjItODUyLjVxNjYuMjEtMjguNSAxNDEtMjguNSA3NC44IDAgMTQwLjMgMjguNVE2ODgtODI0IDczNi4wNS03NzQuNTFxNDguMDUgNDkuNDggNzYgMTE1LjYzUTg0MC01OTIuNzMgODQwLTUxOHY0MThxMCAyNC0xOCA0MnQtNDIgMThINDgyWk0xODAtMjE0aDg4di0xNzZoLTg4djE3NlptNTEyIDBoODh2LTE3NmgtODh2MTc2Wk0xODAtMzkwaDg4LTg4Wm01MTIgMGg4OC04OFoiLz48L3N2Zz4=");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 .goods-detail__icon-cart {
-  width: 40rpx;
-  height: 40rpx;
-  position: relative;
-
-  // Cart body
-  &::before {
-    content: '';
-    display: block;
-    width: 28rpx;
-    height: 22rpx;
-    border: 3rpx solid $mb-color-text;
-    border-radius: 0 0 6rpx 6rpx;
-    position: absolute;
-    top: 4rpx;
-    left: 6rpx;
-  }
-
-  // Cart handle
-  &::after {
-    content: '';
-    display: block;
-    width: 18rpx;
-    height: 10rpx;
-    border: 3rpx solid $mb-color-text;
-    border-bottom: none;
-    border-radius: 10rpx 10rpx 0 0;
-    position: absolute;
-    top: -2rpx;
-    left: 11rpx;
-  }
+  width: 44rpx;
+  height: 44rpx;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAtOTYwIDk2MCA5NjAiPjxwYXRoIGZpbGw9IiM0MzQ2NTQiIGQ9Ik0yMzYtMTAyLjIxcS0yMS0yMS4yMS0yMS01MVQyMzYuMjEtMjA0cTIxLjIxLTIxIDUxLTIxVDMzOC0yMDMuNzlxMjEgMjEuMjEgMjEgNTFUMzM3Ljc5LTEwMnEtMjEuMjEgMjEtNTEgMjFUMjM2LTEwMi4yMVptNDAwIDBxLTIxLTIxLjIxLTIxLTUxVDYzNi4yMS0yMDRxMjEuMjEtMjEgNTEtMjFUNzM4LTIwMy43OXEyMSAyMS4yMSAyMSA1MVQ3MzcuNzktMTAycS0yMS4yMSAyMS01MSAyMVQ2MzYtMTAyLjIxWk0yMzUtNzQxbDExMCAyMjhoMjg4bDEyNS0yMjhIMjM1Wm0tMzAtNjBoNTg5LjA3cTIyLjk3IDAgMzQuOTUgMjEgMTEuOTggMjEtLjAyIDQyTDY5NC00OTVxLTExIDE5LTI4LjU2IDMwLjVUNjI3LTQ1M0gzMjRsLTU2IDEwNGg0OTF2NjBIMjc3cS00MiAwLTYwLjUtMjh0LjUtNjNsNjQtMTE4LTE1Mi0zMjJINTF2LTYwaDExN2wzNyA3OVptMTQwIDI4OGgyODgtMjg4WiIvPjwvc3ZnPg==");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 .goods-detail__bar-icon-label {
@@ -1438,8 +1441,8 @@ function onBuyNow({ sku, quantity }) {
 
 .goods-detail__bar-btn {
   flex: 1;
-  height: 76rpx;
-  border-radius: $mb-radius-sm;
+  height: 88rpx;
+  border-radius: $mb-radius-full;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1451,18 +1454,19 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__bar-btn--cart {
-  background: $mb-color-bg-surface;
-  border: 1rpx solid $mb-color-border;
+  background: $mb-color-bg;
+  border: 2rpx solid $mb-color-primary;
 }
 
 .goods-detail__bar-btn--buy {
-  background: $mb-color-primary;
+  background: linear-gradient(135deg, $mb-color-primary 0%, $mb-color-primary-light 100%);
+  box-shadow: 0 6rpx 16rpx rgba(13, 80, 213, 0.2);
 }
 
 .goods-detail__bar-btn-text {
   font-size: $mb-font-md;
   font-weight: 600;
-  color: $mb-color-text;
+  color: $mb-color-primary;
 }
 
 .goods-detail__bar-btn-text--light {

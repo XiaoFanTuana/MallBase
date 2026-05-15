@@ -54,6 +54,12 @@
           "style": {
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "comments",
+          "style": {
+            "navigationStyle": "custom"
+          }
         }
       ]
     },
