@@ -30,13 +30,15 @@
 |---|---|---|
 | `cat-{phone,clothes,food,home,smartphone,tablet,menswear,womenswear,snacks,furniture}.png` | 分类卡 | `mb_goods_category.image` |
 | `banner-{digital,fashion,home}.png` | 首页轮播 | `mb_setting.client_home_banners` |
-| `iphone15pro{,-2,-3}.png` `mate60pro{,-2,-3}.png` `xiaomi14{,-2,-3}.png` `tshirt.png` `nuts.png` | 演示商品图 | `mb_goods.image` / `mb_goods_image.image` |
+| `laptop-01-*.jpg` `camera-01-*.jpg` `jeans-01-*.jpg` `watch-01-main.png` `sofa-01-*.jpg` `vanity-01-*.png` | 演示商品图 / SKU 图 | `mb_goods.main_image` / `mb_goods.images` / `mb_goods_sku.image` |
 
 ## 替换素材时
 
-1. 在本目录覆盖同名文件。
-2. 在 `backend/public/static/demo/` 同步覆盖（开源仓约定：`backend/public/static/demo/` 也 commit 一份方便 `git clone` 后立即可视）。
-3. 或者：删除 `backend/public/static/demo/` 中对应文件 + 删除 `deploy/install/install.lock`，再跑一次 `php think install:auto`，由钩子重新拷贝。
+`backend/public/static/demo/` 在 `backend/.gitignore` 内被忽略（`public/static/demo/*`），**只有本目录是 git 跟踪的唯一源**。替换流程：
+
+1. 在本目录覆盖或新增同名文件。
+2. 如本机已安装过 demo：直接清掉 `backend/public/static/demo/` 中对应文件，下次启动时 `InstallService::copyDemoStatics()` 会重新从本目录拷贝过去。
+3. 或者跑 `sh deploy/docker/cleanup-dev.sh` 彻底清理运行时目录后重装，由 `InstallService` 重新拷贝。
 
 ## 命名规范
 
