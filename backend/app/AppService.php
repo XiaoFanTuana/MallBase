@@ -25,12 +25,12 @@ class AppService extends Service
         ]);
         DriverManager::setDefault('upload', UploadService::getDriver());
 
-        // 注册短信驱动
+        // 注册短信驱动(默认驱动由 SmsService 按场景绑定动态选择,这里仅注册可用集合)
         DriverManager::register('sms', [
             'mock'   => MockSmsDriver::class,
             'aliyun' => AliyunSmsDriver::class,
         ]);
-        DriverManager::setDefault('sms', (string) getSystemSetting('sms_driver', 'mock'));
+        DriverManager::setDefault('sms', 'mock');
     }
 
     public function boot()

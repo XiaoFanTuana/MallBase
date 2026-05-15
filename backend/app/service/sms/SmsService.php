@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace app\service\sms;
 
+use app\model\sms\SmsProvider;
+use app\model\sms\SmsSceneBinding;
+use app\model\sms\SmsSign;
+use app\model\sms\SmsTemplate;
+use mall_base\drivers\DriverManager;
 use mall_base\drivers\sms\BaseSmsDriver;
 use mall_base\exception\SmsException;
 
@@ -17,16 +22,19 @@ use mall_base\exception\SmsException;
  *  - 验证码存 SmsCache(独立于驱动,方便 mock 模式联调)
  *  - 提供 verifyCode(mobile, scene, code) 业务校验接口
  *
- * 验证码生命周期:
- *  - 写入 5 分钟 TTL(可由构造参数 codeTtl 覆盖)
- *  - 验证成功后立即删除,防止重放
+ * 驱动解析:
+ *  - 构造期注入 driver -> 直接使用(用于单元测试 / mock 模式)
+ *  - 构造期 driver=null -> 按 SmsSceneBinding 动态解析服务商、模板、签名
+ *
+ * 兼容性硬约束:
+ *  - sendCode 方法签名保持不变,uniapp 调用方零修改
  */
 class SmsService
 {
     private const CODE_KEY_PREFIX = 'sms:code:';
 
     public function __construct(
-        private readonly BaseSmsDriver $driver,
+        private readonly ?BaseSmsDriver $driver,
         private readonly SmsRateLimiter $rateLimiter,
         private readonly SmsCache $cache,
         private readonly int $codeTtl = 300,
@@ -47,8 +55,10 @@ class SmsService
 
         $code = $this->generateCode();
 
-        if (!$this->driver->sendCode($mobile, $scene, $code, $extra)) {
-            throw new SmsException($this->driver->getError() ?: '短信发送失败');
+        [$driver, $sendExtra] = $this->resolveDriverForScene($scene, $code, $extra);
+
+        if (!$driver->sendCode($mobile, $scene, $code, $sendExtra)) {
+            throw new SmsException($driver->getError() ?: '短信发送失败');
         }
 
         $this->rateLimiter->record($mobile, $ip);
@@ -88,6 +98,59 @@ class SmsService
     {
         $value = $this->cache->get($this->codeKey($mobile, $scene));
         return $value === null ? null : (string) $value;
+    }
+
+    /**
+     * 解析当前场景应使用的驱动与发送参数
+     *
+     * @return array{0: BaseSmsDriver, 1: array<string, mixed>}
+     */
+    private function resolveDriverForScene(string $scene, string $code, array $extra): array
+    {
+        // 显式注入的驱动优先(测试 / mock 模式)
+        if ($this->driver !== null) {
+            return [$this->driver, $extra];
+        }
+
+        $binding = SmsSceneBinding::where('scene_code', $scene)
+            ->where('status', 1)
+            ->find();
+        if ($binding === null) {
+            throw new SmsException("场景 [{$scene}] 尚未绑定短信模板,请在后台短信配置中完成绑定");
+        }
+
+        $template = SmsTemplate::find($binding->template_id);
+        if ($template === null) {
+            throw new SmsException("场景 [{$scene}] 绑定的模板不存在,请重新绑定");
+        }
+        if ($template->audit_status !== SmsTemplate::AUDIT_PASSED) {
+            throw new SmsException("场景 [{$scene}] 绑定的模板尚未审核通过");
+        }
+
+        $sign = SmsSign::find($binding->sign_id);
+        if ($sign === null) {
+            throw new SmsException("场景 [{$scene}] 绑定的签名不存在,请重新绑定");
+        }
+        if ($sign->audit_status !== SmsSign::AUDIT_PASSED) {
+            throw new SmsException("场景 [{$scene}] 绑定的签名尚未审核通过");
+        }
+
+        $provider = SmsProvider::find($binding->provider_id);
+        if ($provider === null || (int) $provider->status !== 1) {
+            throw new SmsException("场景 [{$scene}] 绑定的服务商不可用,请检查启用状态");
+        }
+
+        $driver = DriverManager::create('sms', (string) $provider->driver, [
+            'access_key_id' => (string) $provider->access_key_id,
+            'access_key_secret' => SmsSecret::decrypt((string) $provider->access_key_secret),
+            'region' => (string) $provider->region,
+        ]);
+
+        $extra['sign_name'] = $sign->sign_name;
+        $extra['template_code'] = $template->template_code;
+        $extra['template_param'] = $extra['template_param'] ?? ['code' => $code];
+
+        return [$driver, $extra];
     }
 
     private function codeKey(string $mobile, string $scene): string

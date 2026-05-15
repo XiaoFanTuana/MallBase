@@ -92,11 +92,8 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
 (105, 100, 0, '客户端配置', 'ClientConfig', 'lucide:smartphone', 'App/H5 客户端品牌、启动屏、分享与协议等配置', 50, 'page', 1);
 
--- 二级分组：短信配置（选项卡）及其子页面
-INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
-(106, 100, 0, '短信配置', 'SmsConfig', 'lucide:message-square', '短信驱动、频控阈值与阿里云短信参数', 60, 'tab', 1),
-(1061, 106, 0, '基础', 'SmsBasic', NULL, '短信驱动选择、验证码有效期与频控阈值', 10, 'page', 1),
-(1062, 106, 0, '阿里云短信', 'SmsAliyun', NULL, '阿里云短信 AccessKey、签名与模板 ID', 20, 'page', 1);
+-- 短信配置已迁移至独立模块 mb_sms_provider / mb_sms_sign / mb_sms_template / mb_sms_scene_binding / mb_sms_config
+-- 参见 09_mb_sms.sql 与 系统维护 → 短信配置 菜单
 
 -- 设置项：1011 SystemBasic 基础
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
@@ -192,41 +189,27 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1041, '支付宝状态', 'payment_alipay_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 20);
 
 -- 设置项：1042 PaymentWechat 微信支付V3
+-- 证书/密钥统一走 secure_upload：文件落到 backend/storage/cert/，不进 public/uploads/
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1042, '商户号 MCHID', 'pay_wechat_mchid', '', 'input', NULL, NULL, NULL, NULL, 10),
-(1042, 'APIv3 密钥', 'pay_wechat_api_v3_key', '', 'password', NULL, NULL, NULL, '32 位，商户平台-账户中心-API 安全处设置', 20),
-(1042, '商户证书序列号', 'pay_wechat_cert_serial_no', '', 'input', NULL, NULL, NULL, NULL, 30),
-(1042, '商户 API 私钥', 'pay_wechat_private_key', '', 'textarea', NULL, NULL, NULL, '粘贴 apiclient_key.pem 完整内容', 40),
-(1042, 'V3 平台公钥', 'pay_wechat_platform_public_key', '', 'textarea', NULL, NULL, NULL, '对应微信新版公钥管理', 50),
-(1042, '平台公钥 ID', 'pay_wechat_platform_public_key_id', '', 'input', NULL, NULL, NULL, NULL, 60);
+(1042, 'APIv3 密钥', 'pay_wechat_api_v3_key', '', 'password', NULL, NULL, NULL, '32 位字符串。来源：商户平台 → 账户中心 → API 安全 → APIv3 密钥 → 修改/查看', 20),
+(1042, '商户证书序列号', 'pay_wechat_cert_serial_no', '', 'input', NULL, NULL, NULL, '来源：商户平台 → 账户中心 → API 安全 → 商户 API 证书 → 管理证书页面里的"证书序列号"', 30),
+(1042, '商户 API 私钥', 'pay_wechat_private_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".pem",".key"]},{"type":"max_size","value":1}]', NULL, '上传申请商户 API 证书时下载的 apiclient_key.pem 文件。证书包压缩内一般有 apiclient_cert.pem 与 apiclient_key.pem 两份，本字段选带 key 的那份。.pem 浏览器/微信打不开，记事本 / VS Code / TextEdit 都可以查看，内容以 -----BEGIN PRIVATE KEY----- 开头。文件仅保存在服务器内部目录 backend/storage/cert/，不会公开。', 40),
+(1042, 'V3 平台公钥', 'pay_wechat_platform_public_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".pem"]},{"type":"max_size","value":1}]', NULL, '上传 pub_key.pem。下载位置：商户平台 → 账户中心 → API 安全 → 微信支付公钥 → 下载公钥。仅当微信支付公钥已启用时存在；若显示"切换中"请等切换完成后再下载。文件以 -----BEGIN PUBLIC KEY----- 开头。', 50),
+(1042, '平台公钥 ID', 'pay_wechat_platform_public_key_id', '', 'input', NULL, NULL, NULL, '形如 PUB_KEY_ID_xxxxxxxx。来源：商户平台 → 账户中心 → API 安全 → 微信支付公钥 → 公钥 ID', 60);
 
 -- 设置项：1043 PaymentAlipay 支付宝（RSA2 证书模式）
+-- 应用私钥与三份公钥/根证书统一走 secure_upload，落到 backend/storage/cert/
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1043, '应用 AppID', 'pay_alipay_app_id', '', 'input', NULL, NULL, NULL, NULL, 10),
 (1043, '签名算法', 'pay_alipay_sign_type', 'RSA2', 'select', '[{"label":"RSA2","value":"RSA2"}]', NULL, NULL, NULL, 20),
-(1043, '应用私钥', 'pay_alipay_app_private_key', '', 'textarea', NULL, NULL, NULL, 'PEM 格式', 30),
-(1043, '应用公钥证书', 'pay_alipay_app_cert_public_key', '', 'file', NULL, NULL, NULL, '上传 appCertPublicKey_xxx.crt', 40),
-(1043, '支付宝公钥证书', 'pay_alipay_alipay_cert_public_key', '', 'file', NULL, NULL, NULL, '上传 alipayCertPublicKey_RSA2.crt', 50),
-(1043, '支付宝根证书', 'pay_alipay_alipay_root_cert', '', 'file', NULL, NULL, NULL, '上传 alipayRootCert.crt', 60),
+(1043, '应用私钥', 'pay_alipay_app_private_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".pem",".key"]},{"type":"max_size","value":1}]', NULL, '上传支付宝开放平台生成的应用私钥文件（如 appPrivateKey.pem / 应用私钥RSA2.pem）。内容以 -----BEGIN RSA PRIVATE KEY----- 或 -----BEGIN PRIVATE KEY----- 开头。文件仅保存在服务器内部目录 backend/storage/cert/，不会公开。', 30),
+(1043, '应用公钥证书', 'pay_alipay_app_cert_public_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 appCertPublicKey_xxx.crt（支付宝控制台 → 应用 → 接口加签方式（公钥证书）→ 生成并下载）。文件保存于服务器内部，不会公开。', 40),
+(1043, '支付宝公钥证书', 'pay_alipay_alipay_cert_public_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 alipayCertPublicKey_RSA2.crt（支付宝控制台同一位置同时下载）。文件保存于服务器内部，不会公开。', 50),
+(1043, '支付宝根证书', 'pay_alipay_alipay_root_cert', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 alipayRootCert.crt（支付宝控制台同一位置一同提供）。文件保存于服务器内部，不会公开。', 60),
 (1043, '网关地址', 'pay_alipay_gateway', 'https://openapi.alipay.com/gateway.do', 'input', NULL, NULL, NULL, NULL, 70);
 
--- 设置项：1061 SmsBasic 短信基础
-INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
-(1061, '短信驱动', 'sms_driver', 'mock', 'select', '[{"label":"模拟（开发用）","value":"mock"},{"label":"阿里云短信","value":"aliyun"}]', '[{"type":"required","message":"不能为空"}]', NULL, 'mock 模式验证码仅打印日志', 10),
-(1061, '验证码有效期(秒)', 'sms_code_ttl', '300', 'number', NULL, NULL, NULL, NULL, 20),
-(1061, '同号码24h上限', 'sms_rate_mobile_daily', '5', 'number', NULL, NULL, NULL, NULL, 30),
-(1061, '同IP每分钟上限', 'sms_rate_ip_minute', '3', 'number', NULL, NULL, NULL, NULL, 40);
-
--- 设置项：1062 SmsAliyun 阿里云短信
-INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
-(1062, 'AccessKeyId', 'sms_aliyun_access_key_id', '', 'input', NULL, NULL, NULL, NULL, 10),
-(1062, 'AccessKeySecret', 'sms_aliyun_access_key_secret', '', 'password', NULL, NULL, NULL, NULL, 20),
-(1062, '签名名称', 'sms_aliyun_sign_name', '', 'input', NULL, NULL, NULL, '在阿里云短信服务审核通过的签名', 30),
-(1062, '登录模板ID', 'sms_aliyun_tpl_login', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 40),
-(1062, '注册模板ID', 'sms_aliyun_tpl_register', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 50),
-(1062, '重置密码模板ID', 'sms_aliyun_tpl_reset_password', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 60),
-(1062, '绑定手机号模板ID', 'sms_aliyun_tpl_bind_mobile', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 70),
-(1062, '公众号绑定模板ID', 'sms_aliyun_tpl_wechat_official_bind', '', 'input', NULL, NULL, 'SMS_XXXXXXXXX', NULL, 80);
+-- 短信相关 setting 已迁移至独立模块（mb_sms_config / mb_sms_provider / mb_sms_template / mb_sms_sign / mb_sms_scene_binding）
 
 -- 设置项：105 ClientConfig 客户端配置
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
