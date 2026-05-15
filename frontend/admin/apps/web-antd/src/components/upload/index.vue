@@ -7,11 +7,8 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import {
-  getUploadConfigApi,
-  uploadBatchApi,
-  uploadSingleApi,
-} from '#/api/core/upload';
+import { uploadBatchApi, uploadSingleApi } from '#/api/core/upload';
+import { getUploadConfigCached } from '#/api/core/upload-config-cache';
 
 /** 文件信息对象 */
 export interface FileInfo {
@@ -120,7 +117,7 @@ const loadRemoteConfig = async () => {
     return;
   }
   try {
-    const res = await getUploadConfigApi(props.type);
+    const res = await getUploadConfigCached(props.type);
     if (res) {
       remoteConfig.value = {
         maxSize: res.max_size,

@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 
 import { createSettingItemApi, updateSettingItemApi } from '#/api/setting';
+import { invalidateUploadConfig } from '#/api/core/upload-config-cache';
 
 const props = defineProps<{
   editData?: null | SettingApi.SettingItem;
@@ -444,6 +445,8 @@ const handleOk = async () => {
       }
       message.success('创建成功');
     }
+    // 设置项的 rules 可能影响 /config/uploadConfig 的输出，主动失效缓存
+    invalidateUploadConfig();
     emit('update:visible', false);
     emit('success');
   } catch (error) {

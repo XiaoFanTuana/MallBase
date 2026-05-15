@@ -6,7 +6,8 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue';
 
-import { getUploadConfigApi, uploadSingleApi } from '#/api/core/upload';
+import { uploadSingleApi } from '#/api/core/upload';
+import { getUploadConfigCached } from '#/api/core/upload-config-cache';
 
 import '@wangeditor/editor/dist/css/style.css';
 
@@ -47,8 +48,8 @@ const videoUploadConfig = ref<{
 const loadUploadConfig = async () => {
   try {
     const [imageConfig, videoConfig] = await Promise.all([
-      getUploadConfigApi('image'),
-      getUploadConfigApi('video'),
+      getUploadConfigCached('image'),
+      getUploadConfigCached('video'),
     ]);
     imageUploadConfig.value = {
       acceptTypes: imageConfig.accept_types || [],
