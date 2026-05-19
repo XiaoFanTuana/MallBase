@@ -50,6 +50,7 @@ class SmsSceneService extends BaseService
                 'sign_name' => $row ? ($signMap[$row['sign_id']] ?? null) : null,
                 'status' => $row['status'] ?? 0,
                 'update_time' => $row['update_time'] ?? null,
+                'available_params' => SmsScene::availableParamNames($code),
             ];
         }
 
@@ -113,7 +114,7 @@ class SmsSceneService extends BaseService
         // 占位符兼容校验:模板 ${xxx} 必须能被场景白名单覆盖,
         // 否则发送时阿里云 SendSms / SendSmsVerifyCode 会因 templateParam 错配报错
         $placeholders = SmsTemplate::extractPlaceholders((string) $template->template_content);
-        $unsupported = array_values(array_diff($placeholders, SmsScene::availableParamNames()));
+        $unsupported = array_values(array_diff($placeholders, SmsScene::availableParamNames($sceneCode)));
         if (!empty($unsupported)) {
             throw new BusinessException(
                 '模板包含占位符 [' . implode(',', $unsupported) . '] 当前场景未提供;'

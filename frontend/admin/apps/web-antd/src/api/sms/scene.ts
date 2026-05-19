@@ -12,6 +12,8 @@ export namespace SmsSceneApi {
     sign_name?: string;
     status: number;
     update_time?: string;
+    /** 当前场景可用的占位符名称(后端按场景定义,只读下发) */
+    available_params?: string[];
   }
 
   export interface BindParams {

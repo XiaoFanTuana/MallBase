@@ -16,6 +16,7 @@ export const SMS_DRIVER = {
 export type SmsDriverCode = (typeof SMS_DRIVER)[keyof typeof SMS_DRIVER];
 
 export const SMS_AUDIT_STATUS = {
+  SUBMITTING: 'submitting',
   PENDING: 'pending',
   PASSED: 'passed',
   REJECTED: 'rejected',
@@ -35,4 +36,26 @@ export type SmsAuditStatus = (typeof SMS_AUDIT_STATUS)[keyof typeof SMS_AUDIT_ST
  */
 export function isPnvsDriver(driver?: string | null): boolean {
   return driver === SMS_DRIVER.ALIYUN_PNVS;
+}
+
+/**
+ * 从模板内容中提取占位符名称
+ *
+ * 镜像后端 SmsTemplate::extractPlaceholders,正则匹配 ${xxx} 形式的变量名并去重。
+ * 场景绑定判断优先使用后端派生的 placeholders 字段,本工具用于表单输入态的实时识别提示与兜底。
+ */
+export function extractPlaceholders(content?: null | string): string[] {
+  if (!content) {
+    return [];
+  }
+  const result: string[] = [];
+  const regex = /\$\{(\w+)\}/g;
+  let match: null | RegExpExecArray;
+  while ((match = regex.exec(content)) !== null) {
+    const name = match[1];
+    if (name && !result.includes(name)) {
+      result.push(name);
+    }
+  }
+  return result;
 }

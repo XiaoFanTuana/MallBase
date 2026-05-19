@@ -27,6 +27,9 @@ class SmsTemplate extends BaseModel
     /** 模板类型:国际/港澳台 */
     public const TYPE_INTERNATIONAL = 3;
 
+    /** 本地已落库,远端 AddSmsTemplate 已派入队列,尚未完成 */
+    public const AUDIT_SUBMITTING = 'submitting';
+
     /** 待审核 */
     public const AUDIT_PENDING = 'pending';
 

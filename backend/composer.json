@@ -29,7 +29,7 @@
         "topthink/think-swoole": "^4.1",
         "firebase/php-jwt": "^7.0",
         "w7corp/easywechat": "^6.17",
-        "alibabacloud/dysmsapi-20170525": "^2.0",
+        "alibabacloud/dysmsapi-20170525": "^4.0",
         "alibabacloud/dypnsapi-20170525": "^2.0"
     },
     "require-dev": {

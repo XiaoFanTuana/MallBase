@@ -103,6 +103,9 @@ Route::group('sms/template', function () {
     Route::post('syncBatch', 'syncBatch')->name('SmsTemplateSyncBatch')->option([
         '_alias' => '勾选同步', '_desc' => '按勾选的 id 批量同步模板状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
+    Route::post('createByScenes', 'createByScenes')->name('SmsTemplateCreateByScenes')->option([
+        '_alias' => '按场景创建', '_desc' => '按内置场景批量创建模板', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+    ]);
 })->prefix('admin.sms.TemplateController/')
   ->option([
       '_group_name' => '模板管理',

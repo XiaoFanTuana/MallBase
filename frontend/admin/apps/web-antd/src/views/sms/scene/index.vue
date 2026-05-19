@@ -10,7 +10,11 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
-import { isPnvsDriver, SMS_AUDIT_STATUS } from '#/api/sms/constants';
+import {
+  extractPlaceholders,
+  isPnvsDriver,
+  SMS_AUDIT_STATUS,
+} from '#/api/sms/constants';
 import { getSmsProviderListApi } from '#/api/sms/provider';
 import {
   bindSmsSceneApi,
@@ -63,6 +67,48 @@ const filteredTemplates = computed(() =>
   ),
 );
 
+// 当前场景可用的占位符集合(后端按场景下发,缺省回退到默认验证码占位符)
+const sceneAvailableParams = computed<string[]>(() => {
+  const params = editingScene.value?.available_params;
+  return params && params.length > 0 ? params : ['code', 'min'];
+});
+
+// 取模板占位符:优先用后端派生字段,缺省时从模板内容兜底解析
+const getTemplatePlaceholders = (
+  template: SmsTemplateApi.TemplateItem,
+): string[] => {
+  return template.placeholders && template.placeholders.length > 0
+    ? template.placeholders
+    : extractPlaceholders(template.template_content);
+};
+
+// 判断模板占位符是否被当前场景全部支持,返回不被支持的占位符列表
+const getUnsupportedPlaceholders = (
+  template: SmsTemplateApi.TemplateItem,
+): string[] => {
+  const available = sceneAvailableParams.value;
+  return getTemplatePlaceholders(template).filter(
+    (name) => !available.includes(name),
+  );
+};
+
+// 模板下拉选项:在 provider + 审核状态过滤基础上,对占位符不兼容的模板标灰禁用
+const templateOptions = computed(() =>
+  filteredTemplates.value.map((t) => {
+    const unsupported = getUnsupportedPlaceholders(t);
+    const baseLabel = `${t.template_name} (${t.template_code})`;
+    if (unsupported.length === 0) {
+      return { label: baseLabel, value: t.id, disabled: false };
+    }
+    const reason = unsupported.map((name) => `\${${name}}`).join('、');
+    return {
+      label: `${baseLabel} — 含场景不支持的占位符 ${reason}`,
+      value: t.id,
+      disabled: true,
+    };
+  }),
+);
+
 const filteredSigns = computed(() =>
   signs.value.filter(
     (s) =>
@@ -98,6 +144,16 @@ const openBindModal = (row: SmsSceneApi.SceneItem) => {
     sign_id: row.sign_id || 0,
     status: row.status || 1,
   };
+  // 回填的模板若与当前场景占位符不兼容,清空并提示重选
+  if (formData.value.template_id) {
+    const bound = templates.value.find(
+      (t) => t.id === formData.value.template_id,
+    );
+    if (bound && getUnsupportedPlaceholders(bound).length > 0) {
+      formData.value.template_id = 0;
+      message.warning('原绑定模板与当前场景占位符不兼容,请重新选择模板');
+    }
+  }
   modalVisible.value = true;
 };
 
@@ -221,12 +277,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
           <a-select
             v-model:value="formData.template_id"
             placeholder="仅可选已审核通过的模板"
-            :options="
-              filteredTemplates.map((t) => ({
-                label: `${t.template_name} (${t.template_code})`,
-                value: t.id,
-              }))
-            "
+            :options="templateOptions"
             :disabled="filteredTemplates.length === 0"
           />
           <div
@@ -234,6 +285,11 @@ if (hasAccessByCodes(['SmsSceneList'])) {
             class="mt-1 text-xs text-gray-500"
           >
             当前服务商下没有已审核通过的模板,请先到模板管理创建并等待审核
+          </div>
+          <div v-else class="mt-1 text-xs text-gray-500">
+            只能选占位符为
+            {{ sceneAvailableParams.map((p) => '${' + p + '}').join('、') }}
+            的模板;标灰项含当前场景无法提供的参数
           </div>
         </a-form-item>
         <a-form-item label="签名" :required="!isPnvs">

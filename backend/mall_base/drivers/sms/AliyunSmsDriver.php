@@ -7,13 +7,13 @@ namespace mall_base\drivers\sms;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Dysmsapi;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\AddSmsSignRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\AddSmsSignRequest\signFileList as AddSmsSignFileItem;
-use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\AddSmsTemplateRequest;
+use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\CreateSmsTemplateRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\DeleteSmsSignRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\DeleteSmsTemplateRequest;
-use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\ModifySmsTemplateRequest;
+use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\GetSmsTemplateRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\QuerySmsSignRequest;
-use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\QuerySmsTemplateRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\SendSmsRequest;
+use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\UpdateSmsTemplateRequest;
 use Darabonba\OpenApi\Models\Config;
 use mall_base\drivers\sms\contracts\SmsTemplateManagerInterface;
 use mall_base\exception\SmsException;
@@ -135,13 +135,23 @@ class AliyunSmsDriver extends BaseSmsDriver implements SmsTemplateManagerInterfa
     {
         $this->ensureClient();
         try {
-            $req = new AddSmsTemplateRequest([
+            $content = (string) $data['template_content'];
+            $params = [
                 'templateName' => $data['template_name'],
-                'templateContent' => $data['template_content'],
+                'templateContent' => $content,
                 'templateType' => (int) $data['template_type'],
                 'remark' => $data['remark'] ?? '',
-            ]);
-            $resp = $this->client->addSmsTemplate($req);
+                // 新接口 CreateSmsTemplate 强制要求 RelatedSignName:模板需关联一个
+                // 已存在的短信签名供内容审核参照,由调用方解析后注入
+                'relatedSignName' => $this->requireSignName($data),
+            ];
+            // 新接口 CreateSmsTemplate:模板含 ${var} 占位符时必须随附 TemplateRule
+            // 声明每个变量的类型(JSON),否则审核驳回「变量不符合规范」
+            $rule = $this->buildTemplateRule($content);
+            if ($rule !== null) {
+                $params['templateRule'] = $rule;
+            }
+            $resp = $this->client->createSmsTemplate(new CreateSmsTemplateRequest($params));
             $body = $resp->body;
             $this->assertOk($body->code ?? '', $body->message ?? '创建模板失败');
             return ['template_code' => (string) ($body->templateCode ?? '')];
@@ -156,14 +166,20 @@ class AliyunSmsDriver extends BaseSmsDriver implements SmsTemplateManagerInterfa
     {
         $this->ensureClient();
         try {
-            $req = new ModifySmsTemplateRequest([
+            $content = (string) $data['template_content'];
+            $params = [
                 'templateCode' => $templateCode,
                 'templateName' => $data['template_name'],
-                'templateContent' => $data['template_content'],
+                'templateContent' => $content,
                 'templateType' => (int) $data['template_type'],
                 'remark' => $data['remark'] ?? '',
-            ]);
-            $resp = $this->client->modifySmsTemplate($req);
+                'relatedSignName' => $this->requireSignName($data),
+            ];
+            $rule = $this->buildTemplateRule($content);
+            if ($rule !== null) {
+                $params['templateRule'] = $rule;
+            }
+            $resp = $this->client->updateSmsTemplate(new UpdateSmsTemplateRequest($params));
             $this->assertOk($resp->body->code ?? '', $resp->body->message ?? '修改模板失败');
         } catch (SmsException $e) {
             throw $e;
@@ -190,17 +206,19 @@ class AliyunSmsDriver extends BaseSmsDriver implements SmsTemplateManagerInterfa
     {
         $this->ensureClient();
         try {
-            $req = new QuerySmsTemplateRequest(['templateCode' => $templateCode]);
-            $resp = $this->client->querySmsTemplate($req);
+            $req = new GetSmsTemplateRequest(['templateCode' => $templateCode]);
+            $resp = $this->client->getSmsTemplate($req);
             $body = $resp->body;
             $this->assertOk($body->code ?? '', $body->message ?? '查询模板失败');
+            // 新接口把驳回原因放进 auditInfo->rejectInfo,替代旧接口的扁平 reason 字段
+            $reason = $body->auditInfo->rejectInfo ?? null;
             return [
                 'template_code' => (string) ($body->templateCode ?? $templateCode),
                 'template_name' => (string) ($body->templateName ?? ''),
                 'template_content' => (string) ($body->templateContent ?? ''),
                 'template_type' => (int) ($body->templateType ?? 0),
-                'audit_status' => $this->mapAuditStatus((int) ($body->templateStatus ?? 0)),
-                'audit_reason' => $body->reason ?? null,
+                'audit_status' => $this->mapTemplateStatus((string) ($body->templateStatus ?? '')),
+                'audit_reason' => $reason !== null && $reason !== '' ? (string) $reason : null,
             ];
         } catch (SmsException $e) {
             throw $e;
@@ -316,6 +334,68 @@ class AliyunSmsDriver extends BaseSmsDriver implements SmsTemplateManagerInterfa
             1 => 'passed',
             default => 'rejected',
         };
+    }
+
+    /**
+     * 把新接口 GetSmsTemplate 的 templateStatus 字符串映射成本地枚举
+     *
+     * 阿里云取值:
+     *  - AUDIT_STATE_INIT      审核中
+     *  - AUDIT_STATE_PASS      审核通过
+     *  - AUDIT_STATE_NOT_PASS  审核未通过(原因见 auditInfo.rejectInfo)
+     *  - AUDIT_SATE_CANCEL     取消审核
+     */
+    private function mapTemplateStatus(string $status): string
+    {
+        if (str_contains($status, 'NOT_PASS')) {
+            return 'rejected';
+        }
+        if (str_contains($status, 'PASS')) {
+            return 'passed';
+        }
+        if (str_contains($status, 'INIT')) {
+            return 'pending';
+        }
+        return 'rejected';
+    }
+
+    /**
+     * 由模板内容里的 ${var} 占位符构造 CreateSmsTemplate 的 TemplateRule(JSON)
+     *
+     * 新接口要求模板含变量时声明每个变量类型,否则审核驳回。命名含
+     * code/captcha/验证/yzm 的变量按数字验证码处理,其余归为通用类型 others。
+     * 无占位符时返回 null(纯文本模板无需 TemplateRule)。
+     */
+    private function buildTemplateRule(string $content): ?string
+    {
+        if (!preg_match_all('/\$\{(\w+)\}/', $content, $matches)) {
+            return null;
+        }
+        $rule = [];
+        foreach (array_unique($matches[1]) as $name) {
+            $lower = strtolower($name);
+            $isCaptcha = str_contains($lower, 'code')
+                || str_contains($lower, 'captcha')
+                || str_contains($lower, 'yzm')
+                || str_contains($name, '验证');
+            $rule[$name] = $isCaptcha ? 'numberCaptcha' : 'others';
+        }
+        return json_encode($rule, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * 取出并校验关联签名名称
+     *
+     * 阿里云新接口 CreateSmsTemplate/UpdateSmsTemplate 把 RelatedSignName 列为必填,
+     * 由调用方(SmsTemplateService / SmsTemplateSyncJob)解析服务商下的签名后注入。
+     */
+    private function requireSignName(array $data): string
+    {
+        $signName = trim((string) ($data['related_sign_name'] ?? ''));
+        if ($signName === '') {
+            throw new SmsException('阿里云新接口要求模板必须关联一个已存在的短信签名,请先在「短信签名」中创建并通过签名后再提交模板');
+        }
+        return $signName;
     }
 
     private function assertOk(string $code, string $message): void

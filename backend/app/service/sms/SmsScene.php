@@ -37,6 +37,20 @@ class SmsScene
         self::WECHAT_OFFICIAL_BIND => '公众号绑定手机号',
     ];
 
+    /**
+     * 各场景能向短信模板提供的参数白名单(占位符名称)
+     *
+     * 当前 5 个场景占位符一致,拆为 per-scene 是为了支持"按场景判断 + 提示"
+     * 以及未来不同场景占位符差异化扩展。
+     */
+    private const SCENE_PARAMS = [
+        self::LOGIN                => ['code', 'min'],
+        self::REGISTER             => ['code', 'min'],
+        self::RESET_PASSWORD       => ['code', 'min'],
+        self::BIND_MOBILE          => ['code', 'min'],
+        self::WECHAT_OFFICIAL_BIND => ['code', 'min'],
+    ];
+
     public static function isValid(string $scene): bool
     {
         return array_key_exists($scene, self::TEXTS);
@@ -56,7 +70,7 @@ class SmsScene
     }
 
     /**
-     * 所有场景能向短信模板提供的参数白名单(占位符名称)
+     * 场景能向短信模板提供的参数白名单(占位符名称)
      *
      *  - code: 验证码本体(PNVS 注入 ##code## 由平台生成;企业版注入本地生成的 6 位码)
      *  - min:  验证码有效期分钟数(取自 SmsService::codeTtl/60)
@@ -65,12 +79,27 @@ class SmsScene
      *  - SmsSceneService::bind() 校验模板占位符是否被场景覆盖
      *  - SmsService::resolveDriverForScene() 构造 templateParam
      *
-     * 未来扩展 app_name / amount 等占位符,需在此追加 + 在 SmsService 注入逻辑里增加分支。
+     * 参数说明:
+     *  - 传入合法场景:返回该场景的占位符白名单
+     *  - 不传或传入未知场景:返回所有场景占位符的并集(去重,向后兼容)
+     *
+     * 未来扩展 app_name / amount 等占位符,需在 SCENE_PARAMS 对应场景追加
+     * + 在 SmsService 注入逻辑里增加分支。
      *
      * @return array<int, string>
      */
-    public static function availableParamNames(): array
+    public static function availableParamNames(string $scene = ''): array
     {
-        return ['code', 'min'];
+        if ($scene !== '' && isset(self::SCENE_PARAMS[$scene])) {
+            return self::SCENE_PARAMS[$scene];
+        }
+
+        $merged = [];
+        foreach (self::SCENE_PARAMS as $params) {
+            foreach ($params as $param) {
+                $merged[$param] = true;
+            }
+        }
+        return array_keys($merged);
     }
 }

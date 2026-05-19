@@ -1,13 +1,21 @@
 import { requestClient } from '#/api/request';
 
 export namespace SmsTemplateApi {
-  export type AuditStatus = 'local_only' | 'passed' | 'pending' | 'rejected';
+  export type AuditStatus =
+    | 'local_only'
+    | 'passed'
+    | 'pending'
+    | 'rejected'
+    | 'submitting';
 
   export interface TemplateItem {
     id: number;
     provider_id: number;
+    /** 关联签名ID;阿里云模板必填,PNVS 模板为 null */
+    sign_id: null | number;
     template_name: string;
-    template_code: string;
+    /** 远端模板编码;本地新建/提交中尚未分配时为 null */
+    template_code: null | string;
     template_type: number;
     template_content: string;
     audit_status: AuditStatus;
@@ -16,6 +24,8 @@ export namespace SmsTemplateApi {
     last_synced_at?: string;
     create_time?: string;
     update_time?: string;
+    /** 后端从 template_content 派生的占位符名称(派生值,不入库) */
+    placeholders?: string[];
   }
 
   export interface ListParams {
@@ -28,6 +38,8 @@ export namespace SmsTemplateApi {
 
   export interface SaveParams {
     provider_id: number;
+    /** 关联签名ID;阿里云模板必填,PNVS 模板可不传 */
+    sign_id?: number;
     template_name: string;
     template_type: number;
     template_content?: string;
@@ -39,6 +51,46 @@ export namespace SmsTemplateApi {
   export interface ImportParams {
     provider_id: number;
     template_code: string;
+  }
+
+  export interface CreateByScenesItem {
+    scene_code: string;
+    template_name: string;
+    template_content: string;
+    template_type: number;
+    remark?: string;
+  }
+
+  export interface CreateByScenesParams {
+    provider_id: number;
+    /** 整批模板共用的关联签名ID */
+    sign_id: number;
+    items: CreateByScenesItem[];
+  }
+
+  export interface CreateByScenesResultItem {
+    scene_code: string;
+    scene_name: string;
+    success: boolean;
+    message: string;
+    template_id: number;
+  }
+
+  /**
+   * created/failed 仅反映"本地行落库"是否成功。
+   * 阿里云 AddSmsTemplate 异步派发,审核结果用户需稍后刷新列表查看。
+   */
+  export interface CreateByScenesResult {
+    created: number;
+    failed: number;
+    results: CreateByScenesResultItem[];
+  }
+
+  /** 同步类 API 统一返回派发计数 */
+  export interface SyncDispatchResult {
+    dispatched: number;
+    invalid?: number;
+    skipped?: number;
   }
 }
 
@@ -63,6 +115,15 @@ export async function importSmsTemplateApi(data: SmsTemplateApi.ImportParams) {
   return requestClient.post<{ id: number }>('/sms/template/import', data);
 }
 
+export async function createSmsTemplateByScenesApi(
+  data: SmsTemplateApi.CreateByScenesParams,
+) {
+  return requestClient.post<SmsTemplateApi.CreateByScenesResult>(
+    '/sms/template/createByScenes',
+    data,
+  );
+}
+
 export async function updateSmsTemplateApi(
   id: number,
   data: SmsTemplateApi.SaveParams,
@@ -75,20 +136,20 @@ export async function deleteSmsTemplateApi(id: number) {
 }
 
 export async function syncSmsTemplateStatusApi(id: number) {
-  return requestClient.post<SmsTemplateApi.TemplateItem>(
+  return requestClient.post<SmsTemplateApi.SyncDispatchResult>(
     `/sms/template/syncStatus/${id}`,
   );
 }
 
 export async function syncAllSmsTemplateApi(providerId: number) {
-  return requestClient.post<{ failed: number; success: number }>(
+  return requestClient.post<SmsTemplateApi.SyncDispatchResult>(
     '/sms/template/syncAll',
     { provider_id: providerId },
   );
 }
 
 export async function syncBatchSmsTemplateApi(ids: number[]) {
-  return requestClient.post<{ failed: number; success: number }>(
+  return requestClient.post<SmsTemplateApi.SyncDispatchResult>(
     '/sms/template/syncBatch',
     { ids },
   );
