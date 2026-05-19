@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 import type { SmsSignApi } from '#/api/sms/sign';
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
+import { isPnvsDriver } from '#/api/sms/constants';
 import { getSmsProviderListApi } from '#/api/sms/provider';
 import type { SmsProviderApi } from '#/api/sms/provider';
 import {
@@ -30,24 +31,26 @@ const auditStatusOptions = [
   { label: '仅本地', value: 'local_only', color: 'default' },
 ];
 
-const signSourceOptions = [
-  { label: '企事业单位的全称或简称', value: 0 },
-  { label: '工信部备案网站全称或简称', value: 1 },
-  { label: 'App 应用全称', value: 2 },
-  { label: '公众号或小程序', value: 3 },
-  { label: '电商平台店铺名', value: 4 },
-  { label: '商标名', value: 5 },
-];
-
-const signTypeOptions = [
-  { label: '验证码', value: 0 },
-  { label: '通用', value: 1 },
-];
-
 const providers = ref<SmsProviderApi.ProviderItem[]>([]);
 const loadProviders = async () => {
   const res = await getSmsProviderListApi({ page: 1, limit: 100 });
   providers.value = res.list;
+};
+
+// PNVS 服务商:可本地登记签名(签名由阿里云预置,无远端管理 API)
+const pnvsProviders = computed(() =>
+  providers.value.filter((p) => isPnvsDriver(p.driver)),
+);
+// 非 PNVS 服务商:签名只能从阿里云控制台导入已审核记录
+const importableProviders = computed(() =>
+  providers.value.filter((p) => !isPnvsDriver(p.driver)),
+);
+const canCreate = computed(() => pnvsProviders.value.length > 0);
+const canImport = computed(() => importableProviders.value.length > 0);
+
+const isPnvsRow = (record: SmsSignApi.SignItem) => {
+  const p = providers.value.find((p) => p.id === record.provider_id);
+  return isPnvsDriver(p?.driver);
 };
 
 const searchParams = ref<SmsSignApi.ListParams>({
@@ -65,79 +68,24 @@ const { tableData, loading, pagination, loadData, refresh, handleDelete } =
     { immediateLoad: false },
   );
 
-const {
-  modalVisible,
-  modalTitle,
-  formData,
-  formRef,
-  openCreateModal,
-  handleSubmit,
-} = useFormModal<SmsSignApi.SignItem>();
-
-// 创建签名表单的本地状态(资质文件单独管理,不放进 formData 避免后端字段污染)
-const signFiles = ref<SmsSignApi.SignFileItem[]>([]);
-const uploadingFiles = ref(false);
+const { modalVisible, modalTitle, formData, formRef, openCreateModal, handleSubmit } =
+  useFormModal<SmsSignApi.SignItem>();
 
 const handleCreate = async () => {
   if (providers.value.length === 0) await loadProviders();
-  signFiles.value = [];
+  if (!canCreate.value) {
+    message.warning('请先在「服务商管理」新建 PNVS 服务商');
+    return;
+  }
   openCreateModal({
-    provider_id: providers.value[0]?.id,
+    provider_id: pnvsProviders.value[0]?.id,
     sign_name: '',
-    sign_source: 0,
-    sign_type: 1,
     remark: '',
   });
 };
 
-const readFileAsBase64 = (file: File): Promise<SmsSignApi.SignFileItem> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // dataURL 形如 "data:image/png;base64,XXXX"
-      const base64 = result.split(',')[1] || '';
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      resolve({ file_contents: base64, file_suffix: ext });
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-
-const handleBeforeUpload = async (file: File) => {
-  // 阿里云限制单文件 ≤ 2MB
-  if (file.size > 2 * 1024 * 1024) {
-    message.error(`${file.name} 超过 2MB,请压缩后再上传`);
-    return false;
-  }
-  uploadingFiles.value = true;
-  try {
-    const item = await readFileAsBase64(file);
-    signFiles.value.push(item);
-    message.success(`${file.name} 已就绪`);
-  } catch (e) {
-    message.error(`${file.name} 读取失败`);
-    console.error(e);
-  } finally {
-    uploadingFiles.value = false;
-  }
-  // 返回 false 阻止 ant-design 默认的上传行为(我们只要 base64,不上服务器)
-  return false;
-};
-
-const handleRemoveFile = (idx: number) => {
-  signFiles.value.splice(idx, 1);
-};
-
 const handleFormSubmit = async () => {
-  if (signFiles.value.length === 0) {
-    message.error('请至少上传一个资质证明文件(营业执照/App 截图/网站备案截图等)');
-    return;
-  }
-  // 把 sign_files 临时塞进 formData 让 useFormModal 一起提交
-  (formData.value as any).sign_files = signFiles.value;
   await handleSubmit({ create: createSmsSignApi }, () => {
-    signFiles.value = [];
     loadData(searchParams.value);
   });
 };
@@ -153,8 +101,12 @@ const importing = ref(false);
 
 const openImportModal = async () => {
   if (providers.value.length === 0) await loadProviders();
+  if (!canImport.value) {
+    message.warning('当前没有可导入签名的服务商(PNVS 不支持导入)');
+    return;
+  }
   importFormData.value = {
-    provider_id: providers.value[0]?.id || 0,
+    provider_id: importableProviders.value[0]?.id || 0,
     sign_name: '',
   };
   importModalVisible.value = true;
@@ -233,18 +185,26 @@ if (hasAccessByCodes(['SmsSignList'])) {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-tooltip title="本地提交新签名 + 资质文件,推送到阿里云审核">
+      <a-tooltip
+        :title="
+          canCreate
+            ? '录入 PNVS 系统赠送的签名（仅本地登记，不推送远端）'
+            : '请先在「服务商管理」新建 PNVS 服务商'
+        "
+      >
         <a-button
           type="primary"
+          :disabled="!canCreate"
           @click="handleCreate"
           v-access:code="'SmsSignCreate'"
         >
-          新增签名（推送阿里云）
+          新增签名
         </a-button>
       </a-tooltip>
       <a-tooltip title="把已经在阿里云审核通过的签名拉回本地,不触发新审核">
         <a-button
           class="ml-2"
+          :disabled="!canImport"
           @click="openImportModal"
           v-access:code="'SmsSignImport'"
         >
@@ -349,6 +309,7 @@ if (hasAccessByCodes(['SmsSignList'])) {
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button
+              v-if="!isPnvsRow(record)"
               type="link"
               size="small"
               @click="handleSync(record)"
@@ -382,6 +343,12 @@ if (hasAccessByCodes(['SmsSignList'])) {
         :label-col="{ span: 6 }"
         :wrapper-col="{ span: 16 }"
       >
+        <a-alert
+          type="info"
+          show-icon
+          message="签名为阿里云号码认证服务（PNVS）系统赠送,请到 PNVS 控制台「赠送签名配置」页面查看可用签名名称后填入,仅本地登记,不推送远端审核。"
+          class="mb-3"
+        />
         <a-form-item
           label="服务商"
           name="provider_id"
@@ -389,7 +356,7 @@ if (hasAccessByCodes(['SmsSignList'])) {
         >
           <a-select
             v-model:value="formData.provider_id"
-            :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+            :options="pnvsProviders.map((p) => ({ label: p.name, value: p.id }))"
           />
         </a-form-item>
         <a-form-item
@@ -399,63 +366,15 @@ if (hasAccessByCodes(['SmsSignList'])) {
         >
           <a-input
             v-model:value="formData.sign_name"
-            placeholder="阿里云控制台审核通过后的签名文本"
+            placeholder="PNVS 控制台「赠送签名配置」中的签名文本"
           />
         </a-form-item>
-        <a-form-item label="签名来源" name="sign_source">
-          <a-select
-            v-model:value="formData.sign_source"
-            :options="signSourceOptions"
-          />
-        </a-form-item>
-        <a-form-item label="签名类型" name="sign_type">
-          <a-select
-            v-model:value="formData.sign_type"
-            :options="signTypeOptions"
-          />
-        </a-form-item>
-        <a-form-item label="申请说明" name="remark">
+        <a-form-item label="备注" name="remark">
           <a-textarea
             v-model:value="formData.remark"
             :rows="3"
-            placeholder="向阿里云说明用途场景,有助审核"
+            placeholder="可选:留作备注,例如「营销验证码」"
           />
-        </a-form-item>
-        <a-form-item label="资质文件" required>
-          <a-upload
-            :before-upload="handleBeforeUpload"
-            :show-upload-list="false"
-            accept=".jpg,.jpeg,.png,.pdf,.gif,.bmp"
-            :multiple="true"
-          >
-            <a-button :loading="uploadingFiles">
-              选择文件（≤2MB,可多选）
-            </a-button>
-          </a-upload>
-          <div v-if="signFiles.length > 0" class="mt-2 space-y-1">
-            <div
-              v-for="(f, idx) in signFiles"
-              :key="idx"
-              class="flex items-center gap-2 rounded border border-dashed border-gray-300 px-2 py-1 text-xs"
-            >
-              <span class="flex-1">
-                文件 {{ idx + 1 }}（.{{ f.file_suffix }}，
-                {{ Math.round(((f.file_contents.length * 3) / 4 / 1024) * 10) / 10 }} KB）
-              </span>
-              <a-button
-                type="link"
-                danger
-                size="small"
-                @click="handleRemoveFile(idx)"
-              >
-                移除
-              </a-button>
-            </div>
-          </div>
-          <div class="mt-1 text-xs text-gray-500">
-            企业:营业执照；个人:身份证 + App 截图/网站备案截图；商标:商标注册证。
-            支持 jpg/png/pdf,单文件 ≤ 2MB
-          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -470,14 +389,16 @@ if (hasAccessByCodes(['SmsSignList'])) {
       <a-alert
         type="info"
         show-icon
-        message="只调用 QuerySmsSign 把阿里云上已审核通过的签名拉回本地,不会触发新审核"
+        message="只调用 QuerySmsSign 把阿里云上已审核通过的签名拉回本地,不会触发新审核。PNVS 服务商不支持导入。"
         class="mb-4"
       />
       <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
         <a-form-item label="服务商" required>
           <a-select
             v-model:value="importFormData.provider_id"
-            :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+            :options="
+              importableProviders.map((p) => ({ label: p.name, value: p.id }))
+            "
           />
         </a-form-item>
         <a-form-item label="签名名称" required>

@@ -7,6 +7,7 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
+import { isPnvsDriver, SMS_DRIVER } from '#/api/sms/constants';
 import {
   createSmsProviderApi,
   deleteSmsProviderApi,
@@ -22,10 +23,13 @@ defineOptions({ name: 'SmsProvider' });
 const { hasAccessByCodes } = useAccess();
 
 const driverOptions = [
-  { label: '阿里云短信', value: 'aliyun' },
-  { label: '腾讯云短信', value: 'tencent' },
-  { label: '模拟（开发用）', value: 'mock' },
+  { label: '阿里云短信', value: SMS_DRIVER.ALIYUN },
+  { label: '阿里云短信认证(PNVS)', value: SMS_DRIVER.ALIYUN_PNVS },
+  { label: '腾讯云短信', value: SMS_DRIVER.TENCENT },
+  { label: '模拟（开发用）', value: SMS_DRIVER.MOCK },
 ];
+
+const isPnvs = computed(() => isPnvsDriver(formData.value.driver));
 
 const searchParams = ref<SmsProviderApi.ListParams>({
   keyword: '',
@@ -62,6 +66,7 @@ const handleCreate = () => {
     access_key_id: '',
     access_key_secret: '',
     region: 'cn-hangzhou',
+    scheme_name: '',
     is_default: 0,
     status: 1,
     remark: '',
@@ -291,6 +296,9 @@ if (hasAccessByCodes(['SmsProviderList'])) {
         </a-form-item>
         <a-form-item label="区域" name="region">
           <a-input v-model:value="formData.region" placeholder="cn-hangzhou" />
+        </a-form-item>
+        <a-form-item v-if="isPnvs" label="认证方案" name="scheme_name">
+          <a-input v-model:value="formData.scheme_name" placeholder="可选，PNVS 控制台创建的方案名称" />
         </a-form-item>
         <a-form-item label="设为默认">
           <a-radio-group v-model:value="formData.is_default">

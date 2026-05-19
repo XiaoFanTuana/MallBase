@@ -5,6 +5,7 @@ namespace app;
 
 use app\service\UploadService;
 use mall_base\drivers\DriverManager;
+use mall_base\drivers\sms\AliyunPnvsDriver;
 use mall_base\drivers\sms\AliyunSmsDriver;
 use mall_base\drivers\sms\MockSmsDriver;
 use mall_base\drivers\upload\LocalUploadDriver;
@@ -27,8 +28,9 @@ class AppService extends Service
 
         // 注册短信驱动(默认驱动由 SmsService 按场景绑定动态选择,这里仅注册可用集合)
         DriverManager::register('sms', [
-            'mock'   => MockSmsDriver::class,
-            'aliyun' => AliyunSmsDriver::class,
+            'mock'        => MockSmsDriver::class,
+            'aliyun'      => AliyunSmsDriver::class,
+            'aliyun_pnvs' => AliyunPnvsDriver::class,
         ]);
         DriverManager::setDefault('sms', 'mock');
     }

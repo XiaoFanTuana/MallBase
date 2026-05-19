@@ -7,6 +7,7 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
+import { isPnvsDriver } from '#/api/sms/constants';
 import { getSmsProviderListApi } from '#/api/sms/provider';
 import type { SmsProviderApi } from '#/api/sms/provider';
 import {
@@ -16,6 +17,7 @@ import {
   getSmsTemplateListApi,
   importSmsTemplateApi,
   syncAllSmsTemplateApi,
+  syncBatchSmsTemplateApi,
   syncSmsTemplateStatusApi,
   updateSmsTemplateApi,
 } from '#/api/sms/template';
@@ -45,6 +47,12 @@ const loadProviders = async () => {
   providers.value = res.list;
 };
 
+// 非 PNVS 服务商:模板可从阿里云控制台导入(PNVS 无 QuerySmsTemplate API)
+const importableProviders = computed(() =>
+  providers.value.filter((p) => !isPnvsDriver(p.driver)),
+);
+const canImport = computed(() => importableProviders.value.length > 0);
+
 const searchParams = ref<SmsTemplateApi.ListParams>({
   keyword: '',
   provider_id: undefined,
@@ -73,12 +81,24 @@ const {
 
 const isEdit = computed(() => modalTitle.value.includes('编辑'));
 
+// 当前选中服务商是否 PNVS:PNVS 模板由阿里云预置,表单需录入模板编码(SMS_xxx)
+const isPnvsProvider = computed(() => {
+  const p = providers.value.find((p) => p.id === formData.value.provider_id);
+  return isPnvsDriver(p?.driver);
+});
+
+const isPnvsRow = (record: SmsTemplateApi.TemplateItem) => {
+  const p = providers.value.find((p) => p.id === record.provider_id);
+  return isPnvsDriver(p?.driver);
+};
+
 const handleCreate = async () => {
   if (providers.value.length === 0) await loadProviders();
   openCreateModal({
     provider_id: providers.value[0]?.id,
     template_name: '',
     template_type: 0,
+    template_code: '',
     template_content: '您的验证码是 ${code},5 分钟内有效,请勿泄露。',
     remark: '',
   });
@@ -119,6 +139,31 @@ const handleSyncAll = async () => {
   loadData(searchParams.value);
 };
 
+// ------------------- 勾选批量同步 -------------------
+
+const selectedRowKeys = ref<number[]>([]);
+const rowSelection = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys: (number | string)[]) => {
+    selectedRowKeys.value = keys.map((k) => Number(k));
+  },
+  // PNVS 模板由平台预置,无远端审核状态,不可同步 → 禁用勾选
+  getCheckboxProps: (record: SmsTemplateApi.TemplateItem) => ({
+    disabled: isPnvsRow(record),
+  }),
+}));
+
+const handleSyncBatch = async () => {
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('请先勾选要同步的模板');
+    return;
+  }
+  const stat = await syncBatchSmsTemplateApi(selectedRowKeys.value);
+  message.success(`同步完成: 成功 ${stat.success} 个,失败 ${stat.failed} 个`);
+  selectedRowKeys.value = [];
+  loadData(searchParams.value);
+};
+
 const resetSearch = () => {
   searchParams.value = {
     keyword: '',
@@ -140,8 +185,12 @@ const importing = ref(false);
 
 const openImportModal = async () => {
   if (providers.value.length === 0) await loadProviders();
+  if (!canImport.value) {
+    message.warning('当前没有可导入模板的服务商(PNVS 不支持导入)');
+    return;
+  }
   importFormData.value = {
-    provider_id: providers.value[0]?.id || 0,
+    provider_id: importableProviders.value[0]?.id || 0,
     template_code: '',
   };
   importModalVisible.value = true;
@@ -178,11 +227,12 @@ const templateTypeLabel = (t: number) =>
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
   { title: '服务商', dataIndex: 'provider_id', width: 160 },
-  { title: '模板名称', dataIndex: 'template_name', width: 200 },
+  { title: '模板名称', dataIndex: 'template_name', width: 180 },
   { title: '模板编码', dataIndex: 'template_code', width: 180 },
+  { title: '模板内容', dataIndex: 'template_content', width: 260, ellipsis: true },
   { title: '类型', dataIndex: 'template_type', width: 100 },
   { title: '审核状态', dataIndex: 'audit_status', width: 120 },
-  { title: '审核备注', dataIndex: 'audit_reason', width: 360 },
+  { title: '审核备注', dataIndex: 'audit_reason', width: 320 },
   { title: '最近同步', dataIndex: 'last_synced_at', width: 180 },
   { title: '操作', key: 'action', width: 260 },
 ];
@@ -196,18 +246,21 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
 <template>
   <div class="p-4">
     <div class="mb-4">
-      <a-tooltip title="本地新建模板内容,推送到阿里云审核(通常 2 小时内出结果)">
+      <a-tooltip
+        title="普通模板会推送阿里云审核(通常 2 小时内出结果);PNVS 模板仅本地登记"
+      >
         <a-button
           type="primary"
           @click="handleCreate"
           v-access:code="'SmsTemplateCreate'"
         >
-          新增模板（推送阿里云）
+          新增模板
         </a-button>
       </a-tooltip>
       <a-tooltip title="已经在阿里云审核通过的模板编码(SMS_xxx)拉回本地,不触发新审核">
         <a-button
           class="ml-2"
+          :disabled="!canImport"
           @click="openImportModal"
           v-access:code="'SmsTemplateImport'"
         >
@@ -223,6 +276,18 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
           v-access:code="'SmsTemplateSyncAll'"
         >
           批量同步状态
+        </a-button>
+      </a-tooltip>
+      <a-tooltip title="同步当前勾选的模板状态(PNVS 模板不可勾选)">
+        <a-button
+          class="ml-2"
+          :disabled="selectedRowKeys.length === 0"
+          @click="handleSyncBatch"
+          v-access:code="'SmsTemplateSyncBatch'"
+        >
+          批量同步选中{{
+            selectedRowKeys.length > 0 ? `（${selectedRowKeys.length}）` : ''
+          }}
         </a-button>
       </a-tooltip>
       <a-button class="ml-2" @click="refresh" v-access:code="'SmsTemplateList'">
@@ -278,7 +343,8 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
       :data-source="tableData"
       :loading="loading"
       :pagination="pagination"
-      :scroll="{ x: 1400 }"
+      :row-selection="rowSelection"
+      :scroll="{ x: 1600 }"
       row-key="id"
       @change="
         (newPagination) => {
@@ -305,6 +371,11 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
           <span v-if="record.template_code">{{ record.template_code }}</span>
           <a-tag v-else color="default">未提交</a-tag>
         </template>
+        <template v-if="column.dataIndex === 'template_content'">
+          <a-tooltip :title="record.template_content">
+            <span class="text-xs">{{ record.template_content || '-' }}</span>
+          </a-tooltip>
+        </template>
         <template v-if="column.dataIndex === 'audit_reason'">
           <div
             class="whitespace-pre-wrap break-all text-xs leading-relaxed"
@@ -316,6 +387,7 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button
+              v-if="!isPnvsRow(record)"
               type="link"
               size="small"
               @click="handleSync(record)"
@@ -368,6 +440,13 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
             :options="providers.map((p) => ({ label: p.name, value: p.id }))"
           />
         </a-form-item>
+        <a-alert
+          v-if="isPnvsProvider"
+          type="info"
+          show-icon
+          message="PNVS 模板为阿里云号码认证服务系统赠送,请到 PNVS 控制台「赠送模板配置」页面查看模板编码(SMS_xxx)后填入。模板内容仅本地保存用于绑定时的参数校验,实际发送内容由阿里云使用控制台预置版本。"
+          class="mb-3"
+        />
         <a-form-item
           label="模板名称"
           name="template_name"
@@ -375,10 +454,24 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
         >
           <a-input
             v-model:value="formData.template_name"
-            placeholder="如：登录验证码"
+            :placeholder="
+              isPnvsProvider ? '本地备注名,例如「PNVS 登录验证」' : '如：登录验证码'
+            "
           />
         </a-form-item>
-        <a-form-item label="模板类型" name="template_type">
+        <a-form-item
+          v-if="isPnvsProvider"
+          label="模板编码"
+          name="template_code"
+          :rules="[{ required: true, message: '请输入 PNVS 控制台查到的模板编码' }]"
+        >
+          <a-input
+            v-model:value="formData.template_code"
+            :disabled="isEdit"
+            placeholder="PNVS 控制台「赠送模板配置」中的模板编码,例如 SMS_154950909"
+          />
+        </a-form-item>
+        <a-form-item v-if="!isPnvsProvider" label="模板类型" name="template_type">
           <a-select
             v-model:value="formData.template_type"
             :options="templateTypeOptions"
@@ -392,14 +485,22 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
           <a-textarea
             v-model:value="formData.template_content"
             :rows="4"
-            placeholder="使用 ${code} 作为验证码占位符"
+            :placeholder="
+              isPnvsProvider
+                ? '请抄录阿里云 PNVS 控制台「赠送模板配置」中显示的模板原文,系统据此校验场景参数（如 ${code}、${min}）'
+                : '使用 ${code} 作为验证码占位符'
+            "
           />
         </a-form-item>
         <a-form-item label="申请说明" name="remark">
           <a-textarea
             v-model:value="formData.remark"
             :rows="3"
-            placeholder="向阿里云说明使用场景,有助审核"
+            :placeholder="
+              isPnvsProvider
+                ? '可选:本地备注,例如「PNVS 默认验证码模板」'
+                : '向阿里云说明使用场景,有助审核'
+            "
           />
         </a-form-item>
       </a-form>
@@ -415,14 +516,16 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
       <a-alert
         type="info"
         show-icon
-        message="只调用 QuerySmsTemplate 把阿里云上已审核通过的模板拉回本地,不会触发新审核"
+        message="只调用 QuerySmsTemplate 把阿里云上已审核通过的模板拉回本地,不会触发新审核。PNVS 服务商不支持导入。"
         class="mb-4"
       />
       <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
         <a-form-item label="服务商" required>
           <a-select
             v-model:value="importFormData.provider_id"
-            :options="providers.map((p) => ({ label: p.name, value: p.id }))"
+            :options="
+              importableProviders.map((p) => ({ label: p.name, value: p.id }))
+            "
           />
         </a-form-item>
         <a-form-item label="模板编码" required>

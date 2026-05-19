@@ -64,23 +64,61 @@ class SmsSceneService extends BaseService
         }
 
         $providerId = (int) $data['provider_id'];
-        $templateId = (int) $data['template_id'];
-        $signId = (int) $data['sign_id'];
+        $provider = SmsProvider::find($providerId);
+        if ($provider === null) {
+            throw new BusinessException('服务商不存在');
+        }
+
+        $supportsRemote = SmsDriverFactory::supportsRemoteSignManagement($provider);
+        $templateId = !empty($data['template_id']) ? (int) $data['template_id'] : 0;
+        $signId = !empty($data['sign_id']) ? (int) $data['sign_id'] : 0;
+
+        if ($templateId <= 0) {
+            throw new BusinessException('请选择模板');
+        }
+        if ($signId <= 0) {
+            throw new BusinessException('请选择签名');
+        }
 
         $template = SmsTemplate::find($templateId);
         if ($template === null || $template->provider_id !== $providerId) {
             throw new BusinessException('模板与服务商不匹配');
         }
-        if ($template->audit_status !== SmsTemplate::AUDIT_PASSED) {
-            throw new BusinessException('模板尚未审核通过,不能绑定');
-        }
-
         $sign = SmsSign::find($signId);
         if ($sign === null || $sign->provider_id !== $providerId) {
             throw new BusinessException('签名与服务商不匹配');
         }
-        if ($sign->audit_status !== SmsSign::AUDIT_PASSED) {
-            throw new BusinessException('签名尚未审核通过,不能绑定');
+
+        // 支持远端管理的驱动(普通阿里云):仅接受 PASSED
+        // 不支持远端管理的驱动(PNVS):接受 PASSED 或 LOCAL_ONLY(系统赠送本地登记后即可用)
+        $allowedStatuses = $supportsRemote
+            ? [SmsTemplate::AUDIT_PASSED]
+            : [SmsTemplate::AUDIT_PASSED, SmsTemplate::AUDIT_LOCAL_ONLY];
+
+        if (!in_array($template->audit_status, $allowedStatuses, true)) {
+            throw new BusinessException(
+                $supportsRemote
+                    ? '模板尚未审核通过,不能绑定'
+                    : '模板状态不可用,请确认本地登记完成'
+            );
+        }
+        if (!in_array($sign->audit_status, $allowedStatuses, true)) {
+            throw new BusinessException(
+                $supportsRemote
+                    ? '签名尚未审核通过,不能绑定'
+                    : '签名状态不可用,请确认本地登记完成'
+            );
+        }
+
+        // 占位符兼容校验:模板 ${xxx} 必须能被场景白名单覆盖,
+        // 否则发送时阿里云 SendSms / SendSmsVerifyCode 会因 templateParam 错配报错
+        $placeholders = SmsTemplate::extractPlaceholders((string) $template->template_content);
+        $unsupported = array_values(array_diff($placeholders, SmsScene::availableParamNames()));
+        if (!empty($unsupported)) {
+            throw new BusinessException(
+                '模板包含占位符 [' . implode(',', $unsupported) . '] 当前场景未提供;'
+                . '请联系开发扩展 SmsScene::availableParamNames 或更换不含该占位符的模板'
+            );
         }
 
         $row = $this->model()->where('scene_code', $sceneCode)->find();

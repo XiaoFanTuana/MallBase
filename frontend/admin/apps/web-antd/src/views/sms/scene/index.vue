@@ -10,6 +10,7 @@ import { useAccess } from '@vben/access';
 
 import { message } from 'ant-design-vue';
 
+import { isPnvsDriver, SMS_AUDIT_STATUS } from '#/api/sms/constants';
 import { getSmsProviderListApi } from '#/api/sms/provider';
 import {
   bindSmsSceneApi,
@@ -40,17 +41,33 @@ const formData = ref<SmsSceneApi.BindParams>({
   status: 1,
 });
 
+const selectedProvider = computed(() =>
+  providers.value.find((p) => p.id === formData.value.provider_id),
+);
+
+const isPnvs = computed(() => isPnvsDriver(selectedProvider.value?.driver));
+
+// PNVS 接受 PASSED 或 LOCAL_ONLY(系统赠送签名/模板本地登记后即为 LOCAL_ONLY);
+// 普通驱动仅接受 PASSED
+const allowedStatuses = computed(() =>
+  isPnvs.value
+    ? [SMS_AUDIT_STATUS.PASSED, SMS_AUDIT_STATUS.LOCAL_ONLY]
+    : [SMS_AUDIT_STATUS.PASSED],
+);
+
 const filteredTemplates = computed(() =>
   templates.value.filter(
     (t) =>
-      t.provider_id === formData.value.provider_id && t.audit_status === 'passed',
+      t.provider_id === formData.value.provider_id &&
+      allowedStatuses.value.includes(t.audit_status as never),
   ),
 );
 
 const filteredSigns = computed(() =>
   signs.value.filter(
     (s) =>
-      s.provider_id === formData.value.provider_id && s.audit_status === 'passed',
+      s.provider_id === formData.value.provider_id &&
+      allowedStatuses.value.includes(s.audit_status as never),
   ),
 );
 
@@ -91,12 +108,12 @@ const handleProviderChange = () => {
 };
 
 const handleSubmit = async () => {
-  if (
-    !formData.value.provider_id ||
-    !formData.value.template_id ||
-    !formData.value.sign_id
-  ) {
-    message.error('请完整选择服务商、模板与签名');
+  if (!formData.value.provider_id) {
+    message.error('请选择服务商');
+    return;
+  }
+  if (!formData.value.template_id || !formData.value.sign_id) {
+    message.error('请完整选择模板与签名');
     return;
   }
   await bindSmsSceneApi(formData.value);
@@ -132,7 +149,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
       <a-alert
         type="info"
         show-icon
-        message="把内置场景与已审核通过的阿里云模板/签名绑定后,uniapp 端的验证码请求才能正常发送"
+        message="把内置场景与服务商绑定后即可发送短信验证码。传统短信驱动需要绑定已审核通过的模板和签名；PNVS 驱动签名和模板可选，如不配置则使用平台默认值。"
       />
     </div>
 
@@ -200,7 +217,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
             @change="handleProviderChange"
           />
         </a-form-item>
-        <a-form-item label="模板" required>
+        <a-form-item label="模板" :required="!isPnvs">
           <a-select
             v-model:value="formData.template_id"
             placeholder="仅可选已审核通过的模板"
@@ -219,7 +236,7 @@ if (hasAccessByCodes(['SmsSceneList'])) {
             当前服务商下没有已审核通过的模板,请先到模板管理创建并等待审核
           </div>
         </a-form-item>
-        <a-form-item label="签名" required>
+        <a-form-item label="签名" :required="!isPnvs">
           <a-select
             v-model:value="formData.sign_id"
             placeholder="仅可选已审核通过的签名"
@@ -238,6 +255,13 @@ if (hasAccessByCodes(['SmsSceneList'])) {
             当前服务商下没有已审核通过的签名
           </div>
         </a-form-item>
+        <a-alert
+          v-if="isPnvs"
+          type="warning"
+          show-icon
+          message="PNVS 签名和模板为可选项。如不配置将使用平台默认签名和模板；如您的账号要求传入签名，请在此处选择已配置的签名。"
+          class="mb-4"
+        />
         <a-form-item label="状态">
           <a-radio-group v-model:value="formData.status">
             <a-radio :value="1">启用</a-radio>

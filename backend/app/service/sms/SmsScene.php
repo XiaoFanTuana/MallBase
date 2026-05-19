@@ -54,4 +54,23 @@ class SmsScene
     {
         return array_keys(self::TEXTS);
     }
+
+    /**
+     * 所有场景能向短信模板提供的参数白名单(占位符名称)
+     *
+     *  - code: 验证码本体(PNVS 注入 ##code## 由平台生成;企业版注入本地生成的 6 位码)
+     *  - min:  验证码有效期分钟数(取自 SmsService::codeTtl/60)
+     *
+     * 用于:
+     *  - SmsSceneService::bind() 校验模板占位符是否被场景覆盖
+     *  - SmsService::resolveDriverForScene() 构造 templateParam
+     *
+     * 未来扩展 app_name / amount 等占位符,需在此追加 + 在 SmsService 注入逻辑里增加分支。
+     *
+     * @return array<int, string>
+     */
+    public static function availableParamNames(): array
+    {
+        return ['code', 'min'];
+    }
 }

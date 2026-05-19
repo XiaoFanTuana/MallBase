@@ -9,6 +9,7 @@ export namespace SmsProviderApi {
     access_key_secret?: string;
     access_key_secret_set?: boolean;
     region: string;
+    scheme_name?: string;
     is_default: number;
     status: number;
     remark?: string;
@@ -31,6 +32,7 @@ export namespace SmsProviderApi {
     access_key_id: string;
     access_key_secret?: string;
     region: string;
+    scheme_name?: string;
     is_default: number;
     status: number;
     remark?: string;

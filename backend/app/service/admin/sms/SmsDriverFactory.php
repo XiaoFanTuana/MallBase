@@ -38,4 +38,15 @@ final class SmsDriverFactory
             'region' => (string) $provider->region,
         ]);
     }
+
+    /**
+     * 服务商是否支持远端签名/模板管理
+     *
+     * 通过驱动是否实现 SmsTemplateManagerInterface 判断,避免业务层硬编码 driver 字符串。
+     * 当前 PNVS(aliyun_pnvs)签名/模板由阿里云预置,无远端管理 API,返回 false。
+     */
+    public static function supportsRemoteSignManagement(SmsProvider $provider): bool
+    {
+        return self::driver($provider) instanceof SmsTemplateManagerInterface;
+    }
 }

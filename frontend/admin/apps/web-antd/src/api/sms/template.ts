@@ -30,7 +30,9 @@ export namespace SmsTemplateApi {
     provider_id: number;
     template_name: string;
     template_type: number;
-    template_content: string;
+    template_content?: string;
+    /** PNVS 模板必填:阿里云控制台「赠送模板配置」中的 SMS_xxx;普通模板由后端从远端写回 */
+    template_code?: string;
     remark?: string;
   }
 
@@ -82,5 +84,12 @@ export async function syncAllSmsTemplateApi(providerId: number) {
   return requestClient.post<{ failed: number; success: number }>(
     '/sms/template/syncAll',
     { provider_id: providerId },
+  );
+}
+
+export async function syncBatchSmsTemplateApi(ids: number[]) {
+  return requestClient.post<{ failed: number; success: number }>(
+    '/sms/template/syncBatch',
+    { ids },
   );
 }

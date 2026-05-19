@@ -33,7 +33,7 @@ class TemplateController extends BaseController
 
     public function create()
     {
-        $data = $this->request->param(['provider_id', 'template_name', 'template_type', 'template_content', 'remark']);
+        $data = $this->request->param(['provider_id', 'template_name', 'template_type', 'template_content', 'template_code', 'remark']);
         $this->validate($data, SmsTemplateValidate::class . '.create');
         $id = $this->service()->create($data);
         return $this->success(['id' => $id], '创建已提交,等待审核');
@@ -41,7 +41,7 @@ class TemplateController extends BaseController
 
     public function update($id)
     {
-        $data = $this->request->param(['provider_id', 'template_name', 'template_type', 'template_content', 'remark']);
+        $data = $this->request->param(['provider_id', 'template_name', 'template_type', 'template_content', 'template_code', 'remark']);
         $this->validate($data, SmsTemplateValidate::class . '.update');
         $this->service()->update((int) $id, $data);
         return $this->success(null, '更新成功,等待重新审核');
@@ -82,6 +82,20 @@ class TemplateController extends BaseController
             return $this->error('服务商ID必填');
         }
         $stat = $this->service()->syncAll($providerId);
+        return $this->success($stat, "同步完成: 成功 {$stat['success']} 个,失败 {$stat['failed']} 个");
+    }
+
+    /**
+     * 按勾选的 id 数组批量同步模板状态
+     * body: { ids: [1, 2, 3] }
+     */
+    public function syncBatch()
+    {
+        $ids = (array) $this->request->param('ids', []);
+        if (empty($ids)) {
+            return $this->error('请至少选择一条模板');
+        }
+        $stat = $this->service()->syncBatch($ids);
         return $this->success($stat, "同步完成: 成功 {$stat['success']} 个,失败 {$stat['failed']} 个");
     }
 }

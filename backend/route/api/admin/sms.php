@@ -100,6 +100,9 @@ Route::group('sms/template', function () {
     Route::post('syncAll', 'syncAll')->name('SmsTemplateSyncAll')->option([
         '_alias' => '批量同步', '_desc' => '同步指定服务商下所有模板状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
     ]);
+    Route::post('syncBatch', 'syncBatch')->name('SmsTemplateSyncBatch')->option([
+        '_alias' => '勾选同步', '_desc' => '按勾选的 id 批量同步模板状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON,
+    ]);
 })->prefix('admin.sms.TemplateController/')
   ->option([
       '_group_name' => '模板管理',

@@ -48,17 +48,17 @@ class SmsSignService extends BaseService
     }
 
     /**
-     * 创建本地记录 + 调用阿里云 AddSmsSign(把资质文件 base64 透传到 SignFileList)
-     * 远端失败时本地仍入库,状态置为 local_only,便于用户后续修复重试
+     * 本地登记 PNVS 系统赠送签名
+     *
+     * 业务约束:
+     *  - 仅 PNVS(无远端管理 API)的服务商支持新增签名,且仅做本地登记
+     *  - 普通阿里云/腾讯等渠道的签名必须通过 importFromRemote 从平台拉已审核记录
+     *  - 控制台已审核通过的签名 → 走 importFromRemote;尚未审核的 → 用户先去阿里云控制台申请
      *
      * @param array{
      *     provider_id:int,
      *     sign_name:string,
-     *     sign_source:int,
-     *     sign_type:int,
-     *     remark?:string,
-     *     qualification_id?:int,
-     *     sign_files?:array<int, array{file_contents:string, file_suffix:string}>
+     *     remark?:string
      * } $data
      */
     public function create(array $data): int
@@ -68,34 +68,22 @@ class SmsSignService extends BaseService
             throw new BusinessException('服务商不存在');
         }
 
-        $payload = [
-            'provider_id' => (int) $data['provider_id'],
-            'sign_name' => trim($data['sign_name']),
-            'sign_source' => (int) ($data['sign_source'] ?? 0),
-            'sign_type' => (int) ($data['sign_type'] ?? 1),
-            'remark' => $data['remark'] ?? null,
-            'qualification_id' => $data['qualification_id'] ?? null,
-            'audit_status' => SmsSign::AUDIT_LOCAL_ONLY,
-            'audit_reason' => null,
-        ];
-
-        try {
-            $manager = SmsDriverFactory::manager($provider);
-            $manager->addSign([
-                'sign_name' => $payload['sign_name'],
-                'sign_source' => $payload['sign_source'],
-                'sign_type' => $payload['sign_type'],
-                'remark' => $payload['remark'] ?? '',
-                'sign_files' => $data['sign_files'] ?? [],
-            ]);
-            $payload['audit_status'] = SmsSign::AUDIT_PENDING;
-            $payload['last_synced_at'] = date('Y-m-d H:i:s');
-        } catch (Throwable $e) {
-            $payload['audit_reason'] = $e->getMessage();
+        if (SmsDriverFactory::supportsRemoteSignManagement($provider)) {
+            throw new BusinessException(
+                '签名仅支持 PNVS 服务商本地登记;其他渠道的签名请在阿里云控制台申请通过后,使用「导入已审核签名」功能拉到本地'
+            );
         }
 
         $row = $this->model();
-        $row->save($payload);
+        $row->save([
+            'provider_id' => (int) $data['provider_id'],
+            'sign_name' => trim($data['sign_name']),
+            'sign_source' => 0,
+            'sign_type' => 1,
+            'remark' => $data['remark'] ?? null,
+            'audit_status' => SmsSign::AUDIT_LOCAL_ONLY,
+            'audit_reason' => 'PNVS 系统赠送签名,无需远端审核',
+        ]);
         return (int) $row->id;
     }
 
@@ -105,12 +93,17 @@ class SmsSignService extends BaseService
      * 适用场景:
      *  - 你在阿里云控制台已经申请并审核通过了某签名,想接入到 mallbase
      *  - 旧线上数据迁移
+     *
+     * PNVS 服务商不支持导入:其签名由平台预置无 QuerySmsSign API,请走 create() 本地登记
      */
     public function importFromRemote(int $providerId, string $signName): int
     {
         $provider = SmsProvider::find($providerId);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
+        }
+        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
+            throw new BusinessException('PNVS 服务商不支持导入,请使用「新增签名」在本地登记');
         }
 
         $exists = $this->model()
@@ -146,7 +139,7 @@ class SmsSignService extends BaseService
         }
 
         $provider = SmsProvider::find($row->provider_id);
-        if ($provider !== null) {
+        if ($provider !== null && SmsDriverFactory::supportsRemoteSignManagement($provider)) {
             try {
                 $manager = SmsDriverFactory::manager($provider);
                 $manager->deleteSign((string) $row->sign_name);
@@ -169,6 +162,9 @@ class SmsSignService extends BaseService
         $provider = SmsProvider::find($row->provider_id);
         if ($provider === null) {
             throw new BusinessException('服务商不存在');
+        }
+        if (!SmsDriverFactory::supportsRemoteSignManagement($provider)) {
+            throw new BusinessException('PNVS 签名为系统赠送,无需同步');
         }
 
         try {

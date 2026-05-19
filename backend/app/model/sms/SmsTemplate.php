@@ -43,4 +43,21 @@ class SmsTemplate extends BaseModel
     {
         return $this->belongsTo(SmsProvider::class, 'provider_id', 'id');
     }
+
+    /**
+     * 从模板内容中抽取 ${xxx} 形式的占位符名称(去重)
+     *
+     * 用于场景绑定时校验模板需要的参数是否能被场景白名单覆盖,
+     * 以及发送时按占位符构造 templateParam。
+     *
+     * @return array<int, string>
+     */
+    public static function extractPlaceholders(string $content): array
+    {
+        if ($content === '') {
+            return [];
+        }
+        preg_match_all('/\$\{(\w+)\}/', $content, $matches);
+        return array_values(array_unique($matches[1] ?? []));
+    }
 }
