@@ -25,7 +25,7 @@
 - `thinkPHP/goods-media-contract`
 - `thinkPHP/backend-test-baseline`
 - `thinkPHP/mall-base-boundary`
-- `thinkPHP/dev-no-upgrade-sql`
+- `thinkPHP/dev-schema-upgrade-sql`
 - `thinkPHP/wechat-pay-stateless`
 - `thinkPHP/payment-notify-idempotency`
 
@@ -255,7 +255,7 @@
 - 后端测试基线：
   - `thinkPHP/backend-test-baseline`
 - 数据库 seed 与升级策略：
-  - `thinkPHP/dev-no-upgrade-sql`
+  - `thinkPHP/dev-schema-upgrade-sql`
 - 后台 UI 与表单规范：
   - `vbenAdmin/modal-form-layout`
   - `vbenAdmin/admin-theme-consistency`

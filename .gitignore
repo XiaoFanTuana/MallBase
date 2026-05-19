@@ -21,3 +21,6 @@ deploy/upload-frontend.local.sh
 
 # 工作过程产生的临时目录（截图中转、调试输出等）
 .tmp/
+
+# 已部署环境的增量升级 SQL（按环境手动执行，不入库；schema 文件才是入库的唯一真相源）
+deploy/install/data/upgrade/
