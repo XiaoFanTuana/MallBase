@@ -24,6 +24,11 @@ const settings = ref<SettingApi.SettingItem[]>([]);
 const formValues = ref<Record<string, any>>({});
 const formErrors = reactive<Record<string, string>>({});
 
+type OptionListRow = {
+  label: string;
+  value: string;
+};
+
 // 选项卡模式
 const isTabMode = ref(false);
 const hasTabs = ref(false); // 是否有 tab 子分组（区分纯 page 和 page+tabs）
@@ -122,6 +127,19 @@ const validateFieldValue = (
       (Array.isArray(value) && value.length === 0))
   ) {
     return `请填写「${item.name}」`;
+  }
+
+  if (item.type === 'option_list') {
+    const rows = normalizeOptionListValue(value);
+    const labels = new Set<string>();
+    for (const row of rows) {
+      const label = row.label.trim();
+      if (!label) continue;
+      if (labels.has(label)) {
+        return `「${item.name}」不能包含重复选项：${label}`;
+      }
+      labels.add(label);
+    }
   }
 
   // json 类型特殊验证
@@ -375,6 +393,9 @@ const convertValue = (value: string, type: string, fullUrl?: string) => {
       const num = Number(value);
       return Number.isNaN(num) ? value : num;
     }
+    case 'option_list': {
+      return normalizeOptionListValue(value);
+    }
     case 'switch': {
       return value === '1' || value === 'true';
     }
@@ -415,6 +436,11 @@ const serializeValue = (value: any, type: string): any => {
     case 'number': {
       return String(value);
     }
+    case 'option_list': {
+      return JSON.stringify(
+        normalizeOptionListValue(value).filter((row) => row.label.trim()),
+      );
+    }
     case 'switch': {
       return value ? '1' : '0';
     }
@@ -422,6 +448,62 @@ const serializeValue = (value: any, type: string): any => {
       return String(value);
     }
   }
+};
+
+const generateOptionValue = () =>
+  `CUSTOM_${Date.now().toString(36).toUpperCase()}${Math.random()
+    .toString(36)
+    .slice(2, 6)
+    .toUpperCase()}`;
+
+const normalizeOptionListValue = (value: any): OptionListRow[] => {
+  if (Array.isArray(value)) {
+    return value.map((row) => ({
+      label: String(row?.label || ''),
+      value: String(row?.value || generateOptionValue()),
+    }));
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    try {
+      const decoded = JSON.parse(value);
+      if (Array.isArray(decoded)) {
+        return decoded.map((row) => ({
+          label: String(row?.label || ''),
+          value: String(row?.value || generateOptionValue()),
+        }));
+      }
+    } catch {
+      return value
+        .split(/\r?\n/)
+        .map((label) => label.trim())
+        .filter(Boolean)
+        .map((label) => ({ label, value: generateOptionValue() }));
+    }
+  }
+
+  return [];
+};
+
+const ensureOptionListRows = (code: string): OptionListRow[] => {
+  const rows = normalizeOptionListValue(formValues.value[code]);
+  formValues.value[code] = rows;
+  return rows;
+};
+
+const getOptionListRows = (code: string): OptionListRow[] =>
+  Array.isArray(formValues.value[code]) ? formValues.value[code] : [];
+
+const addOptionListRow = (item: SettingApi.SettingItem) => {
+  const rows = ensureOptionListRows(item.code);
+  rows.push({ label: '', value: generateOptionValue() });
+  delete formErrors[item.code];
+};
+
+const removeOptionListRow = (item: SettingApi.SettingItem, index: number) => {
+  const rows = ensureOptionListRows(item.code);
+  rows.splice(index, 1);
+  handleFieldChange(item);
 };
 
 /** 解析 options */
@@ -663,7 +745,10 @@ onMounted(loadConfig);
             class="form-item-wrapper"
             :class="{
               'has-error': getFieldError(item.code),
-              'full-row': item.type === 'editor' || item.type === 'json',
+              'full-row':
+                item.type === 'editor' ||
+                item.type === 'json' ||
+                item.type === 'option_list',
             }"
           >
             <div class="form-label">
@@ -810,6 +895,41 @@ onMounted(loadConfig);
                 }
               "
             />
+
+            <!-- option_list: 选项列表 -->
+            <div v-else-if="item.type === 'option_list'" class="option-list">
+              <div class="option-list-header">
+                <span>选项名称</span>
+                <span>操作</span>
+              </div>
+              <div
+                v-for="(row, index) in getOptionListRows(item.code)"
+                :key="row.value"
+                class="option-list-row"
+              >
+                <a-input
+                  v-model:value="row.label"
+                  :placeholder="item.placeholder || '请输入选项名称'"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+                <a-button
+                  danger
+                  size="small"
+                  type="text"
+                  @click="removeOptionListRow(item, index)"
+                >
+                  删除
+                </a-button>
+              </div>
+              <a-button
+                size="small"
+                type="dashed"
+                @click="addOptionListRow(item)"
+              >
+                新增选项
+              </a-button>
+            </div>
 
             <!-- editor: HTML 编辑器 + 预览 -->
             <template v-else-if="item.type === 'editor'">
@@ -898,7 +1018,10 @@ onMounted(loadConfig);
             class="form-item-wrapper"
             :class="{
               'has-error': getFieldError(item.code),
-              'full-row': item.type === 'editor' || item.type === 'json',
+              'full-row':
+                item.type === 'editor' ||
+                item.type === 'json' ||
+                item.type === 'option_list',
             }"
           >
             <div class="form-label">
@@ -1045,6 +1168,41 @@ onMounted(loadConfig);
                 }
               "
             />
+
+            <!-- option_list: 选项列表 -->
+            <div v-else-if="item.type === 'option_list'" class="option-list">
+              <div class="option-list-header">
+                <span>选项名称</span>
+                <span>操作</span>
+              </div>
+              <div
+                v-for="(row, index) in getOptionListRows(item.code)"
+                :key="row.value"
+                class="option-list-row"
+              >
+                <a-input
+                  v-model:value="row.label"
+                  :placeholder="item.placeholder || '请输入选项名称'"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+                <a-button
+                  danger
+                  size="small"
+                  type="text"
+                  @click="removeOptionListRow(item, index)"
+                >
+                  删除
+                </a-button>
+              </div>
+              <a-button
+                size="small"
+                type="dashed"
+                @click="addOptionListRow(item)"
+              >
+                新增选项
+              </a-button>
+            </div>
 
             <!-- editor: HTML 编辑器 + 预览 -->
             <template v-else-if="item.type === 'editor'">
@@ -1131,7 +1289,10 @@ onMounted(loadConfig);
             class="form-item-wrapper"
             :class="{
               'has-error': getFieldError(item.code),
-              'full-row': item.type === 'editor' || item.type === 'json',
+              'full-row':
+                item.type === 'editor' ||
+                item.type === 'json' ||
+                item.type === 'option_list',
             }"
           >
             <div class="form-label">
@@ -1278,6 +1439,41 @@ onMounted(loadConfig);
                 }
               "
             />
+
+            <!-- option_list: 选项列表 -->
+            <div v-else-if="item.type === 'option_list'" class="option-list">
+              <div class="option-list-header">
+                <span>选项名称</span>
+                <span>操作</span>
+              </div>
+              <div
+                v-for="(row, index) in getOptionListRows(item.code)"
+                :key="row.value"
+                class="option-list-row"
+              >
+                <a-input
+                  v-model:value="row.label"
+                  :placeholder="item.placeholder || '请输入选项名称'"
+                  :status="getFieldError(item.code) ? 'error' : undefined"
+                  @blur="handleFieldChange(item)"
+                />
+                <a-button
+                  danger
+                  size="small"
+                  type="text"
+                  @click="removeOptionListRow(item, index)"
+                >
+                  删除
+                </a-button>
+              </div>
+              <a-button
+                size="small"
+                type="dashed"
+                @click="addOptionListRow(item)"
+              >
+                新增选项
+              </a-button>
+            </div>
 
             <!-- editor: HTML 编辑器 + 预览 -->
             <template v-else-if="item.type === 'editor'">
@@ -1523,6 +1719,33 @@ onMounted(loadConfig);
 .switch-label {
   font-size: 13px;
   color: hsl(var(--muted-foreground));
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--popover));
+}
+
+.option-list-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.option-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
 }
 
 .editor-tabs {

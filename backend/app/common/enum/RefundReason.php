@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace app\common\enum;
 
+use app\service\order\OrderSettingService;
+
 /**
  * 售后申请原因枚举
  *
@@ -34,12 +36,20 @@ class RefundReason
 
     public static function textOf(string $reason): string
     {
+        $setting = self::settingService();
+        if ($setting !== null) {
+            return $setting->refundReasonText($reason);
+        }
         return self::TEXTS[$reason] ?? '未知';
     }
 
     public static function isValid(string $reason): bool
     {
-        return array_key_exists($reason, self::TEXTS);
+        $setting = self::settingService();
+        if ($setting !== null) {
+            return $setting->isValidRefundReason($reason);
+        }
+        return isset(self::TEXTS[$reason]);
     }
 
     /**
@@ -49,6 +59,10 @@ class RefundReason
      */
     public static function values(): array
     {
+        $setting = self::settingService();
+        if ($setting !== null) {
+            return $setting->refundReasonValues();
+        }
         return array_keys(self::TEXTS);
     }
 
@@ -57,10 +71,27 @@ class RefundReason
      */
     public static function options(): array
     {
-        $options = [];
-        foreach (self::TEXTS as $value => $label) {
-            $options[] = ['value' => $value, 'label' => $label];
+        $setting = self::settingService();
+        if ($setting !== null) {
+            return $setting->refundReasonOptions();
         }
-        return $options;
+        return array_map(
+            static fn(string $value, string $label): array => ['value' => $value, 'label' => $label],
+            array_keys(self::TEXTS),
+            array_values(self::TEXTS)
+        );
+    }
+
+    private static function settingService(): ?OrderSettingService
+    {
+        if (!function_exists('app')) {
+            return null;
+        }
+
+        try {
+            return \app()->make(OrderSettingService::class);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

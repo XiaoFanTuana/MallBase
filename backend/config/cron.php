@@ -17,6 +17,6 @@ return [
      */
 
     'tasks' => [
-        app\cron\tasks\TestCron::class,
+        app\cron\tasks\OrderMaintenanceCron::class,
     ],
 ];

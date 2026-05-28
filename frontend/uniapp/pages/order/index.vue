@@ -38,6 +38,9 @@
             {{ statusLabel(order.status) }}
           </text>
         </view>
+        <text v-if="order.status === 0 && getCountdownText(order)" class="order-card__countdown">
+          剩余 {{ getCountdownText(order) }}
+        </text>
 
         <!-- Product items -->
         <view
@@ -122,8 +125,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { onShow, onReachBottom } from '@dcloudio/uni-app'
+import { ref, computed, onUnmounted } from 'vue'
+import { onShow, onHide, onReachBottom } from '@dcloudio/uni-app'
 import { getOrderList, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import config from '@/config/index'
@@ -183,6 +186,9 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const noMore = ref(false)
 const limit = 10
+const nowTs = ref(Date.now())
+let countdownTimer = null
+let lastExpiredRefreshAt = 0
 
 const currentTabLabel = computed(() => {
   const t = tabs.find((t) => t.key === currentTab.value)
@@ -277,18 +283,53 @@ function getOrderQuantity(order) {
   return items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || items.length
 }
 
+function getExpireAtTs(order) {
+  const expireAt = order?.expire_at || ''
+  if (!expireAt) return 0
+  const ts = Date.parse(String(expireAt).replace(/-/g, '/'))
+  return Number.isFinite(ts) ? ts : 0
+}
+
+function getRemainingSeconds(order) {
+  const expireAtTs = getExpireAtTs(order)
+  if (!expireAtTs) return 0
+  return Math.max(0, Math.floor((expireAtTs - nowTs.value) / 1000))
+}
+
+function isPendingPayExpired(order) {
+  return Number(order?.status) === 0 && getExpireAtTs(order) > 0 && getRemainingSeconds(order) <= 0
+}
+
+function getCountdownText(order) {
+  const seconds = getRemainingSeconds(order)
+  if (seconds <= 0) return ''
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0')
+  const ss = String(seconds % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
+function canApplyRefund(order) {
+  return order?.can_refund !== false
+}
+
 function getActions(order) {
   const actions = []
   if (order.status === 0) {
-    actions.push({ key: 'cancel', label: '取消订单', primary: false })
-    actions.push({ key: 'pay', label: '去付款', primary: true })
+    if (!isPendingPayExpired(order)) {
+      actions.push({ key: 'cancel', label: '取消订单', primary: false })
+      actions.push({ key: 'pay', label: '去付款', primary: true })
+    }
   } else if (order.status === 10) {
-    actions.push({ key: 'refund', label: '申请售后', primary: false })
+    if (canApplyRefund(order)) {
+      actions.push({ key: 'refund', label: '申请售后', primary: false })
+    }
   } else if (order.status === 20) {
     actions.push({ key: 'logistics', label: '查看物流', primary: false })
     actions.push({ key: 'confirm', label: '确认收货', primary: true })
   } else if (order.status === 30 || order.status === 40) {
-    actions.push({ key: 'refund', label: '申请售后', primary: false })
+    if (canApplyRefund(order)) {
+      actions.push({ key: 'refund', label: '申请售后', primary: false })
+    }
     actions.push({ key: 'review', label: '去评价', primary: false })
     actions.push({ key: 'rebuy', label: '再次购买', primary: true })
   }
@@ -360,6 +401,11 @@ async function handleAction(key, order) {
       },
     })
   } else if (key === 'pay') {
+    if (isPendingPayExpired(order)) {
+      uni.showToast({ title: '订单已超时，请重新下单', icon: 'none' })
+      fetchOrders(true)
+      return
+    }
     pendingPayOrder.value = order
     const payResult = await startPay(order.id)
     if (payResult) redirectToPayResult(order, payResult)
@@ -381,6 +427,10 @@ async function handleAction(key, order) {
   } else if (key === 'logistics') {
     uni.navigateTo({ url: `/pages-sub/logistics/detail?order_id=${order.id}` })
   } else if (key === 'refund') {
+    if (!canApplyRefund(order)) {
+      uni.showToast({ title: '订单已超过售后申请期限', icon: 'none' })
+      return
+    }
     const items = getOrderItems(order)
     if (items.length === 0) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
@@ -410,7 +460,26 @@ function goShopping() {
   uni.switchTab({ url: '/pages/index/index' })
 }
 
+function startCountdownTimer() {
+  if (countdownTimer) return
+  countdownTimer = setInterval(() => {
+    nowTs.value = Date.now()
+    if (orderList.value.some(isPendingPayExpired) && Date.now() - lastExpiredRefreshAt > 5000) {
+      lastExpiredRefreshAt = Date.now()
+      fetchOrders(true)
+    }
+  }, 1000)
+}
+
+function stopCountdownTimer() {
+  if (!countdownTimer) return
+  clearInterval(countdownTimer)
+  countdownTimer = null
+}
+
 onShow(() => {
+  nowTs.value = Date.now()
+  startCountdownTimer()
   const initialTab = uni.getStorageSync('order_initial_tab')
   if (initialTab) {
     uni.removeStorageSync('order_initial_tab')
@@ -423,6 +492,14 @@ onShow(() => {
 
 onReachBottom(() => {
   fetchOrders(false)
+})
+
+onHide(() => {
+  stopCountdownTimer()
+})
+
+onUnmounted(() => {
+  stopCountdownTimer()
 })
 </script>
 
@@ -582,6 +659,13 @@ onReachBottom(() => {
 
 .order-card__status--muted {
   color: $mb-color-text-tertiary;
+}
+
+.order-card__countdown {
+  display: block;
+  margin: -8rpx 0 14rpx;
+  font-size: $mb-font-xs;
+  color: $mb-color-primary;
 }
 
 /* --- Product item row -------------------------------------- */

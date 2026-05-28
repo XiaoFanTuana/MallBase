@@ -10,12 +10,15 @@ use app\model\order\Cart;
 use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\OrderLog;
+use app\model\order\PaymentLog;
 use app\model\setting\FreightTemplate;
 use app\service\FreightCalculatorService;
 use app\service\dto\RegionPathDto;
 use app\service\order\OrderSnGenerator;
+use app\service\order\OrderSettingService;
 use app\service\order\OrderStatusMachine;
 use app\service\order\StockService;
+use app\service\order\WechatPrepayCloseService;
 use app\model\user\UserAddress;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
@@ -40,10 +43,9 @@ class OrderService extends BaseService
     protected string $modelClass = Order::class;
 
     /**
-     * 下单默认支付超时（秒）：15 分钟
-     * 秒杀/促销场景可通过参数覆盖（本 MVP 未开放）
+     * 下单默认支付超时（秒）：后台配置缺失时兜底 30 分钟
      */
-    public const DEFAULT_PAY_EXPIRE_SECONDS = 900;
+    public const DEFAULT_PAY_EXPIRE_SECONDS = 1800;
 
     /**
      * 幂等业务域
@@ -339,12 +341,18 @@ class OrderService extends BaseService
             throw new BusinessException('当前订单状态不允许取消');
         }
 
+        /** @var WechatPrepayCloseService $prepayCloser */
+        $prepayCloser = app()->make(WechatPrepayCloseService::class);
+        $prepayLogs = $prepayCloser->activePrepayLogs((int) $order->id);
+        $prepayCloser->closeLogs($prepayLogs);
+        $prepayLogIds = $prepayCloser->idsOf($prepayLogs);
+
         $machine = app()->make(OrderStatusMachine::class);
         $stock   = app()->make(StockService::class);
 
         $items = $this->loadOrderItemsForStock((int) $order->id);
 
-        $this->transaction(function () use ($order, $items, $machine, $stock, $reason, $userId): void {
+        $this->transaction(function () use ($order, $items, $machine, $stock, $reason, $userId, $prepayLogIds): void {
             $machine->transit(
                 order: $order,
                 toStatus: OrderStatus::CLOSED,
@@ -353,6 +361,11 @@ class OrderService extends BaseService
                 remark: $reason !== null && $reason !== '' ? mb_substr($reason, 0, 255) : '买家取消订单',
             );
             $stock->restoreBatch($items);
+            if ($prepayLogIds !== []) {
+                $this->model(PaymentLog::class)
+                    ->whereIn('id', $prepayLogIds)
+                    ->update(['event_type' => PaymentLog::EVENT_CLOSED]);
+            }
         });
     }
 
@@ -404,6 +417,7 @@ class OrderService extends BaseService
         $itemsMap = $this->fetchItemsByOrderIds($orderIds);
         foreach ($list as &$row) {
             $row['items'] = $itemsMap[(int) $row['id']] ?? [];
+            $row['can_refund'] = $this->canApplyRefund($row);
         }
         unset($row);
 
@@ -419,6 +433,7 @@ class OrderService extends BaseService
 
         $data = $order->toArray();
         $data['items'] = $this->fetchItemsByOrderIds([(int) $order->id])[(int) $order->id] ?? [];
+        $data['can_refund'] = $this->canApplyRefund($data);
         $data['logs']  = $this->model(OrderLog::class)
             ->where('order_id', (int) $order->id)
             ->order('id', 'asc')
@@ -481,7 +496,10 @@ class OrderService extends BaseService
                 'receiver_district' => $address['district'],
                 'receiver_address'  => $address['address'],
                 'buyer_remark'      => $buyerRemark !== null ? mb_substr($buyerRemark, 0, 255) : null,
-                'expire_at'         => date('Y-m-d H:i:s', time() + self::DEFAULT_PAY_EXPIRE_SECONDS),
+                'expire_at'         => date(
+                    'Y-m-d H:i:s',
+                    time() + app()->make(OrderSettingService::class)->pendingPayTimeoutSeconds()
+                ),
             ]);
 
             // 3. 落订单项快照
@@ -810,6 +828,42 @@ class OrderService extends BaseService
         }
         if ($goods === null || (int) $goods['status'] !== 1 || (int) $goods['is_on_sale'] !== 1) {
             throw new BusinessException('商品已下架');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     */
+    private function canApplyRefund(array $order): bool
+    {
+        $status = (int) ($order['status'] ?? 0);
+        if (!in_array($status, [OrderStatus::PAID, OrderStatus::SHIPPED, OrderStatus::RECEIVED, OrderStatus::COMPLETED], true)) {
+            return false;
+        }
+
+        $afterSaleDays = $this->afterSaleDays();
+        if ($afterSaleDays === 0) {
+            return true;
+        }
+
+        $receivedAt = (string) ($order['received_at'] ?? '');
+        if ($receivedAt === '') {
+            return true;
+        }
+
+        return strtotime($receivedAt) + ($afterSaleDays * 86400) >= time();
+    }
+
+    private function afterSaleDays(): int
+    {
+        if (!function_exists('app')) {
+            return 0;
+        }
+
+        try {
+            return \app()->make(OrderSettingService::class)->afterSaleDays();
+        } catch (\Throwable) {
+            return 0;
         }
     }
 

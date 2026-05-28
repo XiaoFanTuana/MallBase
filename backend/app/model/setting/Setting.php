@@ -81,6 +81,9 @@ class Setting extends BaseModel
     /** JSON 编辑器 */
     const TYPE_JSON = 'json';
 
+    /** 选项列表 */
+    const TYPE_OPTION_LIST = 'option_list';
+
     /**
      * 需要拼接上传域名的文件类型
      */
@@ -114,6 +117,7 @@ class Setting extends BaseModel
             ['label' => '多视频 (videos)',      'value' => self::TYPE_VIDEOS],
             ['label' => '富文本 (editor)',      'value' => self::TYPE_EDITOR],
             ['label' => 'JSON',                 'value' => self::TYPE_JSON],
+            ['label' => '选项列表 (option_list)', 'value' => self::TYPE_OPTION_LIST],
         ];
     }
 

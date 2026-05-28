@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
@@ -235,11 +235,16 @@ const STATUS_MAP = {
 
 const loading = ref(true)
 const order = ref(null)
+const orderId = ref('')
+const nowTs = ref(Date.now())
+let countdownTimer = null
+let expiredRefreshed = false
 
 onLoad((query) => {
-  const id = query?.id || ''
-  if (id) {
-    fetchDetail(id)
+  orderId.value = query?.id || ''
+  startCountdownTimer()
+  if (orderId.value) {
+    fetchDetail(orderId.value)
   } else {
     loading.value = false
   }
@@ -266,8 +271,11 @@ const statusText = computed(() => {
 
 const statusDesc = computed(() => {
   if (!order.value) return ''
+  if (order.value.status === 0) {
+    const text = countdownText.value
+    return text ? `请在 ${text} 内完成支付` : '订单已超时，正在更新状态'
+  }
   const map = {
-    0: '请在订单关闭前完成支付',
     10: '商家正在为你处理订单',
     20: '你的包裹正在路上，请保持电话畅通',
     30: '订单已签收，期待你的评价',
@@ -320,15 +328,21 @@ const actions = computed(() => {
   if (!order.value) return []
   const list = []
   if (order.value.status === 0) {
-    list.push({ key: 'cancel', label: '取消订单', primary: false })
-    list.push({ key: 'pay', label: '去付款', primary: true })
+    if (!isPendingPayExpired(order.value)) {
+      list.push({ key: 'cancel', label: '取消订单', primary: false })
+      list.push({ key: 'pay', label: '去付款', primary: true })
+    }
   } else if (order.value.status === 10) {
-    list.push({ key: 'refund', label: '申请售后', primary: false })
+    if (canApplyRefund(order.value)) {
+      list.push({ key: 'refund', label: '申请售后', primary: false })
+    }
   } else if (order.value.status === 20) {
     list.push({ key: 'logistics', label: '查看物流', primary: false })
     list.push({ key: 'confirm', label: '确认收货', primary: true })
   } else if (order.value.status === 30 || order.value.status === 40) {
-    list.push({ key: 'refund', label: '申请售后', primary: false })
+    if (canApplyRefund(order.value)) {
+      list.push({ key: 'refund', label: '申请售后', primary: false })
+    }
     list.push({ key: 'review', label: '去评价', primary: false })
   }
   return list
@@ -382,6 +396,35 @@ function getRefundItemLabel(item) {
   return spec ? `${name} ${spec}` : name
 }
 
+function getExpireAtTs(source) {
+  const expireAt = source?.expire_at || ''
+  if (!expireAt) return 0
+  const ts = Date.parse(String(expireAt).replace(/-/g, '/'))
+  return Number.isFinite(ts) ? ts : 0
+}
+
+function getRemainingSeconds(source) {
+  const expireAtTs = getExpireAtTs(source)
+  if (!expireAtTs) return 0
+  return Math.max(0, Math.floor((expireAtTs - nowTs.value) / 1000))
+}
+
+function isPendingPayExpired(source) {
+  return Number(source?.status) === 0 && getExpireAtTs(source) > 0 && getRemainingSeconds(source) <= 0
+}
+
+const countdownText = computed(() => {
+  const seconds = getRemainingSeconds(order.value)
+  if (seconds <= 0) return ''
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0')
+  const ss = String(seconds % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+})
+
+function canApplyRefund(source) {
+  return source?.can_refund !== false
+}
+
 function navigateToRefund(item) {
   const orderItemId = getOrderItemId(item)
   if (!orderItemId) {
@@ -432,6 +475,11 @@ async function handleAction(key) {
       },
     })
   } else if (key === 'pay') {
+    if (isPendingPayExpired(order.value)) {
+      uni.showToast({ title: '订单已超时，请重新下单', icon: 'none' })
+      fetchDetail(order.value.id)
+      return
+    }
     const payResult = await startPay(order.value.id)
     if (payResult) redirectToPayResult(payResult)
   } else if (key === 'confirm') {
@@ -458,6 +506,10 @@ async function handleAction(key) {
       url: `/pages-sub/review/post?order_id=${order.value.id}`,
     })
   } else if (key === 'refund') {
+    if (!canApplyRefund(order.value)) {
+      uni.showToast({ title: '订单已超过售后申请期限', icon: 'none' })
+      return
+    }
     const items = orderItems.value
     if (items.length === 0) {
       uni.showToast({ title: '请选择要申请售后的商品', icon: 'none' })
@@ -476,6 +528,23 @@ async function handleAction(key) {
   }
 }
 
+function startCountdownTimer() {
+  if (countdownTimer) return
+  countdownTimer = setInterval(() => {
+    nowTs.value = Date.now()
+    if (isPendingPayExpired(order.value) && !expiredRefreshed) {
+      expiredRefreshed = true
+      fetchDetail(order.value.id)
+    }
+  }, 1000)
+}
+
+function stopCountdownTimer() {
+  if (!countdownTimer) return
+  clearInterval(countdownTimer)
+  countdownTimer = null
+}
+
 function goBack() {
   const pages = getCurrentPages()
   if (pages.length > 1) {
@@ -484,6 +553,10 @@ function goBack() {
     uni.switchTab({ url: '/pages/order/index' })
   }
 }
+
+onUnmounted(() => {
+  stopCountdownTimer()
+})
 </script>
 
 <style lang="scss" scoped>

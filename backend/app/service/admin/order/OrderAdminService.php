@@ -10,7 +10,9 @@ use app\model\order\OrderLog;
 use app\model\order\PaymentLog;
 use app\model\order\RefundOrder;
 use app\service\order\OrderStatusMachine;
+use app\service\order\OrderSettingService;
 use app\service\order\StockService;
+use app\service\order\WechatPrepayCloseService;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
@@ -124,8 +126,13 @@ class OrderAdminService extends BaseService
             $discount,
             $remarkPart
         );
+        /** @var WechatPrepayCloseService $prepayClose */
+        $prepayClose = app()->make(WechatPrepayCloseService::class);
+        $prepayLogs = $prepayClose->activePrepayLogs((int) $order->id);
+        $prepayClose->closeLogs($prepayLogs);
+        $prepayLogIds = $prepayClose->idsOf($prepayLogs);
 
-        $this->transaction(function () use ($order, $freight, $discount, $newPay, $adminId, $remark, $ip): void {
+        $this->transaction(function () use ($order, $freight, $discount, $newPay, $adminId, $remark, $ip, $prepayLogIds): void {
             // 1) 写订单金额
             $order->freight_amount  = $freight;
             $order->discount_amount = $discount;
@@ -137,6 +144,11 @@ class OrderAdminService extends BaseService
                 ->where('order_id', (int) $order->id)
                 ->where('event_type', PaymentLog::EVENT_PREPAY)
                 ->update(['event_type' => PaymentLog::EVENT_SUPERSEDED]);
+            if ($prepayLogIds !== []) {
+                $this->model(PaymentLog::class)
+                    ->whereIn('id', $prepayLogIds)
+                    ->update(['event_type' => PaymentLog::EVENT_SUPERSEDED]);
+            }
 
             // 3) 审计日志（同状态自环，仅记录改价动作）
             OrderLog::create([
@@ -169,8 +181,16 @@ class OrderAdminService extends BaseService
         /** @var StockService $stock */
         $stock = app()->make(StockService::class);
         $items = $this->loadOrderItemsForStock($orderId);
+        $prepayLogIds = [];
+        if ($from === OrderStatus::PENDING_PAY) {
+            /** @var WechatPrepayCloseService $prepayClose */
+            $prepayClose = app()->make(WechatPrepayCloseService::class);
+            $prepayLogs = $prepayClose->activePrepayLogs((int) $order->id);
+            $prepayClose->closeLogs($prepayLogs);
+            $prepayLogIds = $prepayClose->idsOf($prepayLogs);
+        }
 
-        $this->transaction(function () use ($order, $items, $machine, $stock, $adminId, $reason): void {
+        $this->transaction(function () use ($order, $items, $machine, $stock, $adminId, $reason, $prepayLogIds): void {
             $machine->transit(
                 order: $order,
                 toStatus: OrderStatus::CLOSED,
@@ -179,6 +199,11 @@ class OrderAdminService extends BaseService
                 remark: $reason !== null && $reason !== '' ? mb_substr($reason, 0, 255) : '管理员关闭订单',
             );
             $stock->restoreBatch($items);
+            if ($prepayLogIds !== []) {
+                $this->model(PaymentLog::class)
+                    ->whereIn('id', $prepayLogIds)
+                    ->update(['event_type' => PaymentLog::EVENT_CLOSED]);
+            }
         });
     }
 
@@ -218,8 +243,13 @@ class OrderAdminService extends BaseService
                     continue;
                 }
                 $items = $this->loadOrderItemsForStock($orderId);
+                /** @var WechatPrepayCloseService $prepayClose */
+                $prepayClose = app()->make(WechatPrepayCloseService::class);
+                $prepayLogs = $prepayClose->activePrepayLogs($orderId);
+                $prepayClose->closeLogs($prepayLogs);
+                $prepayLogIds = $prepayClose->idsOf($prepayLogs);
 
-                $this->transaction(function () use ($order, $items, $machine, $stock): void {
+                $this->transaction(function () use ($order, $items, $machine, $stock, $prepayLogIds): void {
                     $machine->transit(
                         order: $order,
                         toStatus: OrderStatus::CLOSED,
@@ -228,6 +258,11 @@ class OrderAdminService extends BaseService
                         remark: '支付超时自动关闭',
                     );
                     $stock->restoreBatch($items);
+                    if ($prepayLogIds !== []) {
+                        $this->model(PaymentLog::class)
+                            ->whereIn('id', $prepayLogIds)
+                            ->update(['event_type' => PaymentLog::EVENT_CLOSED]);
+                    }
                 });
                 $closed++;
             } catch (\Throwable $e) {
@@ -245,6 +280,65 @@ class OrderAdminService extends BaseService
         }
 
         return ['scanned' => $scanned, 'closed' => $closed];
+    }
+
+    /**
+     * 扫描并自动确认收货（定时任务入口）
+     *
+     * @param int $limit 单次最大处理量
+     * @return array{scanned:int, received:int}
+     */
+    public function autoReceiveExpired(int $limit = 500): array
+    {
+        /** @var OrderSettingService $setting */
+        $setting = app()->make(OrderSettingService::class);
+        $deadline = date('Y-m-d H:i:s', time() - $setting->autoReceiveDays() * 86400);
+        $rows = $this->model()
+            ->where('status', OrderStatus::SHIPPED)
+            ->whereNotNull('shipped_at')
+            ->where('shipped_at', '<=', $deadline)
+            ->whereNull('delete_time')
+            ->limit($limit)
+            ->column('id');
+
+        $scanned = count($rows);
+        $received = 0;
+        /** @var OrderStatusMachine $machine */
+        $machine = app()->make(OrderStatusMachine::class);
+
+        foreach ($rows as $id) {
+            $orderId = (int) $id;
+            try {
+                /** @var Order|null $order */
+                $order = $this->model()->where('id', $orderId)->whereNull('delete_time')->find();
+                if ($order === null || (int) $order->status !== OrderStatus::SHIPPED) {
+                    continue;
+                }
+
+                $this->transaction(function () use ($order, $machine): void {
+                    $machine->transit(
+                        order: $order,
+                        toStatus: OrderStatus::RECEIVED,
+                        operatorType: OperatorType::SYSTEM,
+                        operatorId: null,
+                        remark: '发货后超时自动确认收货',
+                    );
+                });
+                $received++;
+            } catch (\Throwable $e) {
+                OrderLog::create([
+                    'order_id'      => $orderId,
+                    'from_status'   => OrderStatus::SHIPPED,
+                    'to_status'     => OrderStatus::SHIPPED,
+                    'operator_type' => OperatorType::SYSTEM,
+                    'operator_id'   => null,
+                    'remark'        => '自动确认收货失败：' . mb_substr($e->getMessage(), 0, 200),
+                    'ip'            => null,
+                ]);
+            }
+        }
+
+        return ['scanned' => $scanned, 'received' => $received];
     }
 
     /**

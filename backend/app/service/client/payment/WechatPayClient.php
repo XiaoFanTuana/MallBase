@@ -65,6 +65,31 @@ class WechatPayClient
     }
 
     /**
+     * 关闭微信支付订单（商户订单号）
+     */
+    public function closeByOutTradeNo(PayApplication $app, string $mchId, string $outTradeNo): void
+    {
+        try {
+            $response = $app->getClient()->postJson(
+                '/v3/pay/transactions/out-trade-no/' . rawurlencode($outTradeNo) . '/close',
+                ['mchid' => $mchId]
+            );
+            $statusCode = $response->getStatusCode();
+            if ($statusCode >= 400) {
+                $body = (string) $response->getContent(false);
+                $decoded = json_decode($body, true);
+                $code = is_array($decoded) ? (string) ($decoded['code'] ?? 'UNKNOWN') : 'UNKNOWN';
+                $message = is_array($decoded) ? (string) ($decoded['message'] ?? '微信关单失败') : '微信关单失败';
+                throw new BusinessException(sprintf('微信关单失败 [%s] %s', $code, $message));
+            }
+        } catch (BusinessException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new BusinessException('微信关单异常：' . $e->getMessage());
+        }
+    }
+
+    /**
      * 微信退款（V3）
      *
      * @param array<string, mixed> $payload

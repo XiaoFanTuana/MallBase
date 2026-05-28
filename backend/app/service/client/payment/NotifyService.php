@@ -136,11 +136,14 @@ class NotifyService extends BaseService
             ->where('event_type', PaymentLog::EVENT_PREPAY)
             ->find();
         if ($prepay === null) {
-            // 可能是已被 SUPERSEDED 或来自陌生 out_trade_no（非本系统）：仅落日志，回 200 避免微信无限重试
-            Logger::instance()->error('微信支付回调匹配不到 PREPAY 记录', [
+            /** @var PaymentLog|null $matched */
+            $matched = PaymentLog::where('out_trade_no', $outTradeNo)->order('id', 'desc')->find();
+            Logger::instance()->critical('微信支付回调命中非活跃预支付流水', [
                 'out_trade_no' => $outTradeNo,
+                'event_type'   => $matched !== null ? (string) $matched->event_type : 'UNKNOWN',
+                'order_id'     => $matched !== null ? (int) $matched->order_id : 0,
             ]);
-            return $this->respond(200, 'SUCCESS', '已忽略未知订单');
+            return $this->respond(500, 'FAIL', '支付流水已关闭或被顶替');
         }
 
         if ((int) $prepay->amount_cents !== $amountTotal) {

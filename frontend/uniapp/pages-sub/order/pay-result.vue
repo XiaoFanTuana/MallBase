@@ -14,7 +14,7 @@ const isPending = computed(() => status.value === 'pending')
 // 轮询配置：2s/次，最多 30 次（共 1min）
 const POLL_INTERVAL_MS = 2000
 const POLL_MAX_TIMES = 30
-const ORDER_STATUS_PAID = 2 // 与后端 OrderStatus::PAID 保持一致
+const ORDER_STATUS_PAID = 10 // 与后端 OrderStatus::PAID 保持一致
 
 let pollTimer = null
 let pollCount = 0

@@ -335,11 +335,11 @@ final class OrderServiceTest extends TestCase
     }
 
     /**
-     * 默认支付超时 15 分钟契约：调优必须同步单测
+     * 默认支付超时 30 分钟契约：调优必须同步单测
      */
-    public function testDefaultPayExpireSecondsIsFifteenMinutes(): void
+    public function testDefaultPayExpireSecondsIsThirtyMinutes(): void
     {
-        $this->assertSame(900, OrderService::DEFAULT_PAY_EXPIRE_SECONDS);
+        $this->assertSame(1800, OrderService::DEFAULT_PAY_EXPIRE_SECONDS);
     }
 
     // ------------------------- helpers -------------------------

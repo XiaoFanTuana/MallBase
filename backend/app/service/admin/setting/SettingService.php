@@ -1525,10 +1525,58 @@ class SettingService extends BaseService
 
     private function saveSettingValue(Setting $setting, mixed $value): string
     {
+        if ((string)$setting->type === Setting::TYPE_OPTION_LIST) {
+            $value = $this->normalizeOptionListValue($value);
+        }
+
         $setting->value = $value;
         $setting->save();
 
         return (string)$setting->code;
+    }
+
+    private function normalizeOptionListValue(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '[]';
+        }
+
+        $rows = is_string($value) ? json_decode($value, true) : $value;
+        if (!is_array($rows)) {
+            return '[]';
+        }
+
+        $result = [];
+        $labels = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $label = trim((string)($row['label'] ?? ''));
+            if ($label === '' || isset($labels[$label])) {
+                continue;
+            }
+            $labels[$label] = true;
+
+            $optionValue = trim((string)($row['value'] ?? ''));
+            if ($optionValue === '') {
+                $optionValue = $this->generateOptionValue();
+            }
+
+            $result[] = ['value' => $optionValue, 'label' => $label];
+        }
+
+        return json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function generateOptionValue(): string
+    {
+        try {
+            return 'CUSTOM_' . strtoupper(bin2hex(random_bytes(4)));
+        } catch (\Throwable) {
+            return 'CUSTOM_' . strtoupper(substr(md5(uniqid('', true)), 0, 8));
+        }
     }
 
     /**

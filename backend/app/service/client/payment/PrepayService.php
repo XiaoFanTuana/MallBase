@@ -15,6 +15,7 @@ use app\service\client\payment\adapter\WechatJsapiAdapter;
 use app\service\client\payment\dto\PrepayContext;
 use app\service\client\payment\dto\PrepayResult;
 use app\service\order\PrepayAdapter;
+use app\service\order\WechatPrepayCloseService;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use think\facade\Request;
@@ -45,6 +46,7 @@ class PrepayService extends BaseService
     public function __construct(
         private readonly WechatJsapiAdapter $jsapiAdapter,
         private readonly WechatH5Adapter $h5Adapter,
+        private readonly WechatPrepayCloseService $prepayCloseService,
     ) {
     }
 
@@ -66,9 +68,10 @@ class PrepayService extends BaseService
 
         $order = $this->loadPayableOrderById($userId, $orderId);
         $openid = $this->resolveOpenid($userId, $scene);
+        $amountCents = $this->yuanToCents((string) $order->pay_amount);
 
-        // 防重：查同 scene + 未过期的 PREPAY
-        $existing = $this->findReusablePrepay((int) $order->id, $scene);
+        // 防重：查同 scene + 未过期 + 金额一致的 PREPAY
+        $existing = $this->findReusablePrepay((int) $order->id, $scene, $amountCents);
         if ($existing !== null) {
             return $this->packResponse($existing);
         }
@@ -77,7 +80,6 @@ class PrepayService extends BaseService
         $this->supersedeOtherScenes((int) $order->id, $scene);
 
         $outTradeNo = $this->generateOutTradeNo($order->sn);
-        $amountCents = $this->yuanToCents((string) $order->pay_amount);
 
         $context = new PrepayContext(
             orderId: (int) $order->id,
@@ -149,12 +151,13 @@ class PrepayService extends BaseService
         return $openid;
     }
 
-    private function findReusablePrepay(int $orderId, int $scene): ?PaymentLog
+    private function findReusablePrepay(int $orderId, int $scene, int $amountCents): ?PaymentLog
     {
         /** @var PaymentLog|null $existing */
         $existing = PaymentLog::where('order_id', $orderId)
             ->where('scene', $scene)
             ->where('event_type', PaymentLog::EVENT_PREPAY)
+            ->where('amount_cents', $amountCents)
             ->where('expire_at', '>', date('Y-m-d H:i:s'))
             ->order('id', 'desc')
             ->find();
@@ -163,10 +166,14 @@ class PrepayService extends BaseService
 
     private function supersedeOtherScenes(int $orderId, int $currentScene): void
     {
-        PaymentLog::where('order_id', $orderId)
-            ->where('scene', '<>', $currentScene)
-            ->where('event_type', PaymentLog::EVENT_PREPAY)
-            ->update(['event_type' => PaymentLog::EVENT_SUPERSEDED]);
+        $logs = $this->prepayCloseService->activePrepayLogs($orderId, $currentScene);
+        $this->prepayCloseService->closeLogs($logs);
+        $ids = $this->prepayCloseService->idsOf($logs);
+        if ($ids === []) {
+            return;
+        }
+
+        PaymentLog::whereIn('id', $ids)->update(['event_type' => PaymentLog::EVENT_SUPERSEDED]);
     }
 
     private function persistPrepayLog(PrepayContext $ctx, PrepayResult $result): PaymentLog

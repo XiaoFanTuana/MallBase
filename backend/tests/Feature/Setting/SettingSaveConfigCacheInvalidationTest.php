@@ -39,7 +39,7 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
             $this->markTestSkipped('缓存服务不可用，跳过直接缓存断言：' . $e->getMessage());
         } finally {
             if ($cacheReady) {
-                Cache::delete($cacheKey);
+                $this->safeCacheDelete($cacheKey);
             }
         }
 
@@ -87,8 +87,8 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
             $this->markTestSkipped('缓存服务不可用，跳过直接缓存断言：' . $e->getMessage());
         } finally {
             if ($cacheReady) {
-                Cache::delete($cacheKey);
-                Cache::delete($otherCacheKey);
+                $this->safeCacheDelete($cacheKey);
+                $this->safeCacheDelete($otherCacheKey);
             }
         }
 
@@ -98,6 +98,15 @@ final class SettingSaveConfigCacheInvalidationTest extends TestCase
         $this->assertTrue($hasOtherCacheBeforeClear, '旁路单值缓存预热后应写入 Redis。');
         $this->assertFalse($hasCacheAfterClear, 'clearSettingValues 应精确清除传入 code 的单值缓存。');
         $this->assertTrue($hasOtherCacheAfterClear, 'clearSettingValues 不应清除未传入 code 的单值缓存。');
+    }
+
+    private function safeCacheDelete(string $key): void
+    {
+        try {
+            Cache::delete($key);
+        } catch (Throwable) {
+            // 缓存不可用时前面的 markTestSkipped 已经说明原因，这里只避免 finally 覆盖跳过状态。
+        }
     }
 
     public function testSaveSystemBasicInvalidatesSingleValueCacheUsedByUploadUrl(): void

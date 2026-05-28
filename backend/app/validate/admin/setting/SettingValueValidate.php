@@ -28,14 +28,20 @@ class SettingValueValidate extends Validate
             $code  = $setting['code'];
             $name  = $setting['name'];
             $rules = $setting['rules'] ?? [];
+            $value = $values[$code] ?? null;
+
+            if (($setting['type'] ?? '') === 'option_list') {
+                $message = $this->validateOptionList($value, $name);
+                if ($message !== true) {
+                    $errors[$code] = $message;
+                    continue;
+                }
+            }
 
             // 没有配置规则则跳过验证
             if (empty($rules) || !is_array($rules)) {
                 continue;
             }
-
-            // 获取提交的值（未提交则为 null）
-            $value = $values[$code] ?? null;
 
             foreach ($rules as $rule) {
                 if (empty($rule['type'])) {
@@ -51,6 +57,35 @@ class SettingValueValidate extends Validate
         }
 
         return $errors;
+    }
+
+    protected function validateOptionList(mixed $value, string $name): true|string
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        $rows = is_string($value) ? json_decode($value, true) : $value;
+        if (!is_array($rows)) {
+            return "{$name}格式不正确";
+        }
+
+        $labels = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                return "{$name}格式不正确";
+            }
+            $label = trim((string)($row['label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            if (isset($labels[$label])) {
+                return "{$name}不能包含重复选项：{$label}";
+            }
+            $labels[$label] = true;
+        }
+
+        return true;
     }
 
     /**

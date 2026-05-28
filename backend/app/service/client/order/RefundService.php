@@ -7,6 +7,7 @@ namespace app\service\client\order;
 use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\RefundOrder;
+use app\service\order\OrderSettingService;
 use app\service\order\RefundOrderStatusMachine;
 use app\service\order\RefundSnGenerator;
 use app\common\enum\OperatorType;
@@ -219,6 +220,7 @@ class RefundService extends BaseService
 
         // 原因文案（前端展示用）
         $data['reason_text'] = RefundReason::textOf((string) ($refund->reason ?? ''));
+        $data['return_receiver'] = $this->returnReceiver();
 
         return $data;
     }
@@ -264,6 +266,49 @@ class RefundService extends BaseService
         $status = (int) ($order['status'] ?? 0);
         if (!in_array($status, self::ORDERABLE_STATUSES, true)) {
             throw new BusinessException('当前订单状态不允许发起售后');
+        }
+
+        $afterSaleDays = $this->afterSaleDays();
+        if ($afterSaleDays <= 0) {
+            return;
+        }
+
+        $receivedAt = (string) ($order['received_at'] ?? '');
+        if ($receivedAt === '') {
+            return;
+        }
+
+        if (strtotime($receivedAt) + ($afterSaleDays * 86400) < time()) {
+            throw new BusinessException('订单已超过售后申请期限');
+        }
+    }
+
+    private function afterSaleDays(): int
+    {
+        if (!function_exists('app')) {
+            return 0;
+        }
+
+        try {
+            return \app()->make(OrderSettingService::class)->afterSaleDays();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * @return array{name:string, phone:string, address:string}
+     */
+    private function returnReceiver(): array
+    {
+        if (!function_exists('app')) {
+            return ['name' => '', 'phone' => '', 'address' => ''];
+        }
+
+        try {
+            return \app()->make(OrderSettingService::class)->returnReceiver();
+        } catch (\Throwable) {
+            return ['name' => '', 'phone' => '', 'address' => ''];
         }
     }
 
