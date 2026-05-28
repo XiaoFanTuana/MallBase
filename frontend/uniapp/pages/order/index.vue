@@ -30,10 +30,12 @@
       >
         <!-- Card header: store + status -->
         <view class="order-card__header">
-          <view class="order-card__store">
+          <view v-if="getStoreName(order)" class="order-card__store">
             <view class="order-card__store-icon" />
             <text class="order-card__store-name">{{ getStoreName(order) }}</text>
           </view>
+          <text v-else-if="order.sn" class="order-card__sn">订单号 {{ order.sn }}</text>
+          <view v-else class="order-card__header-spacer" />
           <text class="order-card__status-text" :class="statusTagClass(order.status)">
             {{ statusLabel(order.status) }}
           </text>
@@ -274,7 +276,7 @@ function navigateToRefund(order, item) {
 }
 
 function getStoreName(order) {
-  return order?.store_name || order?.shop_name || 'Mall Official Store'
+  return String(order?.store_name || order?.shop_name || order?.merchant_name || '').trim()
 }
 
 function getOrderQuantity(order) {
@@ -636,6 +638,21 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.order-card__sn {
+  flex: 1;
+  min-width: 0;
+  font-size: $mb-font-xs;
+  color: $mb-color-text-tertiary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-card__header-spacer {
+  flex: 1;
+  min-width: 0;
 }
 
 .order-card__status-text {

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getGoodsList, getGoodsRecommend } from '@/api/goods/goods'
 import { useAppStore } from '@/store/app'
+import { formatPrice } from '@/utils/price'
 
 const appStore = useAppStore()
 
@@ -96,15 +97,6 @@ onPullDownRefresh(async () => {
 onReachBottom(() => {
   fetchGoodsList(false)
 })
-
-function formatPrice(price) {
-  const num = Number(price)
-  if (Number.isNaN(num)) return '0'
-  return num.toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })
-}
 
 function getFirstImage(item) {
   if (!item) return ''
