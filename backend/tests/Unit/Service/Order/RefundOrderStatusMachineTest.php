@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  * 本类只锁死状态白名单，防止后续回归时意外放行新流转。
  *
  * MVP 允许的流转：
- *   PENDING(0)     → COMPLETED(10)  ｜管理员同意并 Mock 退款
+ *   PENDING(0)     → COMPLETED(10)  ｜管理员同意退款处理
  *   PENDING(0)     → REJECTED(20)   ｜管理员驳回
  *   PENDING(0)     → CLOSED(90)     ｜买家取消
  *

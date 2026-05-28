@@ -23,7 +23,7 @@ use mall_base\exception\BusinessException;
  *      · 审计落在售后单自身冗余字段（admin_remark/reviewed_by/...），不写 mb_order_log
  *      · 由于 MVP 仅一次审核即终态，冗余列比独立日志表更省维护成本
  *  - 不自己启动事务时，调用方负责在外层包裹事务，
- *    以与 StockService::restore、OrderItem.refunded_quantity 更新组合成原子单元
+ *    以与 OrderItem.refunded_quantity 更新、退款渠道处理组合成原子单元
  *
  * @extends BaseService<RefundOrder>
  */

@@ -12,7 +12,6 @@ use app\model\user\User;
 use app\service\order\MockPaymentAdapter;
 use app\service\order\PaymentAdapter;
 use app\service\order\RefundOrderStatusMachine;
-use app\service\order\StockService;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
 use app\common\enum\RefundOrderStatus;
@@ -25,7 +24,7 @@ use mall_base\exception\BusinessException;
  *
  * 原则：
  *  - 审核流转统一走 {@see RefundOrderStatusMachine}
- *  - approve 事务内三件事：状态流转 → 库存回滚 → OrderItem.refunded_quantity 乐观锁累加
+ *  - approve 事务内三件事：状态流转 → OrderItem.refunded_quantity 乐观锁累加 → 退款渠道处理
  *  - reject 只改状态+审核字段，不动库存、不动计数
  *  - 列表条件同源，返回 compact('total','list')
  *
@@ -36,13 +35,15 @@ class RefundOrderAdminService extends BaseService
     protected string $modelClass = RefundOrder::class;
 
     /**
-     * 审核同意（PENDING → COMPLETED，Mock 退款）
+     * 审核同意（PENDING → COMPLETED，完成退款处理）
      *
      * 事务内原子完成：
      *  1) RefundOrderStatusMachine::transit → COMPLETED（含 reviewed_at/refunded_at/reviewed_by）
-     *  2) StockService::restore(sku_id, quantity) — 仅退款单回滚库存
-     *  3) OrderItem.refunded_quantity 乐观锁累加
-     *  4) PaymentAdapter::refund — MVP 返回 true
+     *  2) OrderItem.refunded_quantity 乐观锁累加
+     *  3) PaymentAdapter::refund — MVP 返回 true
+     *
+     * 注意：MVP 仅开放“仅退款”，买家不退回实物，审核同意不回滚库存。
+     * 后续若启用“退货退款”，应在退货入库节点单独处理库存回滚。
      */
     public function approve(int $refundId, int $adminId, string $adminRemark = ''): void
     {
@@ -57,14 +58,12 @@ class RefundOrderAdminService extends BaseService
 
         $orderItemId = (int) ($refund->order_item_id ?? 0);
         $quantity    = (int) ($refund->quantity ?? 0);
-        $type        = (int) ($refund->type ?? 0);
 
-        // 获取 SKU ID 用于库存回滚
+        // 确认关联订单项存在；库存不在“仅退款”同意节点回滚
         $orderItemModel = $this->model(OrderItem::class)->where('id', $orderItemId)->find();
         if ($orderItemModel === null) {
             throw new BusinessException('关联订单商品不存在');
         }
-        $skuId = (int) ($orderItemModel->sku_id ?? 0);
 
         // 获取主订单 trade_no 用于退款渠道调用
         $orderModel = $this->model(Order::class)->where('id', (int) $refund->order_id)->find();
@@ -72,15 +71,12 @@ class RefundOrderAdminService extends BaseService
 
         /** @var RefundOrderStatusMachine $machine */
         $machine = app()->make(RefundOrderStatusMachine::class);
-        /** @var StockService $stock */
-        $stock = app()->make(StockService::class);
         /** @var PaymentAdapter $payment */
         $payment = new MockPaymentAdapter();
 
         $this->transaction(function () use (
             $refund, $adminId, $adminRemark, $machine,
-            $stock, $payment, $skuId, $quantity, $type,
-            $orderItemId, $tradeNo
+            $payment, $quantity, $orderItemId, $tradeNo
         ): void {
             // 1. 状态流转（内部原子写 reviewed_at/refunded_at/reviewed_by/admin_remark）
             $machine->transit(
@@ -91,22 +87,17 @@ class RefundOrderAdminService extends BaseService
                 remark: $adminRemark !== '' ? $adminRemark : '管理员同意退款',
             );
 
-            // 2. 仅退款 → 回滚库存
-            if ($type === RefundOrderStatus::TYPE_REFUND_ONLY) {
-                $stock->restore($skuId, $quantity);
-            }
-
-            // 3. 乐观锁累加 OrderItem.refunded_quantity
+            // 2. 乐观锁累加 OrderItem.refunded_quantity
             $affected = $this->model(OrderItem::class)
                 ->where('id', $orderItemId)
                 ->whereRaw('refunded_quantity + ? <= quantity', [$quantity])
                 ->inc('refunded_quantity', $quantity)
                 ->update();
             if ($affected === 0) {
-                throw new BusinessException('退货数量超出限制或已被其他申请占用');
+                throw new BusinessException('退款数量超出限制或已被其他申请占用');
             }
 
-            // 4. Mock 退款（MVP 直接 true）
+            // 3. 退款渠道处理（MVP 适配器直接返回成功）
             $payment->refund($tradeNo, (string) $refund->refund_amount);
         });
     }

@@ -134,7 +134,7 @@ class RefundOrderStatus
      * 售后状态流转白名单（MVP）
      *
      * PENDING(0)
-     *   ├─ 管理员同意 Mock 退款  → COMPLETED(10)
+     *   ├─ 管理员同意退款处理     → COMPLETED(10)
      *   ├─ 管理员驳回           → REJECTED(20)
      *   └─ 买家主动取消          → CLOSED(90)
      *

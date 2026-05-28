@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  *  - approve / reject 的 adminId 校验
  *  - reject 的 adminRemark 必填校验
  *
- * 完整的 approve/reject 事务路径（状态机 + 库存 + 乐观锁）依赖 MySQL，
+ * 完整的 approve/reject 事务路径（状态机 + 退款计数 + 渠道处理）依赖 MySQL，
  * 由后续集成测试覆盖。
  */
 final class RefundOrderAdminServiceTest extends TestCase
@@ -81,5 +81,16 @@ final class RefundOrderAdminServiceTest extends TestCase
         $this->assertStringContainsString('mobile as phone', $source);
         $this->assertStringNotContainsString("->where('phone', 'like'", $source);
         $this->assertStringNotContainsString("field('id, nickname, phone", $source);
+    }
+
+    public function testRefundOnlyApproveDoesNotRestoreStock(): void
+    {
+        $source = (string) file_get_contents(
+            dirname(__DIR__, 4) . '/app/service/admin/order/RefundOrderAdminService.php',
+        );
+
+        $this->assertStringContainsString('买家不退回实物，审核同意不回滚库存', $source);
+        $this->assertStringNotContainsString('StockService::class', $source);
+        $this->assertStringNotContainsString('->restore(', $source);
     }
 }
