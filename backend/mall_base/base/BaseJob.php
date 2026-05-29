@@ -63,8 +63,8 @@ use Throwable;
  * }
  * 
  * // 入队
- * use think\facade\Queue;
- * Queue::push(SendEmailJob::class, [
+ * use mall_base\queue\JobQueue;
+ * JobQueue::push(SendEmailJob::class, [
  *     'email' => 'user@example.com',
  *     'subject' => '测试邮件',
  *     'content' => '邮件内容'
@@ -73,12 +73,19 @@ use Throwable;
  */
 abstract class BaseJob
 {
+    public const QUEUE = 'default';
+
     /**
      * 构造函数
      */
     public function __construct()
     {
         // Logger::instance() 会自动初始化 Trace ID 和添加类名到上下文
+    }
+
+    public static function queueName(): string
+    {
+        return static::QUEUE;
     }
 
     /**

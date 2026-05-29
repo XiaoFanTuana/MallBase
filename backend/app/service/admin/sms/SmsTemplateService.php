@@ -11,7 +11,7 @@ use app\model\sms\SmsTemplate;
 use app\service\sms\SmsScene;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
-use think\facade\Queue;
+use mall_base\queue\JobQueue;
 use Throwable;
 
 /**
@@ -161,7 +161,7 @@ class SmsTemplateService extends BaseService
         $row = new SmsTemplate();
         $row->save($payload);
 
-        Queue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
+        JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
 
         return (int) $row->id;
     }
@@ -247,7 +247,7 @@ class SmsTemplateService extends BaseService
         $newData['audit_status'] = SmsTemplate::AUDIT_SUBMITTING;
         $newData['audit_reason'] = null;
         $row->save($newData);
-        Queue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
+        JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
     }
 
     public function delete(int $id): void
@@ -341,7 +341,7 @@ class SmsTemplateService extends BaseService
             throw new BusinessException('PNVS 模板为系统赠送,无需同步');
         }
 
-        Queue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
+        JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
         return ['dispatched' => 1];
     }
 
@@ -365,7 +365,7 @@ class SmsTemplateService extends BaseService
         $rows = $this->model()->where('provider_id', $providerId)->select();
         $dispatched = 0;
         foreach ($rows as $row) {
-            Queue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
+            JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => (int) $row->id]);
             $dispatched++;
         }
         return ['dispatched' => $dispatched];
@@ -402,7 +402,7 @@ class SmsTemplateService extends BaseService
                 $skipped++;
                 continue;
             }
-            Queue::push(SmsTemplateSyncJob::class, ['templateId' => $id]);
+            JobQueue::push(SmsTemplateSyncJob::class, ['templateId' => $id]);
             $dispatched++;
         }
         return ['dispatched' => $dispatched, 'invalid' => $invalid, 'skipped' => $skipped];

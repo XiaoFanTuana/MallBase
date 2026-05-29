@@ -55,7 +55,15 @@ return [
     //队列
     'queue'      => [
         'enable'  => env('SWOOLE_QUEUE_ENABLE', false),
-        'workers' => [],
+        'workers' => [
+            'default' => [
+                'delay'      => 0,
+                'sleep'      => 3,
+                'tries'      => 3,
+                'timeout'    => 60,
+                'worker_num' => 1,
+            ],
+        ],
     ],
     'hot_update' => [
         'enable'  => env('APP_DEBUG', false),

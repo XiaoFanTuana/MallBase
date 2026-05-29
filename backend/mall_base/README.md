@@ -829,24 +829,24 @@ class SendEmailJob extends BaseJob
 
 ```php
 <?php
-use think\facade\Queue;
+use mall_base\queue\JobQueue;
 
 // 方式1：直接入队
-Queue::push(SendEmailJob::class, [
+JobQueue::push(SendEmailJob::class, [
     'email' => 'user@example.com',
     'subject' => '测试邮件',
     'content' => '邮件内容'
 ]);
 
 // 方式2：延迟执行（秒）
-Queue::later(60, SendEmailJob::class, [
+JobQueue::later(60, SendEmailJob::class, [
     'email' => 'user@example.com',
     'subject' => '测试邮件',
     'content' => '邮件内容'
 ]);
 
 // 方式3：指定队列
-Queue::push(SendEmailJob::class, $data, 'email');
+JobQueue::push(SendEmailJob::class, $data, 'email');
 ```
 
 ### 配置重试次数

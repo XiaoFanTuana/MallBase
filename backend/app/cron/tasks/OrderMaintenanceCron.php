@@ -7,9 +7,9 @@ namespace app\cron\tasks;
 use app\cron\CronTaskInterface;
 use app\job\AutoReceiveOrdersJob;
 use app\job\CloseExpiredOrdersJob;
+use mall_base\queue\JobQueue;
 use Swoole\Timer;
 use think\facade\Cache;
-use think\facade\Queue;
 use Throwable;
 
 class OrderMaintenanceCron implements CronTaskInterface
@@ -24,8 +24,8 @@ class OrderMaintenanceCron implements CronTaskInterface
                 return;
             }
 
-            Queue::push(CloseExpiredOrdersJob::class, ['limit' => 500], 'default');
-            Queue::push(AutoReceiveOrdersJob::class, ['limit' => 500], 'default');
+            JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
+            JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
         });
     }
 

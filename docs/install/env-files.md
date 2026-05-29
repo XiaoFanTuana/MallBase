@@ -52,9 +52,9 @@ docker compose 的变量插值**只认项目根目录的 `.env`**，无法改路
 
 订单定时任务使用 Swoole Cron 投递队列 Job：
 
-- 单机部署：可设置 `CRON_ENABLE=true`，`QUEUE_CONNECTION=sync` 或 `redis`；若使用 `redis`，同时启动 `php think queue:work --queue=default --tries=3`
-- K8s / 多副本部署：Web Deployment 设置 `CRON_ENABLE=false`；Scheduler Deployment 副本数固定 `1` 且设置 `CRON_ENABLE=true`；Queue Worker Deployment 运行 `php think queue:work --queue=default --tries=3`，可按压力水平扩容
-- `SWOOLE_QUEUE_ENABLE` 只控制 Swoole 内置队列 Worker 是否启用，默认关闭；常规 `think-queue` Redis 队列仍建议使用独立 `php think queue:work` 进程。
+- 单机部署：可设置 `CRON_ENABLE=true`，`QUEUE_CONNECTION=sync` 或 `redis`；若使用 `redis`，推荐设置 `SWOOLE_QUEUE_ENABLE=true`，由 Swoole 内置队列 Worker 消费 `config/swoole.php` 中声明的队列
+- K8s / 多副本部署：Web Deployment 设置 `CRON_ENABLE=false`；Scheduler Deployment 副本数固定 `1` 且设置 `CRON_ENABLE=true`；Queue Worker Deployment 运行 `php think queue:work redis --queue=default --tries=3`，可按压力水平扩容
+- `SWOOLE_QUEUE_ENABLE=true` 会随 Swoole 创建内置队列 Worker；worker 列表由 `config/swoole.php` 维护，Job 默认队列由各 Job 类的 `QUEUE` 常量声明。
 
 **⚠️ 容易混淆的点**：
 
