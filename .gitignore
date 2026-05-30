@@ -24,3 +24,5 @@ deploy/upload-frontend.local.sh
 
 # 已部署环境的增量升级 SQL（按环境手动执行，不入库；schema 文件才是入库的唯一真相源）
 deploy/install/data/upgrade/
+
+.playwright-cli/
