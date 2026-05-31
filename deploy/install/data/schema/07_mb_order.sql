@@ -46,7 +46,7 @@ CREATE TABLE `mb_order` (
   `freight_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '运费',
   `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '优惠金额',
   `pay_amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT '应付金额（total + freight - discount）',
-  `pay_method` tinyint(1) DEFAULT NULL COMMENT '支付方式（1微信 2支付宝 9Mock测试）',
+  `pay_method` tinyint(1) DEFAULT NULL COMMENT '支付方式（1微信 2支付宝 3余额）',
   `pay_scene` tinyint(1) unsigned DEFAULT NULL COMMENT '支付场景（1小程序 2公众号 3H5），仅微信支付有值',
   `trade_no` varchar(64) DEFAULT NULL COMMENT '第三方交易流水号',
   `receiver_name` varchar(50) NOT NULL COMMENT '收货人姓名',

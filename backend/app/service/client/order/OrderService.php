@@ -219,65 +219,17 @@ class OrderService extends BaseService
     }
 
     /**
-     * Mock 支付（MVP 不接真实渠道）
-     *
-     * 真实渠道接入时，将本方法包装在 PaymentAdapter 后面，OrderService 内部流程不变。
-     *
-     * 安全边界：
-     *  - 通过 order.id + user_id 复合条件加载，保证只有订单归属人能触发支付
-     *  - trade_no 仍以 sn 为可读前缀，便于日志/对账定位
+     * 旧同步测试支付入口已下线，仅保留方法签名用于兼容反射契约。
      */
     public function pay(int $orderId, int $userId, int $payMethod, ?string $tradeNo = null): array
     {
-        $this->assertUserId($userId);
-        if (!PayMethod::isValid($payMethod)) {
-            throw new BusinessException('支付方式不合法');
-        }
-
-        /** @var Order|null $order */
-        $order = $this->model()
-            ->where('id', $orderId)
-            ->where('user_id', $userId)
-            ->whereNull('delete_time')
-            ->find();
-        if ($order === null) {
-            throw new BusinessException('订单不存在或不属于当前用户');
-        }
-        if ((int) $order->status !== OrderStatus::PENDING_PAY) {
-            throw new BusinessException('订单已支付或已关闭');
-        }
-        if ($order->expire_at !== null && strtotime((string) $order->expire_at) < time()) {
-            throw new BusinessException('订单已超时，请重新下单');
-        }
-
-        $machine = app()->make(OrderStatusMachine::class);
-        $this->transaction(function () use ($order, $payMethod, $tradeNo, $machine): void {
-            $order->pay_method = $payMethod;
-            $order->trade_no   = $tradeNo !== null ? mb_substr($tradeNo, 0, 64) : 'MOCK-' . $order->sn;
-            $order->save();
-
-            $machine->transit(
-                order: $order,
-                toStatus: OrderStatus::PAID,
-                operatorType: OperatorType::SYSTEM,
-                operatorId: null,
-                remark: sprintf('支付成功（%s）', PayMethod::textOf($payMethod)),
-            );
-        });
-
-        return [
-            'order_id' => (int) $order->id,
-            'sn'       => (string) $order->sn,
-            'status'   => OrderStatus::PAID,
-        ];
+        throw new BusinessException('该支付方式暂未开放');
     }
 
     /**
      * 回调驱动：确认订单已支付（真实渠道走此入口）
      *
-     * 与 {@see pay()} 的差异：
-     *  - pay() 是同步 Mock 支付入口（PayMethod::MOCK 测试用）
-     *  - confirmPaid() 是异步回调入口，由 NotifyService 在验签 + 金额比对通过后调用
+     * confirmPaid() 是异步回调入口，由 NotifyService 在验签 + 金额比对通过后调用。
      *
      * 幂等：订单已是 PAID 状态时直接返回，不抛异常（应对重复回调）
      *
