@@ -10,7 +10,6 @@ use app\job\CloseExpiredOrdersJob;
 use mall_base\queue\JobQueue;
 use Swoole\Timer;
 use think\facade\Cache;
-use think\swoole\Sandbox;
 use Throwable;
 
 class OrderMaintenanceCron implements CronTaskInterface
@@ -18,15 +17,10 @@ class OrderMaintenanceCron implements CronTaskInterface
     private const LOCK_KEY = 'cron:order-maintenance:dispatch';
     private const LOCK_TTL = 55;
 
-    public function __construct(
-        private readonly Sandbox $sandbox,
-    ) {
-    }
-
-    public function register(): void
+    public function register(callable $runInSandbox): void
     {
-        Timer::tick(60000, function (): void {
-            $this->runInSandbox(function (): void {
+        Timer::tick(60000, function () use ($runInSandbox): void {
+            $runInSandbox(function (): void {
                 $this->dispatchJobs();
             });
         });
@@ -40,13 +34,6 @@ class OrderMaintenanceCron implements CronTaskInterface
 
         JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
         JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
-    }
-
-    private function runInSandbox(callable $callback): void
-    {
-        $this->sandbox->run(function () use ($callback): void {
-            $callback();
-        });
     }
 
     private function acquireLock(): bool
