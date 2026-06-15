@@ -129,6 +129,14 @@ const refundAmountText = computed(() => {
 
 const showRefundAmountSymbol = computed(() => Boolean(refundableAmount.value) && !refundableLoading.value)
 
+const receiveStatusText = computed(() =>
+  receiveStatusOptions.value.find((item) => item.value === receiveStatus.value)?.label || '未收到货',
+)
+
+const refundTypeText = computed(() =>
+  refundTypeOptions.value.find((item) => item.value === refundType.value)?.label || '仅退款',
+)
+
 const selectedGoodsCount = computed(() => refundItems.value.length)
 
 const selectedQuantityTotal = computed(() =>
@@ -306,7 +314,7 @@ async function onSubmit() {
   submitting.value = true
 
   try {
-    await applyRefundBatch({
+    const result = await applyRefundBatch({
       items: refundItems.value.map((item) => ({
         order_item_id: item.order_item_id,
         quantity: item.quantity,
@@ -318,13 +326,22 @@ async function onSubmit() {
     })
     uni.showToast({ title: '退款申请已提交', icon: 'success' })
     setTimeout(() => {
-      uni.navigateBack()
-    }, 1500)
+      redirectAfterSubmit(result)
+    }, 900)
   } catch {
     // error handled by request interceptor
   } finally {
     submitting.value = false
   }
+}
+
+function redirectAfterSubmit(result) {
+  const list = Array.isArray(result?.list) ? result.list : []
+  if (list.length === 1 && list[0]?.id) {
+    uni.redirectTo({ url: `/pages-sub/refund/detail?id=${list[0].id}` })
+    return
+  }
+  uni.redirectTo({ url: '/pages-sub/refund/list' })
 }
 </script>
 
@@ -365,9 +382,16 @@ async function onSubmit() {
 
     <!-- Form fields -->
     <view class="form-section">
+      <view class="form-section__header">
+        <text class="form-section__title">申请信息</text>
+      </view>
       <view class="form-item form-item--column">
         <text class="form-item__label">收货状态</text>
-        <view class="option-grid">
+        <view v-if="receiveStatusOptions.length <= 1" class="readonly-box">
+          <text class="readonly-box__value">{{ receiveStatusText }}</text>
+          <text class="readonly-box__hint">由当前订单状态确定</text>
+        </view>
+        <view v-else class="option-grid">
           <view
             v-for="item in receiveStatusOptions"
             :key="item.value"
@@ -381,7 +405,11 @@ async function onSubmit() {
       </view>
       <view class="form-item form-item--column">
         <text class="form-item__label">售后类型</text>
-        <view class="option-grid">
+        <view v-if="refundTypeOptions.length <= 1" class="readonly-box">
+          <text class="readonly-box__value">{{ refundTypeText }}</text>
+          <text class="readonly-box__hint">由收货状态自动匹配</text>
+        </view>
+        <view v-else class="option-grid">
           <view
             v-for="item in refundTypeOptions"
             :key="item.value"
@@ -408,6 +436,7 @@ async function onSubmit() {
       <!-- Description -->
       <view class="form-item form-item--column">
         <text class="form-item__label">退款说明</text>
+        <view class="textarea-wrap">
         <textarea
           v-model="description"
           class="form-textarea"
@@ -415,9 +444,10 @@ async function onSubmit() {
           :maxlength="MAX_DESC_LENGTH"
           placeholder-style="color: #737686"
         />
-        <text class="form-textarea__count">
-          {{ description.length }}/{{ MAX_DESC_LENGTH }}
-        </text>
+          <text class="form-textarea__count">
+            {{ description.length }}/{{ MAX_DESC_LENGTH }}
+          </text>
+        </view>
       </view>
 
       <!-- Image upload -->
@@ -450,23 +480,19 @@ async function onSubmit() {
       </view>
     </view>
 
-    <!-- Refund amount display -->
-    <view class="amount-card">
-      <view>
-        <text class="amount-card__label">预计退款金额</text>
-        <text class="amount-card__hint">以后端实时计算为准</text>
+    <view class="bottom-spacer" />
+    <view class="submit-bar">
+      <view class="submit-bar__amount">
+        <text class="submit-bar__label">预计退款</text>
+        <view class="submit-bar__value-wrap">
+          <text v-if="showRefundAmountSymbol" class="submit-bar__symbol">{{ '¥' }}</text>
+          <text
+            class="submit-bar__value"
+            :class="{ 'submit-bar__value--pending': !showRefundAmountSymbol }"
+          >{{ refundAmountText }}</text>
+        </view>
+        <text class="submit-bar__hint">以后端实时计算为准</text>
       </view>
-      <view class="amount-card__value-wrap">
-        <text v-if="showRefundAmountSymbol" class="amount-card__symbol">{{ '¥' }}</text>
-        <text
-          class="amount-card__value"
-          :class="{ 'amount-card__value--pending': !showRefundAmountSymbol }"
-        >{{ refundAmountText }}</text>
-      </view>
-    </view>
-
-    <!-- Submit button -->
-    <view class="submit-wrap">
       <view
         class="submit-btn"
         :class="{ 'submit-btn--disabled': submitting }"
@@ -483,19 +509,17 @@ async function onSubmit() {
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  background: $mb-color-bg-secondary;
-  padding: 0 $mb-spacing-page $mb-spacing-xl;
+  background: #f6f8fb;
+  padding: 0 24rpx;
 }
 
 // ---- Product card ----
 .product-card {
-  padding: $mb-spacing-lg;
-  margin: $mb-spacing-sm 0 0;
+  margin-top: 18rpx;
   background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
-  margin-left: 0;
-  margin-right: 0;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
+  overflow: hidden;
 }
 
 .product-card__header {
@@ -503,39 +527,40 @@ async function onSubmit() {
   align-items: center;
   justify-content: space-between;
   gap: $mb-spacing-md;
-  margin-bottom: $mb-spacing-md;
+  padding: 22rpx 24rpx;
+  background: #fff;
+  border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
 }
 
 .product-card__title {
-  font-size: $mb-font-md;
+  font-size: 30rpx;
   font-weight: 700;
   color: $mb-color-text-title;
 }
 
 .product-card__summary {
   flex-shrink: 0;
-  font-size: $mb-font-sm;
+  font-size: 24rpx;
   color: $mb-color-text-secondary;
 }
 
 .product-card__item {
   display: flex;
-  gap: $mb-spacing-md;
-  padding: $mb-spacing-md 0;
-  border-top: 1rpx solid $mb-color-divider;
+  gap: 20rpx;
+  padding: 22rpx 24rpx;
+  border-top: 1rpx solid rgba(25, 27, 35, 0.06);
 }
 
 .product-card__header + .product-card__item {
   border-top: 0;
-  padding-top: 0;
 }
 
 .product-card__image {
   flex-shrink: 0;
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: $mb-radius-md;
-  background: $mb-color-bg;
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 12rpx;
+  background: #f2f5fa;
 }
 
 .product-card__image--placeholder {
@@ -546,9 +571,9 @@ async function onSubmit() {
 
 .product-card__placeholder-box {
   width: 44rpx;
-  height: 36rpx;
-  border: 4rpx solid $mb-color-primary;
+  height: 32rpx;
   border-radius: 8rpx;
+  background: rgba(13, 80, 213, 0.12);
   position: relative;
 
   &::after {
@@ -560,7 +585,7 @@ async function onSubmit() {
     height: 4rpx;
     border-radius: $mb-radius-full;
     background: $mb-color-primary;
-    opacity: 0.5;
+    opacity: 0.32;
   }
 }
 
@@ -573,20 +598,28 @@ async function onSubmit() {
 }
 
 .product-card__name {
-  font-size: $mb-font-md;
-  font-weight: 500;
+  font-size: 28rpx;
+  font-weight: 600;
   color: $mb-color-text-title;
-  line-height: 1.4;
+  line-height: 1.36;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .product-card__spec {
-  font-size: $mb-font-sm;
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 8rpx;
+  padding: 4rpx 10rpx;
+  overflow: hidden;
+  border-radius: 8rpx;
+  background: #f4f6fa;
+  font-size: 22rpx;
   color: $mb-color-text-tertiary;
-  margin-top: 6rpx;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .product-card__bottom {
@@ -597,31 +630,48 @@ async function onSubmit() {
 }
 
 .product-card__price {
-  font-size: $mb-font-md;
-  font-weight: 600;
+  font-size: 26rpx;
+  font-weight: 700;
   color: $mb-color-text-title;
 }
 
 .product-card__qty {
-  font-size: $mb-font-sm;
-  color: $mb-color-text-tertiary;
+  padding: 3rpx 12rpx;
+  border-radius: $mb-radius-full;
+  background: #f4f6fa;
+  font-size: 22rpx;
+  color: $mb-color-text-secondary;
 }
 
 // ---- Form section ----
 .form-section {
-  margin-top: $mb-spacing-lg;
+  margin-top: 18rpx;
   background: $mb-color-bg;
-  border: 1rpx solid $mb-color-divider;
-  border-radius: $mb-radius-lg;
-  padding: 0 $mb-spacing-lg;
+  border: 1rpx solid rgba(25, 27, 35, 0.06);
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+}
+
+.form-section__header {
+  padding: 24rpx 0 6rpx;
+}
+
+.form-section__title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
 }
 
 .form-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: $mb-spacing-lg 0;
-  border-bottom: 1rpx solid $mb-color-divider;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid rgba(25, 27, 35, 0.06);
+}
+
+.form-item:last-child {
+  border-bottom: 0;
 }
 
 .form-item--column {
@@ -630,9 +680,9 @@ async function onSubmit() {
 }
 
 .form-item__label {
-  font-size: $mb-font-md;
-  font-weight: 500;
-  color: $mb-color-text;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
   flex-shrink: 0;
   margin-bottom: 0;
 }
@@ -651,7 +701,7 @@ async function onSubmit() {
 }
 
 .form-item__value {
-  font-size: $mb-font-md;
+  font-size: 28rpx;
   color: $mb-color-text;
   overflow: hidden;
   white-space: nowrap;
@@ -663,27 +713,54 @@ async function onSubmit() {
 }
 
 .form-item__arrow {
-  font-size: $mb-font-lg;
+  font-size: 34rpx;
   color: $mb-color-text-tertiary;
   font-weight: 300;
+}
+
+.readonly-box {
+  width: 100%;
+  min-height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: 0 18rpx;
+  border-radius: 14rpx;
+  background: #f7f9fc;
+}
+
+.readonly-box__value {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $mb-color-text-title;
+}
+
+.readonly-box__hint {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 22rpx;
+  color: $mb-color-text-tertiary;
 }
 
 // ---- Option buttons ----
 .option-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: $mb-spacing-md;
+  grid-template-columns: repeat(auto-fit, minmax(220rpx, 1fr));
+  gap: 16rpx;
   width: 100%;
 }
 
 .option-grid__item {
-  height: 76rpx;
+  height: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: $mb-radius-md;
-  border: 1rpx solid $mb-color-border;
-  background: $mb-color-bg;
+  border-radius: 14rpx;
+  border: 1rpx solid rgba(25, 27, 35, 0.08);
+  background: #f7f9fc;
   transition: opacity 0.15s;
 
   &:active {
@@ -692,12 +769,12 @@ async function onSubmit() {
 }
 
 .option-grid__item--active {
-  border-color: rgba(13, 80, 213, 0.45);
-  background: rgba(13, 80, 213, 0.08);
+  border-color: rgba(13, 80, 213, 0.5);
+  background: rgba(13, 80, 213, 0.09);
 }
 
 .option-grid__text {
-  font-size: $mb-font-md;
+  font-size: 26rpx;
   font-weight: 600;
   color: $mb-color-text-secondary;
 }
@@ -707,40 +784,44 @@ async function onSubmit() {
 }
 
 // ---- Textarea ----
+.textarea-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .form-textarea {
   width: 100%;
-  height: 200rpx;
-  padding: $mb-spacing-md;
-  font-size: $mb-font-md;
+  height: 176rpx;
+  padding: 20rpx 20rpx 44rpx;
+  font-size: 26rpx;
   color: $mb-color-text;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-md;
+  background: #f7f9fc;
+  border-radius: 14rpx;
   line-height: 1.6;
   box-sizing: border-box;
 }
 
 .form-textarea__count {
-  display: block;
-  text-align: right;
-  font-size: $mb-font-xs;
+  position: absolute;
+  right: 20rpx;
+  bottom: 14rpx;
+  font-size: 22rpx;
   color: $mb-color-text-tertiary;
-  margin-top: $mb-spacing-xs;
-  width: 100%;
 }
 
 // ---- Image grid ----
 .image-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: $mb-spacing-md;
+  gap: 16rpx;
   width: 100%;
 }
 
 .image-grid__item {
   position: relative;
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: $mb-radius-md;
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: 14rpx;
   overflow: hidden;
 }
 
@@ -768,87 +849,100 @@ async function onSubmit() {
 }
 
 .image-grid__add {
-  width: 200rpx;
-  height: 200rpx;
+  width: 144rpx;
+  height: 144rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $mb-color-bg-secondary;
-  border-radius: $mb-radius-md;
+  background: #f7f9fc;
+  border-radius: 14rpx;
   border: 2rpx dashed $mb-color-border;
 }
 
 .image-grid__add-icon {
-  font-size: 64rpx;
+  font-size: 48rpx;
   color: $mb-color-text-tertiary;
   font-weight: 300;
   line-height: 1;
 }
 
-// ---- Amount card ----
-.amount-card {
-  margin-top: $mb-spacing-xl;
-  padding: $mb-spacing-lg;
-  background: $mb-color-bg;
-  border-radius: $mb-radius-lg;
-  border: 1rpx solid $mb-color-divider;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+// ---- Submit bar ----
+.bottom-spacer {
+  height: 180rpx;
 }
 
-.amount-card__label {
+.submit-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 16rpx 24rpx;
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid rgba(25, 27, 35, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -8rpx 24rpx rgba(25, 27, 35, 0.06);
+}
+
+.submit-bar__amount {
+  flex: 1;
+  min-width: 0;
+}
+
+.submit-bar__label {
   display: block;
-  font-size: $mb-font-md;
+  font-size: 22rpx;
+  color: $mb-color-text-tertiary;
+}
+
+.submit-bar__value-wrap {
+  display: flex;
+  align-items: baseline;
+  min-height: 44rpx;
+}
+
+.submit-bar__symbol {
+  margin-right: 3rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: $mb-color-primary;
+}
+
+.submit-bar__value {
+  overflow: hidden;
+  font-size: 38rpx;
+  font-weight: 800;
+  line-height: 1.1;
+  color: $mb-color-primary;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.submit-bar__value--pending {
+  font-size: 24rpx;
+  font-weight: 600;
   color: $mb-color-text-secondary;
 }
 
-.amount-card__hint {
+.submit-bar__hint {
   display: block;
-  margin-top: 6rpx;
-  font-size: $mb-font-xs;
+  margin-top: 2rpx;
+  font-size: 20rpx;
   color: $mb-color-text-tertiary;
-}
-
-.amount-card__value-wrap {
-  display: flex;
-  align-items: baseline;
-}
-
-.amount-card__symbol {
-  font-size: $mb-font-md;
-  font-weight: 700;
-  color: $mb-color-text-title;
-  margin-right: 4rpx;
-}
-
-.amount-card__value {
-  font-size: $mb-font-xxl;
-  font-weight: 700;
-  color: $mb-color-text-title;
-  line-height: 1.2;
-}
-
-.amount-card__value--pending {
-  font-size: $mb-font-sm;
-  font-weight: 500;
-  color: $mb-color-text-tertiary;
-}
-
-// ---- Submit button ----
-.submit-wrap {
-  margin-top: $mb-spacing-xl;
-  padding-bottom: calc(#{$mb-spacing-xl} + env(safe-area-inset-bottom));
 }
 
 .submit-btn {
-  width: 100%;
-  height: 96rpx;
+  flex-shrink: 0;
+  width: 248rpx;
+  height: 84rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   background: $mb-color-primary;
-  border-radius: $mb-radius-sm;
+  border-radius: $mb-radius-full;
   transition: opacity 0.15s;
 
   &:active {
@@ -862,7 +956,7 @@ async function onSubmit() {
 }
 
 .submit-btn__text {
-  font-size: $mb-font-lg;
+  font-size: 28rpx;
   font-weight: 600;
   color: $mb-color-text-inverse;
 }

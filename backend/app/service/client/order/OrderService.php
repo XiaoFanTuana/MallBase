@@ -832,21 +832,40 @@ class OrderService extends BaseService
         if (!in_array($status, [OrderStatus::PAID, OrderStatus::SHIPPED, OrderStatus::RECEIVED, OrderStatus::COMPLETED], true)) {
             return false;
         }
-        if ($this->hasActiveRefund((int) ($order['id'] ?? 0))) {
+
+        $afterSaleDays = $this->afterSaleDays();
+        if ($afterSaleDays > 0) {
+            $receivedAt = (string) ($order['received_at'] ?? '');
+            if ($receivedAt !== '' && strtotime($receivedAt) + ($afterSaleDays * 86400) < time()) {
+                return false;
+            }
+        }
+
+        return $this->hasRefundableItem($order['items'] ?? []);
+    }
+
+    /**
+     * @param mixed $items
+     */
+    private function hasRefundableItem(mixed $items): bool
+    {
+        if (!is_array($items)) {
             return false;
         }
 
-        $afterSaleDays = $this->afterSaleDays();
-        if ($afterSaleDays === 0) {
-            return true;
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if (!empty($item['has_active_refund'])) {
+                continue;
+            }
+            if ((int) ($item['refundable_quantity'] ?? 0) > 0) {
+                return true;
+            }
         }
 
-        $receivedAt = (string) ($order['received_at'] ?? '');
-        if ($receivedAt === '') {
-            return true;
-        }
-
-        return strtotime($receivedAt) + ($afterSaleDays * 86400) >= time();
+        return false;
     }
 
     private function hasActiveRefund(int $orderId): bool
@@ -972,24 +991,28 @@ class OrderService extends BaseService
         $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
             'goods_image' => 'goods_image_full_url',
         ]);
-        $itemOccupiedCents = $this->refundOccupiedCentsByOrderItemIds(array_map(
+        $orderItemIds = array_map(
             static fn(array $row): int => (int) ($row['id'] ?? 0),
             $rows
-        ));
+        );
+        $itemOccupiedCents = $this->refundOccupiedCentsByOrderItemIds($orderItemIds);
+        $activeRefundItemIds = $this->activeRefundOrderItemIds($orderItemIds);
 
         $map = [];
         foreach ($rows as $row) {
             $orderId = (int) $row['order_id'];
+            $orderItemId = (int) ($row['id'] ?? 0);
             $refundableQuantity = max(
                 0,
                 (int) ($row['quantity'] ?? 0) - (int) ($row['refunded_quantity'] ?? 0)
             );
+            $row['has_active_refund'] = isset($activeRefundItemIds[$orderItemId]);
             $row['refundable_quantity'] = $refundableQuantity;
             $row['refundable_amount'] = $this->calcItemRefundableAmount(
                 $refundBases[$orderId] ?? null,
                 $row,
                 $refundableQuantity,
-                $itemOccupiedCents[(int) ($row['id'] ?? 0)] ?? 0
+                $itemOccupiedCents[$orderItemId] ?? 0
             );
             $map[$orderId][] = $row;
         }
@@ -1118,6 +1141,35 @@ class OrderService extends BaseService
             }
             $map[$orderItemId] = ($map[$orderItemId] ?? 0)
                 + $this->decimalToCents((string) ($row['refund_amount'] ?? '0.00'));
+        }
+        return $map;
+    }
+
+    /**
+     * @param array<int, int> $orderItemIds
+     * @return array<int, bool>
+     */
+    private function activeRefundOrderItemIds(array $orderItemIds): array
+    {
+        $orderItemIds = array_values(array_unique(array_filter(array_map('intval', $orderItemIds))));
+        if ($orderItemIds === []) {
+            return [];
+        }
+
+        $rows = $this->model(RefundOrder::class)
+            ->whereIn('order_item_id', $orderItemIds)
+            ->whereIn('status', RefundOrderStatus::activeStatuses())
+            ->whereNull('delete_time')
+            ->field('order_item_id')
+            ->select()
+            ->toArray();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $orderItemId = (int) ($row['order_item_id'] ?? 0);
+            if ($orderItemId > 0) {
+                $map[$orderItemId] = true;
+            }
         }
         return $map;
     }

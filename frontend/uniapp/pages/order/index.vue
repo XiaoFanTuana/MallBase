@@ -369,8 +369,12 @@ function canApplyRefund(order) {
   return order?.can_refund !== false
 }
 
+function isActiveAfterSaleStatus(status) {
+  return [0, 1, 2].includes(Number(status))
+}
+
 function hasActiveAfterSale(order) {
-  return order?.can_refund === false && !!order?.after_sale_tag_text
+  return isActiveAfterSaleStatus(order?.after_sale?.status)
 }
 
 function afterSaleTip(order) {
@@ -506,7 +510,7 @@ async function handleAction(key, order) {
   } else if (key === 'refund') {
     if (!canApplyRefund(order)) {
       uni.showToast({
-        title: hasActiveAfterSale(order) ? '已有进行中的售后申请' : '订单已超过售后申请期限',
+        title: hasActiveAfterSale(order) ? '剩余商品暂无可申请售后' : '订单已超过售后申请期限',
         icon: 'none',
       })
       return

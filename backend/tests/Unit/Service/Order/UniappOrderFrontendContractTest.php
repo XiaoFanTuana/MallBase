@@ -22,7 +22,9 @@ final class UniappOrderFrontendContractTest extends TestCase
             $this->assertStringContainsString('can_refund', $source);
             $this->assertStringContainsString('after_sale_tag_text', $source);
             $this->assertStringContainsString('refundable_quantity', $source);
-            $this->assertStringContainsString('已有进行中的售后申请', $source);
+            $this->assertStringContainsString('isActiveAfterSaleStatus', $source);
+            $this->assertStringContainsString('售后处理中，暂不能确认收货', $source);
+            $this->assertStringContainsString('剩余商品暂无可申请售后', $source);
             $this->assertStringContainsString('订单已超过售后申请期限', $source);
         }
     }
@@ -98,11 +100,22 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('after_sale', $source);
         $this->assertStringContainsString('aggregateAfterSaleInfo', $source);
         $this->assertStringContainsString('hasActiveRefund', $source);
+        $this->assertStringContainsString('hasRefundableItem', $source);
+        $this->assertStringContainsString('has_active_refund', $source);
+        $this->assertStringContainsString('activeRefundOrderItemIds', $source);
         $this->assertStringContainsString('calcItemRefundableAmount', $source);
         $this->assertStringContainsString('refundOccupiedStatuses', $source);
         $this->assertStringContainsString('订单存在进行中的售后申请，暂不能确认收货', $source);
         $this->assertStringContainsString('refunded_at', $source);
         $this->assertStringNotContainsString("->whereIn('status', RefundOrderStatus::activeStatuses())\n            ->whereNull('delete_time')\n            ->order('id', 'desc')", $source);
+
+        $canApplyStart = strpos($source, 'private function canApplyRefund');
+        $hasRefundableStart = strpos($source, 'private function hasRefundableItem');
+        $this->assertIsInt($canApplyStart);
+        $this->assertIsInt($hasRefundableStart);
+        $canApplyBlock = substr($source, $canApplyStart, $hasRefundableStart - $canApplyStart);
+        $this->assertStringContainsString('return $this->hasRefundableItem($order[\'items\'] ?? []);', $canApplyBlock);
+        $this->assertStringNotContainsString('hasActiveRefund', $canApplyBlock);
     }
 
     public function testRefundCompletedOrderUsesReadableFrontendStatus(): void
@@ -133,6 +146,10 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('selectedItemInputs', $source);
         $this->assertStringContainsString('exactBackendAmount', $source);
         $this->assertStringContainsString('applyRefundBatch', $source);
+        $this->assertStringContainsString('redirectAfterSubmit', $source);
+        $this->assertStringContainsString('uni.redirectTo', $source);
+        $this->assertStringContainsString('/pages-sub/refund/detail?id=', $source);
+        $this->assertStringContainsString('/pages-sub/refund/list', $source);
         $this->assertStringContainsString('以后端实时计算为准', $source);
         $this->assertStringNotContainsString("query?.refundable_amount", $source);
         $this->assertStringNotContainsString('price.value * quantity.value', $source);
@@ -162,6 +179,9 @@ final class UniappOrderFrontendContractTest extends TestCase
         $this->assertStringContainsString('勾选商品并选择申请数量', $sheetSource);
         $this->assertStringContainsString('mb-refund-sheet__stepper', $sheetSource);
         $this->assertStringContainsString('全选可退', $sheetSource);
+        $this->assertStringContainsString('has_active_refund', $sheetSource);
+        $this->assertStringContainsString('isRefundItemSelectable', $sheetSource);
+        $this->assertStringContainsString('售后处理中', $sheetSource);
     }
 
     public function testRefundBatchApplyApiContract(): void

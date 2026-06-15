@@ -39,7 +39,7 @@
           class="mb-refund-sheet__item"
           :class="{
             'mb-refund-sheet__item--active': isSelected(item),
-            'mb-refund-sheet__item--disabled': getRefundableQuantity(item) <= 0,
+            'mb-refund-sheet__item--disabled': !isRefundItemSelectable(item),
           }"
           @tap.stop="toggleItem(item)"
         >
@@ -60,9 +60,9 @@
             <text v-if="getItemSpec(item)" class="mb-refund-sheet__spec">{{ getItemSpec(item) }}</text>
             <view class="mb-refund-sheet__meta">
               <text class="mb-refund-sheet__quantity">
-                {{ getRefundableQuantity(item) > 0 ? `可申请 ${getRefundableQuantity(item)} 件` : '暂无可退数量' }}
+                {{ getRefundItemTip(item) }}
               </text>
-              <text v-if="getRefundableAmount(item)" class="mb-refund-sheet__amount">
+              <text v-if="isRefundItemSelectable(item) && getRefundableAmount(item)" class="mb-refund-sheet__amount">
                 最高 ¥{{ getRefundableAmount(item) }}
               </text>
             </view>
@@ -127,7 +127,7 @@ const show = ref(false)
 const keyword = ref('')
 const selectedMap = ref({})
 
-const refundableItems = computed(() => props.items.filter((item) => getRefundableQuantity(item) > 0))
+const refundableItems = computed(() => props.items.filter(isRefundItemSelectable))
 
 const filteredItems = computed(() => {
   const word = keyword.value.trim().toLowerCase()
@@ -189,8 +189,8 @@ function toggleAll() {
 }
 
 function toggleItem(item) {
-  if (getRefundableQuantity(item) <= 0) {
-    uni.showToast({ title: '该商品暂无可退数量', icon: 'none' })
+  if (!isRefundItemSelectable(item)) {
+    uni.showToast({ title: getRefundItemDisabledMessage(item), icon: 'none' })
     return
   }
   const id = getItemId(item)
@@ -277,6 +277,24 @@ function getRefundableQuantity(item) {
   const explicit = Number(item?.refundable_quantity)
   if (Number.isFinite(explicit)) return Math.max(0, explicit)
   return Math.max(0, Number(item?.quantity || 0) - Number(item?.refunded_quantity || 0))
+}
+
+function hasActiveRefund(item) {
+  return item?.has_active_refund === true || Number(item?.has_active_refund || 0) === 1
+}
+
+function isRefundItemSelectable(item) {
+  return !hasActiveRefund(item) && getRefundableQuantity(item) > 0
+}
+
+function getRefundItemTip(item) {
+  if (hasActiveRefund(item)) return '售后处理中'
+  const quantity = getRefundableQuantity(item)
+  return quantity > 0 ? `可申请 ${quantity} 件` : '暂无可退数量'
+}
+
+function getRefundItemDisabledMessage(item) {
+  return hasActiveRefund(item) ? '该商品已有进行中的售后申请' : '该商品暂无可退数量'
 }
 
 function getRefundableAmount(item) {
