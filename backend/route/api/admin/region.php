@@ -20,9 +20,9 @@ Route::group('region', function () {
         '_group_name'      => '地区管理',
         '_group_code'      => 'SystemRegion',
         '_group_name_desc' => '中国省市区街道地区库管理',
-        '_parent'          => 'SystemManagement',
+        '_parent'          => 'System',
         '_icon'            => 'lucide:map-pinned',
-        '_path'            => '/settings/region',
+        '_path'            => '/region',
         '_auth'            => true,
-        '_component'       => '/settings/region/index',
+        '_component'       => '/region/index',
     ]);

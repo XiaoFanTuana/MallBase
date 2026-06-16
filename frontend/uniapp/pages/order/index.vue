@@ -87,17 +87,20 @@
         </view>
 
         <!-- Action buttons -->
-        <view v-if="getActions(order).length > 0" class="order-card__actions">
-          <view
+        <view
+          v-if="getActions(order).length > 0"
+          class="order-card__actions"
+          @tap.stop
+        >
+          <mb-button
             v-for="act in getActions(order)"
             :key="act.key"
-            :class="['order-card__btn', { 'order-card__btn--primary': act.primary }]"
-            @tap.stop="handleAction(act.key, order)"
-          >
-            <text
-              :class="['order-card__btn-text', { 'order-card__btn-text--primary': act.primary }]"
-            >{{ act.label }}</text>
-          </view>
+            class="order-card__action-button"
+            :type="act.primary ? 'primary' : 'secondary'"
+            size="small"
+            :label="act.label"
+            @click="handleAction(act.key, order)"
+          />
         </view>
       </view>
 
@@ -892,35 +895,7 @@ onUnmounted(() => {
   margin-top: 18rpx;
 }
 
-.order-card__btn {
+.order-card__action-button {
   min-width: 132rpx;
-  height: 58rpx;
-  padding: 0 24rpx;
-  border-radius: 18rpx;
-  border: 1rpx solid rgba(13, 80, 213, 0.45);
-  background: $mb-color-bg;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:active {
-    opacity: 0.7;
-  }
-}
-
-.order-card__btn--primary {
-  background: $mb-color-primary;
-  border-color: $mb-color-primary;
-}
-
-.order-card__btn-text {
-  font-size: $mb-font-sm;
-  font-weight: 500;
-  color: $mb-color-primary;
-  line-height: 1;
-}
-
-.order-card__btn-text--primary {
-  color: $mb-color-text-inverse;
 }
 </style>
