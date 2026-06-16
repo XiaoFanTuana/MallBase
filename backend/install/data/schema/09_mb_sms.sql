@@ -7,7 +7,7 @@ SET NAMES utf8mb4;
 -- 设计说明：
 --   1. 服务商 / 签名 / 模板三张表按 driver 抽象，当前短信服务仅保留阿里云。
 --   2. 场景绑定表把内置 SmsScene 与模板 + 签名挂钩，并保存场景侧模板草稿。
---   3. 全局频控配置走单行表 mb_sms_config，替代旧 setting 项 sms_code_ttl/sms_rate_*。
+--   3. 全局频控配置走系统表单 SmsRateLimit 分组，由短信配置菜单专属入口展示。
 -- ============================================
 
 -- -----------------------------
@@ -98,27 +98,9 @@ CREATE TABLE `mb_sms_scene_binding` (
   UNIQUE KEY `uk_scene_code` (`scene_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短信场景模板绑定';
 
--- -----------------------------
--- 短信全局配置表（单行）
--- -----------------------------
-DROP TABLE IF EXISTS `mb_sms_config`;
-CREATE TABLE `mb_sms_config` (
-  `id` tinyint(1) unsigned NOT NULL DEFAULT 1 COMMENT '主键（固定 = 1，全表单行）',
-  `code_ttl` int(11) unsigned NOT NULL DEFAULT 300 COMMENT '验证码有效期（秒）',
-  `rate_mobile_daily` int(11) unsigned NOT NULL DEFAULT 5 COMMENT '同手机号 24 小时发送上限',
-  `rate_ip_minute` int(11) unsigned NOT NULL DEFAULT 3 COMMENT '同 IP 每分钟发送上限',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短信全局配置（单行）';
-
 -- ============================================
 -- seed 数据
 -- ============================================
-
--- 全局配置默认行
-INSERT INTO `mb_sms_config` (`id`, `code_ttl`, `rate_mobile_daily`, `rate_ip_minute`) VALUES
-(1, 300, 5, 3);
 
 -- 场景模板草稿默认行（未绑定模板，首次安装即可在库中看到 5 个内置场景）
 INSERT INTO `mb_sms_scene_binding`

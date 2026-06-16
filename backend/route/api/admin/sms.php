@@ -148,10 +148,6 @@ Route::group('sms/config', function () {
 })->prefix('admin.sms.ConfigController/')
   ->option([
       '_group_name' => '频控设置',
-      '_group_code' => 'SmsRateLimit',
-      '_path'       => '/sms/config',
       '_auth'       => true,
-      '_icon'       => 'lucide:gauge',
-      '_parent'     => 'SmsConfig',
-      '_component'  => '/sms/config/index',
+      '_parent'     => 'SettingGroup:SmsRateLimit',
   ]);

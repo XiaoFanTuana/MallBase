@@ -163,6 +163,10 @@ class SettingService extends BaseService
             'sort' => $data['sort'] ?? 0,
             'display_type' => $displayType,
             'status' => $data['status'] ?? 1,
+            'permission_parent_code' => $data['permission_parent_code'] ?? null,
+            'permission_path' => $data['permission_path'] ?? null,
+            'permission_component' => $data['permission_component'] ?? null,
+            'permission_status' => $data['permission_status'] ?? null,
         ]);
 
         // 同步创建权限（权限层级自动根据分组层级决定）
@@ -246,6 +250,7 @@ class SettingService extends BaseService
         // 更新分组数据
         $updateData = array_intersect_key($data, array_flip([
             'parent_id', 'name', 'code', 'icon', 'description', 'sort', 'display_type', 'status',
+            'permission_parent_code', 'permission_path', 'permission_component', 'permission_status',
         ]));
         $group->save($updateData);
 
@@ -430,6 +435,15 @@ class SettingService extends BaseService
      */
     protected function resolvePermissionParentId(SettingGroup $group): int
     {
+        $parentCode = trim((string) ($group->permission_parent_code ?? ''));
+        if ($parentCode !== '') {
+            $parentPermission = $this->model(Permission::class)
+                ->where('code', $parentCode)
+                ->find();
+
+            return $parentPermission ? (int) $parentPermission->id : 0;
+        }
+
         if ($group->parent_id > 0) {
             // 子分组：使用父分组对应的权限ID
             $parentGroup = $this->model()->find($group->parent_id);
@@ -456,6 +470,11 @@ class SettingService extends BaseService
      */
     protected function makePermissionPath(SettingGroup $group): string
     {
+        $customPath = trim((string) ($group->permission_path ?? ''));
+        if ($customPath !== '') {
+            return $customPath;
+        }
+
         // 目录类型仍生成稳定路由，用于前端菜单树承载
         if ($group->display_type === SettingGroup::DISPLAY_TYPE_CATEGORY) {
             return '/settings/' . $group->code;
@@ -481,6 +500,22 @@ class SettingService extends BaseService
         return '/settings/' . $group->code;
     }
 
+    protected function makePermissionComponent(SettingGroup $group): string
+    {
+        $customComponent = trim((string) ($group->permission_component ?? ''));
+
+        return $customComponent !== '' ? $customComponent : self::SETTING_COMPONENT;
+    }
+
+    protected function makePermissionStatus(SettingGroup $group): int
+    {
+        if ($group->permission_status !== null && $group->permission_status !== '') {
+            return (int) $group->permission_status;
+        }
+
+        return (int) ($group->status ?? 1);
+    }
+
     /**
      * 同步创建权限（权限层级自动根据分组层级决定）
      *
@@ -499,10 +534,10 @@ class SettingService extends BaseService
             'code' => $this->makeSettingPermissionCode((string) $group->code),
             'type' => Permission::TYPE_MENU,
             'path' => $this->makePermissionPath($group),
-            'component' => self::SETTING_COMPONENT,
+            'component' => $this->makePermissionComponent($group),
             'icon' => $group->icon ?: null,
             'sort' => $group->sort ?? 0,
-            'status' => $group->status ?? 1,
+            'status' => $this->makePermissionStatus($group),
             'is_show' => 1,
             'source' => Permission::SOURCE_SETTING,
             'remark' => $group->description ?: null,
@@ -543,9 +578,10 @@ class SettingService extends BaseService
             'name' => $group->name,
             'code' => $this->makeSettingPermissionCode((string) $group->code),
             'path' => $this->makePermissionPath($group),
+            'component' => $this->makePermissionComponent($group),
             'icon' => $group->icon ?: null,
             'sort' => $group->sort ?? 0,
-            'status' => $group->status ?? 1,
+            'status' => $this->makePermissionStatus($group),
             'remark' => $group->description ?: null,
         ]);
     }
@@ -615,6 +651,14 @@ class SettingService extends BaseService
      */
     protected function shouldGroupHaveStandalonePermission(array $group, ?array $parentGroup): bool
     {
+        if (
+            !empty($group['permission_parent_code'])
+            || !empty($group['permission_path'])
+            || !empty($group['permission_component'])
+        ) {
+            return true;
+        }
+
         if (($group['display_type'] ?? SettingGroup::DISPLAY_TYPE_PAGE) === SettingGroup::DISPLAY_TYPE_CATEGORY) {
             return true;
         }

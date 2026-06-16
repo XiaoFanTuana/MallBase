@@ -42,7 +42,7 @@ class SmsService extends BaseService
         private readonly ?BaseSmsDriver $driver,
         private readonly SmsRateLimiter $rateLimiter,
         private readonly SmsCache $cache,
-        private readonly int $codeTtl = 300,
+        private readonly ?int $codeTtl = null,
     ) {
     }
 
@@ -68,7 +68,12 @@ class SmsService extends BaseService
 
         $this->rateLimiter->record($mobile, $ip);
 
-        $this->cache->set($this->codeKey($mobile, $scene), $code, $this->codeTtl);
+        $this->cache->set($this->codeKey($mobile, $scene), $code, $this->codeTtl());
+    }
+
+    public function codeTtl(): int
+    {
+        return $this->codeTtl ?? SmsConfig::codeTtl();
     }
 
     /**

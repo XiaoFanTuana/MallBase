@@ -42,6 +42,16 @@ const searchParams = ref({
   source: undefined as number | undefined,
 });
 
+const sourceOptions = [
+  { value: 1, label: '手动添加', color: 'orange' },
+  { value: 2, label: '路由同步', color: 'cyan' },
+  { value: 3, label: '设置模块同步', color: 'blue' },
+];
+
+const getSourceOption = (source?: number) => {
+  return sourceOptions.find((item) => item.value === source);
+};
+
 // 加载数据
 const loadData = async () => {
   loading.value = true;
@@ -74,6 +84,7 @@ const resetSearch = () => {
     keyword: '',
     type: undefined,
     status: undefined,
+    source: undefined,
   };
   loadData();
 };
@@ -208,7 +219,7 @@ const columns = [
     dataIndex: 'source',
     width: 120,
     customRender: ({ record }: any) => {
-      return record.source === 1 ? '手动添加' : '路由同步';
+      return getSourceOption(record.source)?.label || '-';
     },
   },
   { title: '路由路径', dataIndex: 'path', width: 200 },
@@ -448,8 +459,13 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
           allow-clear
           style="width: 150px"
         >
-          <a-select-option :value="1">手动添加</a-select-option>
-          <a-select-option :value="2">路由同步</a-select-option>
+          <a-select-option
+            v-for="item in sourceOptions"
+            :key="item.value"
+            :value="item.value"
+          >
+            {{ item.label }}
+          </a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item>
@@ -492,8 +508,12 @@ if (hasAccessByCodes(['SystemPermissionTree'])) {
         </template>
 
         <template v-if="column.dataIndex === 'source'">
-          <a-tag v-if="record.source === 1" color="orange">手动添加</a-tag>
-          <a-tag v-else-if="record.source === 2" color="cyan">路由同步</a-tag>
+          <a-tag
+            v-if="getSourceOption(record.source)"
+            :color="getSourceOption(record.source)?.color"
+          >
+            {{ getSourceOption(record.source)?.label }}
+          </a-tag>
           <span v-else>-</span>
         </template>
 

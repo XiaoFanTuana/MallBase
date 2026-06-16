@@ -95,9 +95,9 @@ class UserController extends BaseController
 
         /** @var SmsAuthService $smsAuth */
         $smsAuth = app(SmsAuthService::class);
-        $smsAuth->send($mobile, $scene, $this->request->ip());
+        $result = $smsAuth->send($mobile, $scene, $this->request->ip());
 
-        return $this->success(null, '验证码已发送');
+        return $this->success($result, '验证码已发送');
     }
 
     /**
