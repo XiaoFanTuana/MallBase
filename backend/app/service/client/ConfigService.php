@@ -6,7 +6,6 @@ namespace app\service\client;
 
 use app\common\enum\PayMethod;
 use app\service\SystemSettingService;
-use app\service\UploadService;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
 
@@ -152,13 +151,4 @@ class ConfigService extends BaseService
         return $list;
     }
 
-    /**
-     * 获取客户端安全上传配置。
-     *
-     * @return array{max_size: float, max_count: int, accept_types: string[], tips: string[]}
-     */
-    public function uploadConfig(string $type): array
-    {
-        return app()->make(UploadService::class)->getClientUploadConfig($type);
-    }
 }

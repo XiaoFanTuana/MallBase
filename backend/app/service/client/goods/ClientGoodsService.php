@@ -37,28 +37,12 @@ class ClientGoodsService extends BaseService
      */
     public function list(array $filter = [], int $page = 1, int $pageSize = 20): array
     {
-        $query = $this->saleableQuery();
-
-        if (!empty($filter['keyword'])) {
-            $query->where('name', 'like', '%' . trim((string) $filter['keyword']) . '%');
-        }
-        if (!empty($filter['category_id'])) {
-            $query->where('category_id', (int) $filter['category_id']);
-        }
-        if (!empty($filter['brand_id'])) {
-            $query->where('brand_id', (int) $filter['brand_id']);
-        }
-        foreach (['is_recommend', 'is_new', 'is_hot'] as $flag) {
-            if (isset($filter[$flag]) && (int) $filter[$flag] === 1) {
-                $query->where($flag, 1);
-            }
-        }
+        $query = $this->buildListQuery($filter);
 
         $sortBy = (string) ($filter['sort_by'] ?? 'default');
-        $query = $this->applySort($query, $sortBy);
 
-        $total = (clone $query)->count();
-        $list = $query
+        $total = (int) (clone $query)->count();
+        $list = $this->applySort($query, $sortBy)
             ->page($page, $pageSize)
             ->select()
             ->toArray();
@@ -109,6 +93,28 @@ class ClientGoodsService extends BaseService
             ->toArray();
 
         return app()->make(AssetHydrator::class)->hydrateGoodsList($list);
+    }
+
+    protected function buildListQuery(array $filter)
+    {
+        $query = $this->saleableQuery();
+
+        if (!empty($filter['keyword'])) {
+            $query->where('name', 'like', '%' . trim((string) $filter['keyword']) . '%');
+        }
+        if (!empty($filter['category_id'])) {
+            $query->where('category_id', (int) $filter['category_id']);
+        }
+        if (!empty($filter['brand_id'])) {
+            $query->where('brand_id', (int) $filter['brand_id']);
+        }
+        foreach (['is_recommend', 'is_new', 'is_hot'] as $flag) {
+            if (isset($filter[$flag]) && (int) $filter[$flag] === 1) {
+                $query->where($flag, 1);
+            }
+        }
+
+        return $query;
     }
 
     /**

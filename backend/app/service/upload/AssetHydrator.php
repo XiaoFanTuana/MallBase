@@ -35,12 +35,30 @@ class AssetHydrator
             if (is_int($value)) {
                 $ids[] = $value;
             }
+            foreach ((array) ($row['spec_meta'] ?? []) as $group) {
+                foreach ((array) ($group['values'] ?? []) as $specValue) {
+                    $ids[] = $this->normalizer->normalizeSingle($specValue['pic'] ?? '');
+                }
+            }
         }
         unset($row);
 
-        $assetMap = $this->resolver->resolve($ids);
+        $assetMap = $this->resolver->resolve($this->normalizer->collectAssetIds($ids));
         foreach ($list as &$row) {
             $row['main_image_full_url'] = $this->fullUrl($row['main_image'] ?? '', $assetMap);
+            if (!is_array($row['spec_meta'] ?? null)) {
+                continue;
+            }
+            foreach ($row['spec_meta'] as &$group) {
+                if (!is_array($group['values'] ?? null)) {
+                    continue;
+                }
+                foreach ($group['values'] as &$specValue) {
+                    $specValue['pic_full_url'] = $this->fullUrl($specValue['pic'] ?? '', $assetMap);
+                }
+                unset($specValue);
+            }
+            unset($group);
         }
         unset($row);
 
@@ -302,7 +320,7 @@ class AssetHydrator
             return (string) ($assetMap[$normalized]['full_url'] ?? '');
         }
 
-        return $this->resolver->fullUrlForLegacyPath((string) $normalized);
+        return buildUploadUrl((string) $normalized);
     }
 
     /**

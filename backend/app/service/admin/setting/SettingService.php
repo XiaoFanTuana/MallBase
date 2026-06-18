@@ -54,24 +54,29 @@ class SettingService extends BaseService
      */
     public function getGroupList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $query = $this->model()
-            ->when(!empty($where['keyword']), function ($q) use ($where) {
-                $q->whereLike('name|code', "%{$where['keyword']}%");
-            })
-            ->when(($where['status'] ?? null) !== null, function ($q) use ($where) {
-                $q->where('status', $where['status']);
-            })
-            ->when(!empty($where['parent_id']), function ($q) use ($where) {
-                $q->where('parent_id', (int)$where['parent_id']);
-            });
+        $query = $this->buildGroupListQuery($where);
 
-        $total = $query->count();
+        $total = (int) (clone $query)->count();
         $list = $query->order('sort', 'asc')
             ->page($page, $limit)
             ->select()
             ->toArray();
 
         return compact('total', 'list');
+    }
+
+    protected function buildGroupListQuery(array $where)
+    {
+        return $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('name|code', "%{$where['keyword']}%");
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            })
+            ->when(!empty($where['parent_id']), function ($q) use ($where) {
+                $q->where('parent_id', (int) $where['parent_id']);
+            });
     }
 
     /**
@@ -1079,7 +1084,21 @@ class SettingService extends BaseService
             }
         }
 
-        $query = $this->model(Setting::class)
+        $query = $this->buildSettingListQuery($where);
+
+        $total = (int) (clone $query)->count();
+        $list = $query->order('sort', 'asc')
+            ->page($page, $pageSize)
+            ->select()
+            ->toArray();
+        $list = app()->make(AssetHydrator::class)->hydrateSettings($list);
+
+        return compact('total', 'list');
+    }
+
+    protected function buildSettingListQuery(array $where)
+    {
+        return $this->model(Setting::class)
             ->when(!empty($where['group_id']), function ($q) use ($where) {
                 $q->where('group_id', $where['group_id']);
             })
@@ -1089,14 +1108,6 @@ class SettingService extends BaseService
             ->when(!empty($where['type']), function ($q) use ($where) {
                 $q->where('type', $where['type']);
             });
-
-        $total = $query->count();
-        $list = $query->order('sort', 'asc')
-            ->page($page, $pageSize)
-            ->select()
-            ->toArray();
-
-        return compact('total', 'list');
     }
 
     /**
@@ -1421,7 +1432,7 @@ class SettingService extends BaseService
                         ->select()
                         ->toArray();
                 });
-                $settings = $this->hydrateSettings($settings);
+                $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
                 // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
                 $tabs[] = [
                     'code' => $child['code'],
@@ -1456,7 +1467,7 @@ class SettingService extends BaseService
                 ->select()
                 ->toArray();
         });
-        $settings = $this->hydrateSettings($settings);
+        $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
 
         // 检查是否有 tab 类型的子分组
         $tabChildren = $this->model()
@@ -1478,7 +1489,7 @@ class SettingService extends BaseService
                         ->select()
                         ->toArray();
                 });
-                $childSettings = $this->hydrateSettings($childSettings);
+                $childSettings = app()->make(AssetHydrator::class)->hydrateSettings($childSettings);
                 $tabs[] = [
                     'code' => $child['code'],
                     'icon' => $child['icon'] ?? null,
@@ -1675,12 +1686,4 @@ class SettingService extends BaseService
         return $config['settings'] ?? [];
     }
 
-    /**
-     * @param array<int, array<string, mixed>> $settings
-     * @return array<int, array<string, mixed>>
-     */
-    private function hydrateSettings(array $settings): array
-    {
-        return app()->make(AssetHydrator::class)->hydrateSettings($settings);
-    }
 }

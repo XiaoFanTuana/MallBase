@@ -175,7 +175,7 @@ class GoodsService extends BaseService
         $tagMap = $this->batchGetGoodsTags($goodsIds);
 
         foreach ($listArray as &$item) {
-            $firstImageValue = $this->getFirstImageValue($item['images'] ?? []);
+            $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($item['images'] ?? []);
             if (empty($item['main_image']) && $firstImageValue !== '') {
                 $item['main_image'] = $firstImageValue;
             }
@@ -204,7 +204,7 @@ class GoodsService extends BaseService
         }
 
         $result = $goods->toArray();
-        $firstImageValue = $this->getFirstImageValue($result['images'] ?? []);
+        $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($result['images'] ?? []);
         if (empty($result['main_image']) && $firstImageValue !== '') {
             $result['main_image'] = $firstImageValue;
         }
@@ -435,7 +435,8 @@ class GoodsService extends BaseService
         $this->model(GoodsSku::class)->where('goods_id', $goodsId)->delete();
 
         if (!empty($skus)) {
-            $data = array_map(function ($sku) use ($goodsId) {
+            $normalizer = app()->make(AssetIdNormalizer::class);
+            $data = array_map(function ($sku) use ($goodsId, $normalizer) {
                 return [
                     'goods_id' => $goodsId,
                     'spec_values' => $sku['spec_values'] ?? '',
@@ -443,7 +444,7 @@ class GoodsService extends BaseService
                     'price' => $sku['price'] ?? 0,
                     'market_price' => $sku['market_price'] ?? 0,
                     'stock' => $sku['stock'] ?? 0,
-                    'image' => $this->normalizeSingleMediaValue($sku['image'] ?? ''),
+                    'image' => $normalizer->normalizeSingle($sku['image'] ?? ''),
                     'status' => $sku['status'] ?? 1,
                     'weight' => isset($sku['weight']) && $sku['weight'] !== '' ? (float) $sku['weight'] : null,
                 ];
@@ -543,11 +544,12 @@ class GoodsService extends BaseService
             return $data;
         }
 
-        $data['spec_meta'] = array_values(array_map(function (array $item) {
-            $values = array_values(array_map(function (array $value) {
+        $normalizer = app()->make(AssetIdNormalizer::class);
+        $data['spec_meta'] = array_values(array_map(function (array $item) use ($normalizer) {
+            $values = array_values(array_map(function (array $value) use ($normalizer) {
                 return [
                     'value' => (string) ($value['value'] ?? ''),
-                    'pic' => $this->normalizeSingleMediaValue($value['pic'] ?? ''),
+                    'pic' => $normalizer->normalizeSingle($value['pic'] ?? ''),
                 ];
             }, array_filter($item['values'] ?? [], 'is_array')));
 
@@ -580,7 +582,7 @@ class GoodsService extends BaseService
             'price' => $data['price'] ?? 0,
             'market_price' => $data['market_price'] ?? 0,
             'stock' => $data['stock'] ?? 0,
-            'image' => $this->normalizeSingleMediaValue($data['main_image'] ?? ''),
+            'image' => app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_image'] ?? ''),
             'status' => $data['status'] ?? 1,
         ];
     }
@@ -727,7 +729,7 @@ class GoodsService extends BaseService
 
         $images = [];
         foreach ($data['images'] as $image) {
-            $url = $this->normalizeSingleMediaValue($image);
+            $url = app()->make(AssetIdNormalizer::class)->normalizeSingle($image);
             if ($url === '') {
                 continue;
             }
@@ -745,30 +747,20 @@ class GoodsService extends BaseService
     protected function normalizeMainImage(array $data): array
     {
         if (array_key_exists('main_image', $data)) {
-            $data['main_image'] = $this->normalizeSingleMediaValue($data['main_image']);
+            $data['main_image'] = app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_image']);
         }
         if (array_key_exists('main_video', $data)) {
-            $data['main_video'] = $this->normalizeSingleMediaValue($data['main_video']);
+            $data['main_video'] = app()->make(AssetIdNormalizer::class)->normalizeSingle($data['main_video']);
         }
 
         if (!empty($data['main_image'])) {
             return $data;
         }
-        $firstImageValue = $this->getFirstImageValue($data['images'] ?? []);
+        $firstImageValue = app()->make(AssetHydrator::class)->firstImageValue($data['images'] ?? []);
         if ($firstImageValue !== '') {
             $data['main_image'] = $firstImageValue;
         }
         return $data;
-    }
-
-    protected function getFirstImageValue(mixed $images): int|string
-    {
-        return app()->make(AssetHydrator::class)->firstImageValue($images);
-    }
-
-    protected function normalizeSingleMediaValue(mixed $value): int|string
-    {
-        return app()->make(AssetIdNormalizer::class)->normalizeSingle($value);
     }
 
     /**

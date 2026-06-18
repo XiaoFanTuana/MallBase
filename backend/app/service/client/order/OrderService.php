@@ -76,7 +76,7 @@ class OrderService extends BaseService
         $this->assertUserId($userId);
 
         // 幂等抢占（事务外，避免事务内触发网络 IO）
-        $idem = $this->idempotencyService();
+        $idem = app()->make(IdempotencyService::class);
         $idemKey = $this->buildIdempotencyKey($userId, $idempotencyKey);
         if (!$idem->acquire(self::IDEM_SCOPE_CREATE, $idemKey)) {
             $recalled = $idem->recall(self::IDEM_SCOPE_CREATE, $idemKey);
@@ -127,7 +127,7 @@ class OrderService extends BaseService
             throw new BusinessException('请选择要购买的商品');
         }
 
-        $idem = $this->idempotencyService();
+        $idem = app()->make(IdempotencyService::class);
         $idemKey = $this->buildIdempotencyKey($userId, $idempotencyKey);
         if (!$idem->acquire(self::IDEM_SCOPE_CREATE, $idemKey)) {
             $recalled = $idem->recall(self::IDEM_SCOPE_CREATE, $idemKey);
@@ -370,16 +370,18 @@ class OrderService extends BaseService
 
         $total = (clone $query)->count();
         $list = $query
+            ->with(['items' => static function ($q): void {
+                $q->order('id', 'asc');
+            }])
             ->order('id', 'desc')
             ->page($page, $pageSize)
             ->select()
             ->toArray();
 
         $orderIds = array_map(static fn(array $r): int => (int) $r['id'], $list);
-        $itemsMap = $this->fetchItemsByOrderIds($orderIds);
         $afterSaleMap = $this->aggregateAfterSaleInfo($orderIds);
+        $list = $this->hydrateOrderItems($list);
         foreach ($list as &$row) {
-            $row['items'] = $itemsMap[(int) $row['id']] ?? [];
             $row['after_sale'] = $afterSaleMap[(int) $row['id']] ?? null;
             $row['after_sale_tag_text'] = (string) ($row['after_sale']['status_text'] ?? '');
             $row['can_refund'] = $this->canApplyRefund($row);
@@ -415,19 +417,30 @@ class OrderService extends BaseService
      */
     public function detail(int $userId, int $orderId): array
     {
-        $order = $this->findOwnedOrder($userId, $orderId);
+        /** @var Order|null $order */
+        $order = $this->model()
+            ->with([
+                'items' => static function ($q): void {
+                    $q->order('id', 'asc');
+                },
+                'logs' => static function ($q): void {
+                    $q->order('id', 'asc');
+                },
+            ])
+            ->where('id', $orderId)
+            ->where('user_id', $userId)
+            ->whereNull('delete_time')
+            ->find();
+        if ($order === null) {
+            throw new BusinessException('订单不存在');
+        }
 
         $data = $order->toArray();
-        $data['items'] = $this->fetchItemsByOrderIds([(int) $order->id])[(int) $order->id] ?? [];
+        $data = $this->hydrateOrderItems([$data])[0];
         $afterSaleMap = $this->aggregateAfterSaleInfo([(int) $order->id]);
         $data['after_sale'] = $afterSaleMap[(int) $order->id] ?? null;
         $data['after_sale_tag_text'] = (string) ($data['after_sale']['status_text'] ?? '');
         $data['can_refund'] = $this->canApplyRefund($data);
-        $data['logs']  = $this->model(OrderLog::class)
-            ->where('order_id', (int) $order->id)
-            ->order('id', 'asc')
-            ->select()
-            ->toArray();
 
         return $data;
     }
@@ -1042,19 +1055,43 @@ class OrderService extends BaseService
     }
 
     /**
-     * @param array<int, int> $orderIds
-     * @return array<int, array<int, array<string, mixed>>>
+     * @param array<int, array<string, mixed>> $orders
+     * @return array<int, array<string, mixed>>
      */
-    private function fetchItemsByOrderIds(array $orderIds): array
+    private function hydrateOrderItems(array $orders): array
     {
-        if ($orderIds === []) {
+        if ($orders === []) {
             return [];
         }
+
+        $orderIds = array_values(array_unique(array_filter(array_map(
+            static fn(array $row): int => (int) ($row['id'] ?? 0),
+            $orders
+        ))));
+        if ($orderIds === []) {
+            return $orders;
+        }
+
         $refundBases = $this->refundBasesByOrderIds($orderIds);
-        $rows = $this->model(OrderItem::class)
-            ->whereIn('order_id', $orderIds)
-            ->select()
-            ->toArray();
+
+        $rows = [];
+        $indexes = [];
+        foreach ($orders as $orderIndex => $order) {
+            if (!is_array($order['items'] ?? null)) {
+                continue;
+            }
+            foreach ($order['items'] as $itemIndex => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $rows[] = $item;
+                $indexes[] = [$orderIndex, $itemIndex];
+            }
+        }
+        if ($rows === []) {
+            return $orders;
+        }
+
         $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
             'goods_image' => 'goods_image_full_url',
         ]);
@@ -1066,8 +1103,7 @@ class OrderService extends BaseService
         $activeRefundItemIds = $this->activeRefundOrderItemIds($orderItemIds);
         $itemAfterSaleInfo = $this->latestRefundInfoByOrderItemIds($orderItemIds);
 
-        $map = [];
-        foreach ($rows as $row) {
+        foreach ($rows as $offset => $row) {
             $orderId = (int) $row['order_id'];
             $orderItemId = (int) ($row['id'] ?? 0);
             $refundableQuantity = max(
@@ -1084,9 +1120,10 @@ class OrderService extends BaseService
                 $refundableQuantity,
                 $itemOccupiedCents[$orderItemId] ?? 0
             );
-            $map[$orderId][] = $row;
+            [$orderIndex, $itemIndex] = $indexes[$offset];
+            $orders[$orderIndex]['items'][$itemIndex] = $row;
         }
-        return $map;
+        return $orders;
     }
 
     /**
@@ -1340,11 +1377,6 @@ class OrderService extends BaseService
             ->whereNull('delete_time')
             ->column('id, name, main_image, status, is_on_sale, freight_template_id', 'id');
         return is_array($rows) ? $rows : [];
-    }
-
-    private function idempotencyService(): IdempotencyService
-    {
-        return app()->make(IdempotencyService::class);
     }
 
     /**

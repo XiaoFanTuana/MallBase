@@ -35,9 +35,11 @@ class Goods extends BaseModel
 
             foreach ($group['values'] as &$item) {
                 $pic = $item['pic'] ?? '';
-                $item['pic_full_url'] = is_scalar($pic) ? buildUploadUrl((string) $pic) : '';
+                $item['pic'] = is_scalar($pic) ? (string) $pic : '';
             }
+            unset($item);
         }
+        unset($group);
 
         return $value;
     }
@@ -70,7 +72,6 @@ class Goods extends BaseModel
 
             $images[] = [
                 'url' => $url,
-                'full_url' => is_int($url) ? '' : buildUploadUrl($url),
             ];
         }
 

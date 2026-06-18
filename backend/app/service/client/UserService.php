@@ -143,18 +143,9 @@ class UserService extends BaseService
      */
     public function getList(array $where = [], int $page = 1, int $limit = 10): array
     {
-        $query = $this->model()
-            ->when(!empty($where['keyword']), function ($q) use ($where) {
-                $q->whereLike('mobile|email|nickname|real_name', "%{$where['keyword']}%");
-            })
-            ->when(($where['status'] ?? null) !== null, function ($q) use ($where) {
-                $q->where('status', $where['status']);
-            })
-            ->when(!empty($where['register_type']), function ($q) use ($where) {
-                $q->where('register_type', $where['register_type']);
-            });
+        $query = $this->buildListQuery($where);
 
-        $total = $query->count();
+        $total = (int) (clone $query)->count();
         $list = $query->order('id', 'desc')
             ->page($page, $limit)
             ->select()
@@ -170,6 +161,20 @@ class UserService extends BaseService
         ]);
 
         return compact('total', 'list');
+    }
+
+    protected function buildListQuery(array $where)
+    {
+        return $this->model()
+            ->when(!empty($where['keyword']), function ($q) use ($where) {
+                $q->whereLike('mobile|email|nickname|real_name', "%{$where['keyword']}%");
+            })
+            ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
+                $q->where('status', $where['status']);
+            })
+            ->when(!empty($where['register_type']), function ($q) use ($where) {
+                $q->where('register_type', $where['register_type']);
+            });
     }
 
     /**

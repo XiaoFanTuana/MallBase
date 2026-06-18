@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace app\service;
 
+use app\model\setting\Setting;
 use app\service\client\WechatService;
 use app\service\upload\AssetService;
 use mall_base\base\BaseService;
@@ -505,7 +506,7 @@ class UploadService extends BaseService
         }
 
         // 查询 mb_setting 记录
-        $settingModel = $this->getSettingModel();
+        $settingModel = $this->model(Setting::class);
         $setting = $settingModel->findOrEmpty($relatedId);
         if ($setting->isEmpty()) {
             throw new BusinessException("设置项不存在（ID: {$relatedId}）");
@@ -691,7 +692,7 @@ class UploadService extends BaseService
         }
 
         if ($relatedId > 0) {
-            $settingModel = $this->getSettingModel();
+            $settingModel = $this->model(Setting::class);
             $setting = $settingModel->findOrEmpty($relatedId);
             if (!$setting->isEmpty()) {
                 $settingRules = $setting->rules ?? [];
@@ -1119,18 +1120,6 @@ class UploadService extends BaseService
 
         // 上传配置来自后台系统设置，Swoole 常驻进程下不缓存实例，避免切换凭证或域名后沿用旧客户端。
         return DriverManager::driver('upload', $driverName, $driverConfig, false);
-    }
-
-    /**
-     * 获取 Setting 模型实例
-     * 通过 app() 动态获取，避免直接 use admin 模块的模型类
-     * 这样当其他模块（如 api）使用此服务时，只要对应模型存在即可
-     *
-     * @return mixed
-     */
-    private function getSettingModel()
-    {
-        return app()->make(\app\model\setting\Setting::class);
     }
 
     /**

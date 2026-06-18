@@ -14,7 +14,6 @@ class GoodsComment extends BaseModel
     protected $name = 'goods_comment';
     protected $json = ['images', 'append_images'];
     protected $jsonAssoc = true;
-    protected array $append = ['images_full_urls', 'append_images_full_urls'];
 
     /**
      * 主评价图片路径数组
@@ -34,26 +33,6 @@ class GoodsComment extends BaseModel
     public function getAppendImagesAttr($value, $data): array
     {
         return $this->normalizeImagePaths($value ?? ($data['append_images'] ?? null));
-    }
-
-    /**
-     * 主评价图片完整 URL
-     *
-     * @return array<int, string>
-     */
-    public function getImagesFullUrlsAttr($value, $data): array
-    {
-        return buildUploadUrls($this->normalizeImagePaths($data['images'] ?? null));
-    }
-
-    /**
-     * 追评图片完整 URL
-     *
-     * @return array<int, string>
-     */
-    public function getAppendImagesFullUrlsAttr($value, $data): array
-    {
-        return buildUploadUrls($this->normalizeImagePaths($data['append_images'] ?? null));
     }
 
     /**

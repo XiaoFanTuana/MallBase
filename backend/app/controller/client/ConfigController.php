@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\controller\client;
 
 use app\service\client\ConfigService;
+use app\service\UploadService;
 use mall_base\base\BaseController;
 
 /**
@@ -66,6 +67,6 @@ class ConfigController extends BaseController
     public function uploadConfig()
     {
         $type = (string) $this->request->param('type', 'image');
-        return $this->success($this->service()->uploadConfig($type), '获取成功');
+        return $this->success(app()->make(UploadService::class)->getClientUploadConfig($type), '获取成功');
     }
 }

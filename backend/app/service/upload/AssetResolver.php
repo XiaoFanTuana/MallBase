@@ -67,11 +67,6 @@ class AssetResolver extends BaseService
         return $result;
     }
 
-    public function fullUrlForLegacyPath(string $path): string
-    {
-        return buildUploadUrl($path);
-    }
-
     /**
      * @param array<string, mixed> $location
      */

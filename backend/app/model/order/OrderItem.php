@@ -19,7 +19,7 @@ class OrderItem extends BaseModel
     /**
      * 归属订单
      */
-    public function order()
+    public function mainOrder()
     {
         return $this->belongsTo(Order::class, 'order_id', 'id');
     }

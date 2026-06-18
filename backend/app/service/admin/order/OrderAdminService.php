@@ -453,6 +453,11 @@ class OrderAdminService extends BaseService
         return (string) request()->ip();
     }
 
+    /**
+     * 预支付关闭服务获取点。
+     *
+     * 保留为 protected，便于单元测试替换外部支付关闭行为；生产逻辑仍通过容器获取无状态服务。
+     */
     protected function prepayCloseService(): WechatPrepayCloseService
     {
         return app()->make(WechatPrepayCloseService::class);
@@ -478,8 +483,7 @@ class OrderAdminService extends BaseService
         $items = $this->loadOrderItemsForStock($orderId);
         $prepayLogIds = [];
         if ($from === OrderStatus::PENDING_PAY) {
-            /** @var WechatPrepayCloseService $prepayClose */
-            $prepayClose = app()->make(WechatPrepayCloseService::class);
+            $prepayClose = $this->prepayCloseService();
             $prepayLogs = $prepayClose->activePrepayLogs((int) $order->id);
             $prepayClose->closeLogs($prepayLogs);
             $prepayLogIds = $prepayClose->idsOf($prepayLogs);
@@ -538,8 +542,7 @@ class OrderAdminService extends BaseService
                     continue;
                 }
                 $items = $this->loadOrderItemsForStock($orderId);
-                /** @var WechatPrepayCloseService $prepayClose */
-                $prepayClose = app()->make(WechatPrepayCloseService::class);
+                $prepayClose = $this->prepayCloseService();
                 $prepayLogs = $prepayClose->activePrepayLogs($orderId);
                 $prepayClose->closeLogs($prepayLogs);
                 $prepayLogIds = $prepayClose->idsOf($prepayLogs);
