@@ -2,6 +2,7 @@
 import type { OrderApi } from '#/api/order';
 
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
@@ -23,6 +24,7 @@ import ShipModal from './ship-modal.vue';
 
 defineOptions({ name: 'OrderManagement' });
 
+const route = useRoute();
 const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
@@ -105,6 +107,28 @@ const loadStats = async () => {
 
 const refreshData = async () => {
   await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const routeNumberQuery = (value: unknown): number | undefined => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null || raw === '') {
+    return undefined;
+  }
+  const numeric = Number(raw);
+  return Number.isNaN(numeric) ? undefined : numeric;
+};
+
+const applyRouteQuery = () => {
+  const status = routeNumberQuery(route.query.status);
+  if (status !== undefined) {
+    searchParams.value.status = status;
+    activeStatusTab.value = String(status);
+  }
+
+  const hasAfterSale = routeNumberQuery(route.query.has_after_sale);
+  if (hasAfterSale === 0 || hasAfterSale === 1) {
+    searchParams.value.has_after_sale = hasAfterSale;
+  }
 };
 
 const handleStatusTabChange = (key: string) => {
@@ -259,6 +283,7 @@ const columns = [
 ];
 
 onMounted(() => {
+  applyRouteQuery();
   refreshData();
   loadStatusOptions();
 });

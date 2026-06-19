@@ -28,6 +28,24 @@ CREATE TABLE `mb_admin` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员表';
 
 -- -----------------------------
+-- 管理员工作台快捷入口表
+-- -----------------------------
+DROP TABLE IF EXISTS `mb_admin_workspace_shortcut`;
+CREATE TABLE `mb_admin_workspace_shortcut` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '快捷入口ID',
+  `admin_id` int(11) unsigned NOT NULL COMMENT '管理员ID',
+  `title` varchar(100) NOT NULL COMMENT '入口标题',
+  `path` varchar(255) NOT NULL COMMENT '菜单路径',
+  `icon` varchar(100) DEFAULT NULL COMMENT '菜单图标',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_admin_path` (`admin_id`, `path`),
+  KEY `idx_admin_sort` (`admin_id`, `sort`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员工作台快捷入口表';
+
+-- -----------------------------
 -- 管理员角色表
 -- -----------------------------
 DROP TABLE IF EXISTS `mb_admin_role`;

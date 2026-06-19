@@ -50,7 +50,7 @@ class CheckPermission
 
         // 检查用户是否有该权限
         if (!$this->hasPermission($adminId, $permissionCode)) {
-            throw new AuthException('没有权限访问该接口', 400);
+            throw new AuthException('没有权限访问该接口', 403);
         }
 
         return $next($request);
@@ -71,6 +71,10 @@ class CheckPermission
             $option = $route->getOption();
             if (($option['_auth'] ?? true) === false) {
                 return null;
+            }
+
+            if (!empty($option['_permission'])) {
+                return (string) $option['_permission'];
             }
 
             return $route->getName();

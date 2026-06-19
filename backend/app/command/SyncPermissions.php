@@ -252,6 +252,11 @@ class SyncPermissions extends Command
                     continue;
                 }
 
+                // 多个拆分接口共用一个权限码时，只有带 _alias 的代表路由需要同步成权限节点。
+                if (!empty($option['_permission']) && !isset($option['_alias'])) {
+                    continue;
+                }
+
                 // 如果有 _group_code，创建路由组菜单（路由组本身不在 getRuleList 中，需要从子路由创建）
                 if ($hasGroupCode) {
                     $groupCode = $option['_group_code'];

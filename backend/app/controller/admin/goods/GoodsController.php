@@ -23,7 +23,7 @@ class GoodsController extends BaseController
      */
     public function list()
     {
-        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view']);
+        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view', 'stock_warning']);
 
         [$page, $limit] = $this->getPagination(1, 15);
 
@@ -33,13 +33,13 @@ class GoodsController extends BaseController
 
     public function stats()
     {
-        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view']);
+        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view', 'stock_warning']);
         return $this->success($this->service()->stats($where), '获取成功');
     }
 
     public function export()
     {
-        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view']);
+        $where = $this->request->param(['keyword', 'category_id', 'brand_id', 'is_on_sale', 'status', 'view', 'stock_warning']);
 
         return response($this->service()->exportCsv($where), 200, [
             'Content-Type' => 'text/csv; charset=utf-8',

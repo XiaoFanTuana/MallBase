@@ -84,7 +84,12 @@ export namespace GoodsApi {
   }
 
   /** 列表参数 */
-  export type ListView = 'all' | 'disabled' | 'off_sale' | 'on_sale' | 'recycle';
+  export type ListView =
+    | 'all'
+    | 'disabled'
+    | 'off_sale'
+    | 'on_sale'
+    | 'recycle';
 
   export interface ListParams {
     keyword?: string;
@@ -92,6 +97,7 @@ export namespace GoodsApi {
     brand_id?: number;
     is_on_sale?: number;
     status?: number;
+    stock_warning?: 0 | 1;
     view?: ListView;
     page?: number;
     limit?: number;

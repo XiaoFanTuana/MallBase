@@ -2,6 +2,7 @@
 import type { RefundApi } from '#/api/order/refund';
 
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
@@ -24,6 +25,7 @@ import RejectModal from './reject-modal.vue';
 
 defineOptions({ name: 'RefundOrderManagement' });
 
+const route = useRoute();
 const { hasAccessByCodes } = useAccess();
 
 /* ---------------- 表格 CRUD ---------------- */
@@ -103,6 +105,23 @@ const loadStats = async () => {
 
 const refreshData = async () => {
   await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const routeNumberQuery = (value: unknown): number | undefined => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null || raw === '') {
+    return undefined;
+  }
+  const numeric = Number(raw);
+  return Number.isNaN(numeric) ? undefined : numeric;
+};
+
+const applyRouteQuery = () => {
+  const status = routeNumberQuery(route.query.status);
+  if (status !== undefined) {
+    searchParams.value.status = status;
+    activeStatusTab.value = String(status);
+  }
 };
 
 const handleStatusTabChange = (key: string) => {
@@ -314,6 +333,7 @@ const columns = [
 ];
 
 onMounted(() => {
+  applyRouteQuery();
   refreshData();
   loadStatusOptions();
 });

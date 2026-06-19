@@ -2,7 +2,7 @@
 import type { GoodsApi } from '#/api/goods';
 
 import { h, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 
@@ -25,6 +25,7 @@ import { downloadBlob } from '#/utils/download';
 
 defineOptions({ name: 'GoodsManagement' });
 
+const route = useRoute();
 const router = useRouter();
 const { hasAccessByCodes } = useAccess();
 
@@ -47,6 +48,7 @@ const searchParams = ref({
   brand_id: undefined as number | undefined,
   is_on_sale: undefined as number | undefined,
   status: undefined as number | undefined,
+  stock_warning: undefined as 0 | 1 | undefined,
   view: 'all' as GoodsApi.ListView,
 });
 const activeViewTab = ref<GoodsApi.ListView>('all');
@@ -99,6 +101,7 @@ const resetSearch = () => {
     brand_id: undefined,
     is_on_sale: undefined,
     status: undefined,
+    stock_warning: undefined,
     view: 'all',
   };
   activeViewTab.value = 'all';
@@ -118,6 +121,33 @@ const loadStats = async () => {
 
 const refreshData = async () => {
   await Promise.all([loadData(buildQuery()), loadStats()]);
+};
+
+const routeStringQuery = (value: unknown): string | undefined => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' && raw !== '' ? raw : undefined;
+};
+
+const routeNumberQuery = (value: unknown): number | undefined => {
+  const raw = routeStringQuery(value);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const numeric = Number(raw);
+  return Number.isNaN(numeric) ? undefined : numeric;
+};
+
+const applyRouteQuery = () => {
+  const view = routeStringQuery(route.query.view) as GoodsApi.ListView;
+  if (['all', 'disabled', 'off_sale', 'on_sale', 'recycle'].includes(view)) {
+    activeViewTab.value = view;
+    searchParams.value.view = view;
+  }
+
+  const stockWarning = routeNumberQuery(route.query.stock_warning);
+  if (stockWarning === 1) {
+    searchParams.value.stock_warning = 1;
+  }
 };
 
 const handleViewTabChange = (key: string) => {
@@ -289,6 +319,7 @@ const columns = [
 
 /* ---------------- 初始化 ---------------- */
 onMounted(() => {
+  applyRouteQuery();
   refreshData();
   loadCategories();
   loadBrands();

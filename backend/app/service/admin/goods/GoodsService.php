@@ -25,6 +25,7 @@ class GoodsService extends BaseService
 {
     private const DEFAULT_SINGLE_SKU_SPEC_VALUES = '';
     private const EXPORT_LIMIT = 5000;
+    private const STOCK_WARNING_THRESHOLD = 10;
 
     /**
      * 默认 Model 类名
@@ -67,6 +68,9 @@ class GoodsService extends BaseService
             })
             ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
                 $q->where('status', $where['status']);
+            })
+            ->when(!empty($where['stock_warning']), function ($q) {
+                $q->where('stock', '<=', self::STOCK_WARNING_THRESHOLD);
             });
     }
 

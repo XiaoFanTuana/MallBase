@@ -1,4 +1,4 @@
-import type { Router } from 'vue-router';
+import type { Router, RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
@@ -11,6 +11,51 @@ import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
+
+function normalizePath(path: string): string {
+  return path.length > 1 ? path.replace(/\/+$/, '') : path;
+}
+
+function canAccessRoute(
+  path: string,
+  name: null | string | symbol | undefined,
+  routes: RouteRecordRaw[],
+): boolean {
+  const targetPath = normalizePath(path);
+  const targetName = name ? String(name) : '';
+
+  function search(items: RouteRecordRaw[]): boolean {
+    return items.some((route) => {
+      if (targetName && String(route.name || '') === targetName) {
+        return true;
+      }
+
+      const routePath = normalizePath(String(route.path || ''));
+      if (routePath === targetPath) {
+        return true;
+      }
+      return Array.isArray(route.children) && search(route.children);
+    });
+  }
+
+  return search(routes);
+}
+
+function findFirstAccessiblePath(routes: RouteRecordRaw[]): string | undefined {
+  for (const route of routes) {
+    const routePath = String(route.path || '');
+    if (routePath.startsWith('/')) {
+      return routePath;
+    }
+
+    if (Array.isArray(route.children)) {
+      const childPath = findFirstAccessiblePath(route.children);
+      if (childPath) {
+        return childPath;
+      }
+    }
+  }
+}
 
 /**
  * 通用守卫配置
@@ -101,6 +146,16 @@ function setupAccessGuard(router: Router) {
 
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
+      if (!canAccessRoute(to.path, to.name, accessStore.accessRoutes)) {
+        const fallbackPath =
+          findFirstAccessiblePath(accessStore.accessRoutes) ||
+          userStore.userInfo?.homePath ||
+          preferences.app.defaultHomePath;
+
+        return normalizePath(fallbackPath) === normalizePath(to.path)
+          ? true
+          : fallbackPath;
+      }
       return true;
     }
 
