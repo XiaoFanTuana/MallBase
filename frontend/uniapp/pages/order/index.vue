@@ -1,5 +1,12 @@
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[
+      `theme-${decorateStore.resolvedThemeMode}`,
+      { 'page--custom-tabbar': decorateStore.tabbarMode === 'custom' },
+    ]"
+    :style="decorateStore.themeStyle"
+  >
     <mb-navbar title="我的订单" :back="false" :accent-line="false" />
 
     <!-- Tabs -->
@@ -139,6 +146,8 @@
       @confirm="onRefundItemsConfirm"
       @close="closeRefundSheet"
     />
+
+    <mb-custom-tabbar current="/pages/order/index" />
   </view>
 </template>
 
@@ -149,7 +158,9 @@ import { getOrderList, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import config from '@/config/index'
 import { isLoggedIn } from '@/utils/auth'
+import { useDecorateStore } from '@/store/decorate'
 
+const decorateStore = useDecorateStore()
 const {
   sheetVisible,
   methods: payMethods,

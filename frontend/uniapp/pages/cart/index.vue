@@ -2,9 +2,11 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
+import { useDecorateStore } from '@/store/decorate'
 import { isLoggedIn } from '@/utils/auth'
 
 const cartStore = useCartStore()
+const decorateStore = useDecorateStore()
 
 const list = computed(() => cartStore.list)
 const loading = computed(() => cartStore.loading)
@@ -149,7 +151,14 @@ function goGoodsDetail(item) {
 </script>
 
 <template>
-  <view class="page">
+  <view
+    class="page"
+    :class="[
+      `theme-${decorateStore.resolvedThemeMode}`,
+      { 'page--custom-tabbar': decorateStore.tabbarMode === 'custom' },
+    ]"
+    :style="decorateStore.themeStyle"
+  >
     <!-- ========== Navbar ========== -->
     <mb-navbar title="购物车" :back="false" :accent-line="false" />
 
@@ -348,6 +357,7 @@ function goGoodsDetail(item) {
       <!-- Safe area -->
       <view class="bottom-bar__safe-area" />
     </view>
+    <mb-custom-tabbar current="/pages/cart/index" />
   </view>
 </template>
 
@@ -641,6 +651,10 @@ function goGoodsDetail(item) {
   bottom: var(--window-bottom, 0);
 }
 /* #endif */
+
+.page--custom-tabbar .bottom-bar {
+  bottom: calc(104rpx + env(safe-area-inset-bottom));
+}
 
 .bottom-bar__inner {
   display: flex;

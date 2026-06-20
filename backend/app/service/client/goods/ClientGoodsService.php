@@ -6,6 +6,7 @@ namespace app\service\client\goods;
 
 use app\model\goods\Goods;
 use app\model\goods\GoodsSku;
+use app\model\goods\GoodsTagRelation;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -31,13 +32,27 @@ class ClientGoodsService extends BaseService
      *     is_recommend?: int|null,
      *     is_new?: int|null,
      *     is_hot?: int|null,
+     *     ids?: string|array<int,int>,
+     *     tag_id?: int|null,
+     *     tag_ids?: string|array<int,int>,
      *     sort_by?: string,
      * } $filter
      * @return array{total:int, list:array<int, array<string, mixed>>}
      */
     public function list(array $filter = [], int $page = 1, int $pageSize = 20): array
     {
+        $manualIds = $this->parseIds($filter['ids'] ?? null);
         $query = $this->buildListQuery($filter);
+
+        if ($manualIds !== []) {
+            $total = (clone $query)->count();
+            $list = $query->select()->toArray();
+            $list = $this->sortGoodsByManualIds($list, $manualIds);
+            $list = array_slice($list, max(0, ($page - 1) * $pageSize), $pageSize);
+            $list = app()->make(AssetHydrator::class)->hydrateGoodsList($list);
+
+            return compact('total', 'list');
+        }
 
         $sortBy = (string) ($filter['sort_by'] ?? 'default');
 
@@ -108,6 +123,17 @@ class ClientGoodsService extends BaseService
         if (!empty($filter['brand_id'])) {
             $query->where('brand_id', (int) $filter['brand_id']);
         }
+        $manualIds = $this->parseIds($filter['ids'] ?? null);
+        if ($manualIds !== []) {
+            $query->whereIn('id', $manualIds);
+        }
+        $tagIds = $this->parseIds($filter['tag_ids'] ?? $filter['tag_id'] ?? null);
+        if ($tagIds !== []) {
+            $goodsIds = $this->model(GoodsTagRelation::class)
+                ->whereIn('tag_id', $tagIds)
+                ->column('goods_id');
+            $query->whereIn('id', array_values(array_unique(array_map('intval', $goodsIds))) ?: [0]);
+        }
         foreach (['is_recommend', 'is_new', 'is_hot'] as $flag) {
             if (isset($filter[$flag]) && (int) $filter[$flag] === 1) {
                 $query->where($flag, 1);
@@ -137,6 +163,44 @@ class ClientGoodsService extends BaseService
             'newest'     => $query->order('id', 'desc'),
             default      => $query->order('sort', 'asc')->order('id', 'desc'),
         };
+    }
+
+    /**
+     * @param mixed $value
+     * @return array<int, int>
+     */
+    private function parseIds($value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $items = is_array($value) ? $value : explode(',', (string) $value);
+        $ids = [];
+        foreach ($items as $item) {
+            $id = (int) $item;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @param array<int, int> $manualIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function sortGoodsByManualIds(array $list, array $manualIds): array
+    {
+        $positions = array_flip($manualIds);
+        usort($list, static function (array $left, array $right) use ($positions): int {
+            return ($positions[(int) ($left['id'] ?? 0)] ?? PHP_INT_MAX)
+                <=> ($positions[(int) ($right['id'] ?? 0)] ?? PHP_INT_MAX);
+        });
+
+        return $list;
     }
 
     /**
