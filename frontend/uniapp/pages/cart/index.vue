@@ -357,7 +357,10 @@ function goGoodsDetail(item) {
       <!-- Safe area -->
       <view class="bottom-bar__safe-area" />
     </view>
-    <mb-custom-tabbar current="/pages/cart/index" />
+    <mb-custom-tabbar
+      v-if="decorateStore.tabbarMode === 'custom'"
+      current="/pages/cart/index"
+    />
   </view>
 </template>
 

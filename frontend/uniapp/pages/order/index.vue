@@ -147,7 +147,10 @@
       @close="closeRefundSheet"
     />
 
-    <mb-custom-tabbar current="/pages/order/index" />
+    <mb-custom-tabbar
+      v-if="decorateStore.tabbarMode === 'custom'"
+      current="/pages/order/index"
+    />
   </view>
 </template>
 

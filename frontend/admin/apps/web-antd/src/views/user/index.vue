@@ -114,6 +114,25 @@ const handleExport = async () => {
   }
 };
 
+const handleTableWheel = (event: WheelEvent) => {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('.ant-table-content')) {
+    return;
+  }
+
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+    return;
+  }
+
+  const scrollElement = document.scrollingElement;
+  if (!scrollElement) {
+    return;
+  }
+
+  event.preventDefault();
+  scrollElement.scrollTop += event.deltaY;
+};
+
 /* ---------------- 弹窗 ---------------- */
 const userModalVisible = ref(false);
 const editingItem = ref<ClientUserApi.UserItem | null>(null);
@@ -398,7 +417,7 @@ const columns = [
     ellipsis: true,
   },
   { title: '注册时间', dataIndex: 'create_time', width: 160 },
-  { title: '操作', key: 'action', width: 300 },
+  { title: '操作', fixed: 'right', key: 'action', width: 380 },
 ];
 
 /* ---------------- 初始化 ---------------- */
@@ -505,7 +524,7 @@ onMounted(async () => {
       </a-form>
     </div>
 
-    <div class="user-table-panel">
+    <div class="user-table-panel" @wheel="handleTableWheel">
       <a-tabs
         :active-key="activeStatusTab"
         class="user-status-tabs"
@@ -524,7 +543,7 @@ onMounted(async () => {
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1900 }"
+        :scroll="{ x: 1980 }"
         row-key="id"
         @change="
           (newPagination: any) => {
@@ -536,7 +555,7 @@ onMounted(async () => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action'">
-            <a-space>
+            <a-space wrap>
               <a-button
                 type="link"
                 size="small"

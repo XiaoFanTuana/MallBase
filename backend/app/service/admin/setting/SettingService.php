@@ -22,6 +22,10 @@ use think\facade\Log;
  */
 class SettingService extends BaseService
 {
+    private const HIDDEN_SETTING_CODES = [
+        'client_home_banners',
+    ];
+
     /**
      * 权限 code 前缀
      */
@@ -1092,6 +1096,7 @@ class SettingService extends BaseService
             ->select()
             ->toArray();
         $list = app()->make(AssetHydrator::class)->hydrateSettings($list);
+        $list = $this->filterVisibleSettings($list);
 
         return compact('total', 'list');
     }
@@ -1433,6 +1438,7 @@ class SettingService extends BaseService
                         ->toArray();
                 });
                 $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
+                $settings = $this->filterVisibleSettings($settings);
                 // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
                 $tabs[] = [
                     'code' => $child['code'],
@@ -1468,6 +1474,7 @@ class SettingService extends BaseService
                 ->toArray();
         });
         $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
+        $settings = $this->filterVisibleSettings($settings);
 
         // 检查是否有 tab 类型的子分组
         $tabChildren = $this->model()
@@ -1490,6 +1497,7 @@ class SettingService extends BaseService
                         ->toArray();
                 });
                 $childSettings = app()->make(AssetHydrator::class)->hydrateSettings($childSettings);
+                $childSettings = $this->filterVisibleSettings($childSettings);
                 $tabs[] = [
                     'code' => $child['code'],
                     'icon' => $child['icon'] ?? null,
@@ -1513,6 +1521,18 @@ class SettingService extends BaseService
             'display_type' => SettingGroup::DISPLAY_TYPE_PAGE,
             'settings' => $settings,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterVisibleSettings(array $settings): array
+    {
+        return array_values(array_filter(
+            $settings,
+            fn (array $setting): bool => !in_array((string) ($setting['code'] ?? ''), self::HIDDEN_SETTING_CODES, true),
+        ));
     }
 
     /**

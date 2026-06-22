@@ -203,7 +203,10 @@ function handleLogout() {
 <template>
   <view
     class="page"
-    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :class="[
+      `theme-${decorateStore.resolvedThemeMode}`,
+      { 'page--custom-tabbar': decorateStore.tabbarMode === 'custom' },
+    ]"
     :style="decorateStore.themeStyle"
   >
     <mb-navbar title="MallBase" :back="false" bg-color="var(--color-bg, #ffffff)" />
@@ -326,8 +329,11 @@ function handleLogout() {
       </template>
     </view>
 
-    <view class="bottom-spacer" />
-    <mb-custom-tabbar current="/pages/profile/index" />
+    <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
+    <mb-custom-tabbar
+      v-if="decorateStore.tabbarMode === 'custom'"
+      current="/pages/profile/index"
+    />
   </view>
 </template>
 

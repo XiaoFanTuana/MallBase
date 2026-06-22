@@ -28,7 +28,7 @@ class ConfigService extends BaseService
      * 完整组直接输出的 group code 白名单
      */
     private const PUBLIC_GROUPS = [
-        'ClientConfig',     // client_site_name / client_logo / client_launch_image / client_home_banners / client_share_* / client_agreement / client_privacy
+        'ClientConfig',     // client_site_name / client_logo / client_launch_image / client_share_* / client_agreement / client_privacy
         'SystemCopyright',  // copyright_* （后台与 Client 共用版权）
     ];
 
@@ -60,6 +60,7 @@ class ConfigService extends BaseService
         /** @var SystemSettingService $settingsService */
         $settingsService = app()->make(SystemSettingService::class);
         $merged = $settingsService->getSystemSettingGroups(self::PUBLIC_GROUPS);
+        unset($merged['client_home_banners']);
 
         // SystemBasic 组走字段级白名单
         foreach (self::SYSTEM_BASIC_PUBLIC_FIELDS as $code) {

@@ -122,9 +122,9 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 -- 设置项：1012 SystemCopyright 系统版权（后台与 Client 共用）
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1012, '启用版权', 'copyright_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后后台/Client 页脚不显示版权信息', 10),
-(1012, '公司名称', 'copyright_company', 'Mall Base Team', 'input', NULL, NULL, NULL, NULL, 20),
-(1012, '公司主页', 'copyright_company_url', '', 'input', NULL, NULL, NULL, NULL, 30),
-(1012, '版权年份', 'copyright_date', '© {year}', 'input', NULL, NULL, NULL, '支持 {year} 占位符自动替换为当前年', 40),
+(1012, '公司名称', 'copyright_company', 'MallBase Team', 'input', NULL, NULL, NULL, NULL, 20),
+(1012, '公司主页', 'copyright_company_url', 'https://github.com/gosowong/mall-base', 'input', NULL, NULL, NULL, NULL, 30),
+(1012, '版权年份', 'copyright_date', '{year}', 'input', NULL, NULL, NULL, '支持 {year} 占位符自动替换为当前年', 40),
 (1012, 'ICP 备案号', 'copyright_icp', '', 'input', NULL, NULL, '例：京ICP备12345678号', '大陆站点页脚必须显示', 50),
 (1012, 'ICP 备案链接', 'copyright_icp_url', 'https://beian.miit.gov.cn', 'input', NULL, NULL, NULL, NULL, 60),
 (1012, '公安备案号', 'copyright_psb', '', 'input', NULL, NULL, '例：京公网安备11010802012345号', NULL, 70),
@@ -236,7 +236,6 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (105, '启动屏图', 'client_launch_image', '/static/client/launch.png', 'image', NULL, NULL, NULL, 'App 启动全屏图，推荐 9:16，建议 1080×2340 JPG，<500KB', 30),
 (105, '启用启动页', 'client_splash_enabled', '1', 'switch', NULL, NULL, NULL, '关闭后客户端不再展示启动页', 110),
 (105, '启动页时长(ms)', 'client_splash_duration', '3000', 'input', NULL, NULL, NULL, '启动页自动关闭倒计时，单位毫秒，建议 2000-5000', 120),
-(105, '首页轮播图', 'client_home_banners', '["/static/client/banner-1.png","/static/client/banner-2.png","/static/client/banner-3.png"]', 'images', NULL, NULL, NULL, '推荐 16:9 或 2:1，建议 750×360 JPG/PNG，单张<300KB', 40),
 (105, '分享默认标题', 'client_share_title', '', 'input', NULL, NULL, NULL, NULL, 50),
 (105, '分享默认简介', 'client_share_desc', '', 'input', NULL, NULL, NULL, NULL, 60),
 (105, '分享默认封面', 'client_share_cover', '/static/client/share-cover.png', 'image', NULL, NULL, NULL, '推荐 5:4，建议 500×400 PNG/JPG，<200KB', 70),

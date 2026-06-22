@@ -166,7 +166,10 @@ onLoad(() => {
 <template>
   <view
     class="page"
-    :class="[`theme-${decorateStore.resolvedThemeMode}`]"
+    :class="[
+      `theme-${decorateStore.resolvedThemeMode}`,
+      { 'page--custom-tabbar': decorateStore.tabbarMode === 'custom' },
+    ]"
     :style="decorateStore.themeStyle"
   >
     <mb-navbar title="分类" :back="false" />
@@ -292,7 +295,7 @@ onLoad(() => {
         </view>
 
         <!-- Bottom safe area -->
-        <view class="bottom-spacer" />
+        <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
       </scroll-view>
     </view>
 
@@ -305,7 +308,10 @@ onLoad(() => {
         @action="fetchCategories"
       />
     </view>
-    <mb-custom-tabbar current="/pages/category/index" />
+    <mb-custom-tabbar
+      v-if="decorateStore.tabbarMode === 'custom'"
+      current="/pages/category/index"
+    />
   </view>
 </template>
 

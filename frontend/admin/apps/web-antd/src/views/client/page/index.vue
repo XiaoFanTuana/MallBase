@@ -191,6 +191,9 @@ const isCategoryRow = (record: PageTableRow): record is PageCategoryRow =>
 const isSystemPage = (record: PageTableRow) =>
   !isCategoryRow(record) && record.source === 'system';
 
+const getRowClassName = (record: PageTableRow) =>
+  isCategoryRow(record) ? 'client-page-category-row' : '';
+
 const resetForm = () => {
   formRef.value?.resetFields();
   Object.assign(formData, {
@@ -363,173 +366,196 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4">
-    <div class="mb-4 flex flex-wrap gap-2">
-      <a-button type="primary" @click="handleCreate">新增页面</a-button>
-      <a-button @click="openImportModal">导入 pages.json</a-button>
-      <a-button @click="() => loadData(searchParams)">刷新</a-button>
+  <div class="client-page p-4">
+    <div class="client-page__header">
+      <div>
+        <h2 class="client-page__title">页面库</h2>
+      </div>
+      <div class="client-page__actions">
+        <a-button type="primary" @click="handleCreate">新增页面</a-button>
+        <a-button @click="openImportModal">导入 pages.json</a-button>
+        <a-button @click="() => loadData(searchParams)">刷新</a-button>
+      </div>
     </div>
 
-    <a-form layout="inline" class="mb-4">
-      <a-form-item label="关键词">
-        <a-input
-          v-model:value="searchParams.keyword"
-          allow-clear
-          placeholder="名称/路径/备注"
-          style="width: 220px"
-        />
-      </a-form-item>
-      <a-form-item label="页面分类">
-        <a-select
-          v-model:value="searchParams.category"
-          :options="CATEGORY_OPTIONS"
-          allow-clear
-          placeholder="请选择"
-          style="width: 150px"
-        />
-      </a-form-item>
-      <a-form-item label="页面类型">
-        <a-select
-          v-model:value="searchParams.page_type"
-          :options="PAGE_TYPE_OPTIONS"
-          allow-clear
-          placeholder="请选择"
-          style="width: 150px"
-        />
-      </a-form-item>
-      <a-form-item label="来源">
-        <a-select
-          v-model:value="searchParams.source"
-          :options="SOURCE_OPTIONS"
-          allow-clear
-          placeholder="请选择"
-          style="width: 150px"
-        />
-      </a-form-item>
-      <a-form-item label="状态">
-        <a-select
-          v-model:value="searchParams.status"
-          allow-clear
-          placeholder="请选择"
-          style="width: 120px"
-        >
-          <a-select-option :value="1">启用</a-select-option>
-          <a-select-option :value="0">禁用</a-select-option>
-        </a-select>
-      </a-form-item>
-      <a-form-item>
-        <a-button
-          type="primary"
-          @click="
-            () => {
-              pagination.current = 1;
-              loadData(searchParams);
-            }
-          "
-        >
-          搜索
-        </a-button>
-        <a-button class="ml-2" @click="resetSearch">重置</a-button>
-      </a-form-item>
-    </a-form>
-
-    <a-table
-      :columns="columns"
-      :data-source="treeTableData"
-      :loading="loading"
-      :pagination="false"
-      :scroll="{ x: 1450 }"
-      row-key="tableKey"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'id'">
-          <span v-if="!isCategoryRow(record)">{{ record.id }}</span>
-        </template>
-
-        <template v-if="column.dataIndex === 'name'">
-          <strong v-if="isCategoryRow(record)">{{ record.name }}</strong>
-          <span v-else>{{ record.name }}</span>
-        </template>
-
-        <template v-if="column.dataIndex === 'path'">
-          <span v-if="isCategoryRow(record)">分类分组</span>
-          <span v-else>{{ record.path }}</span>
-        </template>
-
-        <template v-if="column.dataIndex === 'category'">
-          <a-tag :color="categoryMap[record.category]?.color || 'default'">
-            {{ categoryMap[record.category]?.label || record.category }}
-          </a-tag>
-        </template>
-
-        <template v-if="column.dataIndex === 'page_type'">
-          <a-tag
-            v-if="!isCategoryRow(record)"
-            :color="typeMap[record.page_type]?.color || 'default'"
+    <div class="client-page__filter">
+      <a-form
+        class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
+      >
+        <a-form-item class="mb-0" label="关键词">
+          <a-input
+            v-model:value="searchParams.keyword"
+            allow-clear
+            class="w-full"
+            placeholder="名称/路径/备注"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0" label="页面分类">
+          <a-select
+            v-model:value="searchParams.category"
+            :options="CATEGORY_OPTIONS"
+            allow-clear
+            class="w-full"
+            placeholder="请选择"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0" label="页面类型">
+          <a-select
+            v-model:value="searchParams.page_type"
+            :options="PAGE_TYPE_OPTIONS"
+            allow-clear
+            class="w-full"
+            placeholder="请选择"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0" label="来源">
+          <a-select
+            v-model:value="searchParams.source"
+            :options="SOURCE_OPTIONS"
+            allow-clear
+            class="w-full"
+            placeholder="请选择"
+          />
+        </a-form-item>
+        <a-form-item class="mb-0" label="状态">
+          <a-select
+            v-model:value="searchParams.status"
+            allow-clear
+            class="w-full"
+            placeholder="请选择"
           >
-            {{ typeMap[record.page_type]?.label || record.page_type }}
-          </a-tag>
-        </template>
-
-        <template v-if="column.dataIndex === 'package_root'">
-          <span v-if="!isCategoryRow(record)">
-            {{ record.package_root || '-' }}
-          </span>
-        </template>
-
-        <template v-if="column.dataIndex === 'source'">
-          <a-tag
-            v-if="!isCategoryRow(record)"
-            :color="sourceMap[record.source]?.color || 'default'"
-          >
-            {{ sourceMap[record.source]?.label || record.source }}
-          </a-tag>
-        </template>
-
-        <template v-if="column.dataIndex === 'need_login'">
-          <a-tag
-            v-if="!isCategoryRow(record)"
-            :color="record.need_login ? 'orange' : 'green'"
-          >
-            {{ record.need_login ? '需要' : '不需要' }}
-          </a-tag>
-        </template>
-
-        <template v-if="column.dataIndex === 'sort'">
-          <span v-if="!isCategoryRow(record)">{{ record.sort }}</span>
-        </template>
-
-        <template v-if="column.dataIndex === 'status'">
-          <a-tag
-            v-if="!isCategoryRow(record)"
-            :color="record.status === 1 ? 'green' : 'default'"
-          >
-            {{ record.status === 1 ? '启用' : '禁用' }}
-          </a-tag>
-        </template>
-
-        <template v-if="column.dataIndex === 'update_time'">
-          <span v-if="!isCategoryRow(record)">{{ record.update_time }}</span>
-        </template>
-
-        <template v-if="column.key === 'action'">
-          <span v-if="isCategoryRow(record) || isSystemPage(record)"></span>
-          <a-space v-else>
-            <a-button type="link" size="small" @click="handleEdit(record)">
-              编辑
-            </a-button>
+            <a-select-option :value="1">启用</a-select-option>
+            <a-select-option :value="0">禁用</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item class="mb-0 md:col-span-3 xl:col-span-6">
+          <div class="flex justify-end gap-2">
             <a-button
-              type="link"
-              danger
-              size="small"
-              @click="handleDelete(record)"
+              type="primary"
+              @click="
+                () => {
+                  pagination.current = 1;
+                  loadData(searchParams);
+                }
+              "
             >
-              删除
+              搜索
             </a-button>
-          </a-space>
+            <a-button @click="resetSearch">重置</a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </div>
+
+    <div class="client-page__table">
+      <div class="client-page__table-header">
+        <div>
+          <h3 class="client-page__table-title">页面列表</h3>
+        </div>
+        <div class="client-page__table-meta">
+          {{ treeTableData.length }} 个分组 / {{ tableData.length }} 个页面
+        </div>
+      </div>
+
+      <a-table
+        :columns="columns"
+        :data-source="treeTableData"
+        :loading="loading"
+        :pagination="false"
+        :row-class-name="getRowClassName"
+        :scroll="{ x: 1450 }"
+        row-key="tableKey"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'id'">
+            <span v-if="!isCategoryRow(record)">{{ record.id }}</span>
+          </template>
+
+          <template v-if="column.dataIndex === 'name'">
+            <strong v-if="isCategoryRow(record)">{{ record.name }}</strong>
+            <span v-else>{{ record.name }}</span>
+          </template>
+
+          <template v-if="column.dataIndex === 'path'">
+            <span v-if="isCategoryRow(record)">分类分组</span>
+            <span v-else>{{ record.path }}</span>
+          </template>
+
+          <template v-if="column.dataIndex === 'category'">
+            <a-tag :color="categoryMap[record.category]?.color || 'default'">
+              {{ categoryMap[record.category]?.label || record.category }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'page_type'">
+            <a-tag
+              v-if="!isCategoryRow(record)"
+              :color="typeMap[record.page_type]?.color || 'default'"
+            >
+              {{ typeMap[record.page_type]?.label || record.page_type }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'package_root'">
+            <span v-if="!isCategoryRow(record)">
+              {{ record.package_root || '-' }}
+            </span>
+          </template>
+
+          <template v-if="column.dataIndex === 'source'">
+            <a-tag
+              v-if="!isCategoryRow(record)"
+              :color="sourceMap[record.source]?.color || 'default'"
+            >
+              {{ sourceMap[record.source]?.label || record.source }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'need_login'">
+            <a-tag
+              v-if="!isCategoryRow(record)"
+              :color="record.need_login ? 'orange' : 'green'"
+            >
+              {{ record.need_login ? '需要' : '不需要' }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'sort'">
+            <span v-if="!isCategoryRow(record)">{{ record.sort }}</span>
+          </template>
+
+          <template v-if="column.dataIndex === 'status'">
+            <a-tag
+              v-if="!isCategoryRow(record)"
+              :color="record.status === 1 ? 'green' : 'default'"
+            >
+              {{ record.status === 1 ? '启用' : '禁用' }}
+            </a-tag>
+          </template>
+
+          <template v-if="column.dataIndex === 'update_time'">
+            <span v-if="!isCategoryRow(record)">{{ record.update_time }}</span>
+          </template>
+
+          <template v-if="column.key === 'action'">
+            <span v-if="isCategoryRow(record) || isSystemPage(record)"></span>
+            <a-space v-else>
+              <a-button type="link" size="small" @click="handleEdit(record)">
+                编辑
+              </a-button>
+              <a-button
+                type="link"
+                danger
+                size="small"
+                @click="handleDelete(record)"
+              >
+                删除
+              </a-button>
+            </a-space>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
 
     <a-modal
       v-model:open="modalVisible"
@@ -671,3 +697,106 @@ onMounted(() => {
     </a-modal>
   </div>
 </template>
+
+<style scoped>
+.client-page {
+  min-height: 100%;
+}
+
+.client-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.client-page__title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.client-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.client-page__filter,
+.client-page__table {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.client-page__filter {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.client-page__table {
+  overflow: hidden;
+}
+
+.client-page__table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.client-page__table-title {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.client-page__table-meta {
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.client-page__table :deep(.ant-table) {
+  background: hsl(var(--card));
+}
+
+.client-page__table :deep(.client-page-category-row > td) {
+  background: hsl(var(--background));
+  border-top: 8px solid hsl(var(--card));
+  border-bottom-color: hsl(var(--border));
+  font-weight: 600;
+}
+
+.client-page__table :deep(.client-page-category-row:first-child > td) {
+  border-top-width: 0;
+}
+
+.client-page__table :deep(.ant-table-row-level-1 > td:first-child) {
+  padding-left: 40px;
+}
+
+@media (max-width: 768px) {
+  .client-page__header,
+  .client-page__table-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .client-page__actions {
+    justify-content: flex-start;
+  }
+
+  .client-page__table-meta {
+    white-space: normal;
+  }
+}
+</style>

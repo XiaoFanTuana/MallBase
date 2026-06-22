@@ -1626,6 +1626,8 @@ onMounted(loadConfig);
 <style lang="css" scoped>
 .setting-form-page {
   min-height: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   padding: 24px;
   background: hsl(var(--background-deep));
 }
@@ -1684,6 +1686,8 @@ onMounted(loadConfig);
 }
 
 .setting-card {
+  min-width: 0;
+  overflow-x: hidden;
   padding: 24px;
   background: hsl(var(--card));
   border-radius: 12px;
@@ -1692,13 +1696,13 @@ onMounted(loadConfig);
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
   gap: 24px;
 }
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 24px;
 }
 
@@ -1798,9 +1802,16 @@ onMounted(loadConfig);
 }
 
 .editor-tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  overflow: hidden;
+}
+
+.editor-tabs :deep(.rich-text-editor__toolbar) {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .editor-preview {
