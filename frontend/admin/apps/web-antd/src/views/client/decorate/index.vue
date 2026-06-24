@@ -1170,8 +1170,14 @@ const normalizeProfileTextStyles = (
         const fontWeight = String(
           rawStyle.fontWeight ?? rawStyle.font_weight ?? '',
         );
-        if (['400', '500', '600', '700', '800'].includes(fontWeight)) {
+        if (['400', '500', '600', '700', '800', '900'].includes(fontWeight)) {
           style.fontWeight = fontWeight;
+        }
+        const fontStyle = String(
+          rawStyle.fontStyle ?? rawStyle.font_style ?? '',
+        );
+        if (fontStyle === 'italic' || normalizeBooleanValue(rawStyle.italic)) {
+          style.fontStyle = 'italic';
         }
         const textAlign = normalizeProfileTextAlign(
           rawStyle.textAlign ?? rawStyle.text_align,

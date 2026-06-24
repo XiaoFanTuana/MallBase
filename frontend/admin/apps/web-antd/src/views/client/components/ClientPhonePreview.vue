@@ -978,7 +978,14 @@ function styleBoolean(value: unknown, fallback = false) {
 
 function normalizePreviewFontWeight(value: unknown) {
   const weight = String(value || '');
-  return ['400', '500', '600', '700', '800'].includes(weight) ? weight : '';
+  return ['400', '500', '600', '700', '800', '900'].includes(weight)
+    ? weight
+    : '';
+}
+
+function normalizePreviewFontStyle(value: unknown, italicValue?: unknown) {
+  if (value === 'italic' || styleBoolean(italicValue)) return 'italic';
+  return '';
 }
 
 function normalizePreviewTextAlign(value: unknown) {
@@ -1006,6 +1013,11 @@ function profileTextStyle(module: ModuleItem, role: string) {
     styleConfig.fontWeight ?? styleConfig.font_weight,
   );
   if (fontWeight) style.fontWeight = fontWeight;
+  const fontStyle = normalizePreviewFontStyle(
+    styleConfig.fontStyle ?? styleConfig.font_style,
+    styleConfig.italic,
+  );
+  if (fontStyle) style.fontStyle = fontStyle;
   const textAlign = normalizePreviewTextAlign(
     styleConfig.textAlign ?? styleConfig.text_align,
   );

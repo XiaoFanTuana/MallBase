@@ -126,7 +126,12 @@ const profileEntryDragIndex = ref<null | number>(null);
 const profileEntryDropIndex = ref<null | number>(null);
 const entryCardIconPrefix = ref(props.iconPrefix || 'ant-design');
 
-type ProfileTextStyleField = 'color' | 'fontSize' | 'fontWeight' | 'textAlign';
+type ProfileTextStyleField =
+  | 'color'
+  | 'fontSize'
+  | 'fontStyle'
+  | 'fontWeight'
+  | 'textAlign';
 type ProfileTextStyleRole =
   | 'action'
   | 'amount'
@@ -186,6 +191,7 @@ const profileTextWeightOptions = [
   { label: '半粗', value: '600' },
   { label: '加粗', value: '700' },
   { label: '重粗', value: '800' },
+  { label: '特粗', value: '900' },
 ];
 
 const profileTextAlignOptions = [
@@ -196,7 +202,9 @@ const profileTextAlignOptions = [
 
 const profileTextStyleDefaults: Record<
   string,
-  Partial<Record<ProfileTextStyleRole, Record<ProfileTextStyleField, any>>>
+  Partial<
+    Record<ProfileTextStyleRole, Partial<Record<ProfileTextStyleField, any>>>
+  >
 > = {
   customMenu: {
     itemLabel: {
@@ -1512,7 +1520,7 @@ const getProfileTextStyleDefault = (
     : '';
   const defaults = {
     ...profileTextStyleDefaults[type]?.[role],
-  } as Record<ProfileTextStyleField, any>;
+  } as Partial<Record<ProfileTextStyleField, any>>;
   if (
     ['customMenu', 'serviceMenu'].includes(type) &&
     role === 'itemLabel' &&
@@ -1544,6 +1552,7 @@ const getProfileTextStyleValue = (
   const aliasMap: Record<ProfileTextStyleField, string> = {
     color: 'color',
     fontSize: 'font_size',
+    fontStyle: 'font_style',
     fontWeight: 'font_weight',
     textAlign: 'text_align',
   };
@@ -1632,6 +1641,18 @@ const updateProfileTextStyleField = (
       style.fontWeight = weight;
     } else {
       delete style.fontWeight;
+    }
+    return;
+  }
+  if (field === 'fontStyle') {
+    const fontStyle = value === 'italic' ? 'italic' : '';
+    if (
+      fontStyle &&
+      !isProfileTextDefaultValue(module, role, field, fontStyle)
+    ) {
+      style.fontStyle = fontStyle;
+    } else {
+      delete style.fontStyle;
     }
     return;
   }
@@ -3138,6 +3159,28 @@ const updateSelectedSubTitleColor = (event: Event) => {
                           )
                       "
                     />
+                    <a-checkbox
+                      :checked="
+                        getProfileTextStyleDisplayValue(
+                          editableModule,
+                          item.role,
+                          'fontStyle',
+                        ) === 'italic'
+                      "
+                      :disabled="isReadonlyScheme"
+                      class="profile-text-style-card__toggle"
+                      @change="
+                        (event: any) =>
+                          updateProfileTextStyleField(
+                            editableModule,
+                            item.role,
+                            'fontStyle',
+                            event.target.checked ? 'italic' : '',
+                          )
+                      "
+                    >
+                      斜体
+                    </a-checkbox>
                   </div>
                 </div>
               </div>

@@ -444,7 +444,9 @@ function styleBoolean(value, fallback = false) {
 
 function normalizeFontWeight(value) {
   const weight = String(value || "");
-  return ["400", "500", "600", "700", "800"].includes(weight) ? weight : "";
+  return ["400", "500", "600", "700", "800", "900"].includes(weight)
+    ? weight
+    : "";
 }
 
 function normalizeTextAlign(value) {
@@ -472,6 +474,12 @@ function textStyle(module, role) {
     styleConfig.fontWeight ?? styleConfig.font_weight,
   );
   if (fontWeight) style.fontWeight = fontWeight;
+  const fontStyle = String(
+    styleConfig.fontStyle ?? styleConfig.font_style ?? "",
+  );
+  if (fontStyle === "italic" || styleBoolean(styleConfig.italic)) {
+    style.fontStyle = "italic";
+  }
   const textAlign = normalizeTextAlign(
     styleConfig.textAlign ?? styleConfig.text_align,
   );
@@ -1345,7 +1353,9 @@ function handleLogout() {
 
 .wallet-card__action {
   flex: 1;
-  height: 64rpx;
+  min-height: 64rpx;
+  padding: 12rpx 24rpx;
+  box-sizing: border-box;
   border-radius: 999rpx;
   background: var(--color-bg-surface, #f3f3fe);
   display: flex;
@@ -1359,6 +1369,7 @@ function handleLogout() {
 
 .wallet-card__action-text {
   font-size: 24rpx;
+  line-height: 1.2;
   color: var(--color-text-secondary, #434654);
   font-weight: 600;
 }
