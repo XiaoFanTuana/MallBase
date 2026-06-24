@@ -9,7 +9,7 @@
       >
         <view class="decorate-search__icon" />
         <text class="decorate-search__text">{{
-          module.props.placeholder || '搜索商品'
+          module.props.placeholder || "搜索商品"
         }}</text>
       </view>
 
@@ -38,13 +38,13 @@
         </swiper>
         <view v-else class="decorate-banner__fallback">
           <text class="decorate-banner__fallback-sub">{{
-            module.props.subtitle || 'NEW ARRIVAL'
+            module.props.subtitle || "NEW ARRIVAL"
           }}</text>
           <text class="decorate-banner__fallback-title">{{
-            module.props.title || '夏日好物限时满减'
+            module.props.title || "夏日好物限时满减"
           }}</text>
           <text class="decorate-banner__fallback-button">{{
-            module.props.buttonText || '立即领取'
+            module.props.buttonText || "立即领取"
           }}</text>
         </view>
       </view>
@@ -100,13 +100,13 @@
         </view>
         <view class="decorate-entry-card__content">
           <text class="decorate-entry-card__title">{{
-            module.props.title || '入口卡片'
+            module.props.title || "入口卡片"
           }}</text>
           <text class="decorate-entry-card__sub">{{
             module.props.subtitle ||
             module.props.sub_title ||
             module.props.path ||
-            '点击查看'
+            "点击查看"
           }}</text>
         </view>
         <view v-if="module.props.show_arrow !== false" class="decorate-arrow" />
@@ -142,7 +142,7 @@
         :style="moduleStyle(module)"
       >
         <text class="decorate-title__text" :style="titleTextStyle(module)">{{
-          module.props.text || module.props.title || '标题'
+          module.props.text || module.props.title || "标题"
         }}</text>
         <text
           v-if="module.props.subtitle || module.props.sub_title"
@@ -187,10 +187,7 @@
         class="decorate-products"
         :style="moduleStyle(module)"
       >
-        <view
-          v-if="hasProductHead(module)"
-          class="decorate-section-head"
-        >
+        <view v-if="hasProductHead(module)" class="decorate-section-head">
           <view>
             <text
               v-if="module.props.title"
@@ -266,7 +263,7 @@
           class="decorate-empty"
         >
           <text class="decorate-empty__text">{{
-            module.props.emptyText || '暂无商品'
+            module.props.emptyText || "暂无商品"
           }}</text>
         </view>
       </view>
@@ -275,10 +272,10 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue';
-import { getGoodsList } from '@/api/goods/goods';
-import config from '@/config/index';
-import { buildGoodsParams, openDecorateLink } from '@/utils/decorate';
+import { reactive, watch } from "vue";
+import { getGoodsList } from "@/api/goods/goods";
+import config from "@/config/index";
+import { buildGoodsParams, openDecorateLink } from "@/utils/decorate";
 
 const props = defineProps({
   modules: {
@@ -293,7 +290,7 @@ watch(
   () => props.modules,
   () => {
     props.modules
-      .filter((module) => module.type === 'productGroup')
+      .filter((module) => module.type === "productGroup")
       .forEach((module) => ensureProductState(module));
   },
   { immediate: true, deep: true },
@@ -305,28 +302,142 @@ function getList(module) {
   return Array.isArray(value) ? value : [];
 }
 
+function styleColor(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function gradientDirection(value) {
+  const map = {
+    diagonalLeft: "135deg",
+    diagonalRight: "45deg",
+    horizontal: "90deg",
+    vertical: "180deg",
+  };
+  return map[String(value || "horizontal")] || map.horizontal;
+}
+
+function gradientBackground(startValue, endValue, directionValue, bottomValue) {
+  const start = styleColor(startValue);
+  const end = styleColor(endValue) || start;
+  const bottom = styleColor(bottomValue);
+  if (!start && !bottom) return "";
+  if (bottom && start) {
+    return `linear-gradient(180deg, ${start} 0%, ${end} 68%, ${bottom} 100%)`;
+  }
+  if (!start) return bottom;
+  if (!end || start.toLowerCase() === end.toLowerCase()) return start;
+  return `linear-gradient(${gradientDirection(directionValue)}, ${start}, ${end})`;
+}
+
+function styleBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") return ["1", "true"].includes(value);
+  return Boolean(value);
+}
+
 function moduleStyle(module) {
   const props = module.props || {};
   const style = [];
   const widthPercent = props.widthPercent ?? props.width_percent;
   const marginTop = props.marginTop ?? props.margin_top;
   const marginBottom = props.marginBottom ?? props.margin_bottom;
+  const marginLeft = props.marginLeft ?? props.margin_left;
+  const marginRight = props.marginRight ?? props.margin_right;
   if (widthPercent !== undefined) {
     const widthValue = Number(widthPercent);
     if (Number.isFinite(widthValue)) {
       const width = Math.max(50, Math.min(widthValue, 100));
       style.push(`width: ${width}%`);
-      if (width < 100) style.push('margin-left: auto; margin-right: auto');
+      if (width < 100) style.push("margin-left: auto; margin-right: auto");
     }
   }
   if (marginTop !== undefined)
     style.push(`margin-top: ${Number(marginTop)}rpx`);
   if (marginBottom !== undefined)
     style.push(`margin-bottom: ${Number(marginBottom)}rpx`);
-  if (props.background) style.push(`background: ${props.background}`);
+  if (marginLeft !== undefined) style.push(`margin-left: ${Number(marginLeft)}rpx`);
+  if (marginRight !== undefined)
+    style.push(`margin-right: ${Number(marginRight)}rpx`);
+  const componentBackground = gradientBackground(
+    props.componentBackgroundStart || props.component_background_start,
+    props.componentBackgroundEnd || props.component_background_end,
+    props.backgroundGradientDirection || props.background_gradient_direction,
+  );
+  const backgroundImage = getImage(
+    props.background_image || props.backgroundImage || "",
+  );
+  const backgroundMode = props.backgroundMode || props.background_mode || "color";
+  const background = gradientBackground(
+    props.backgroundColorStart || props.background_color_start || props.background,
+    props.backgroundColorEnd || props.background_color_end,
+    props.backgroundGradientDirection || props.background_gradient_direction,
+    props.bottomBackground || props.bottom_background,
+  );
+  if (componentBackground) style.push(`background: ${componentBackground}`);
+  if (backgroundMode === "image" && backgroundImage) {
+    style.push(`background-image: url("${backgroundImage}")`);
+    style.push("background-size: cover");
+    style.push("background-position: center");
+  } else if (background) {
+    style.push(`background: ${background}`);
+  }
   if (props.radius !== undefined)
     style.push(`border-radius: ${Number(props.radius)}rpx`);
-  if (
+  const textColor = styleColor(props.textColor || props.text_color);
+  if (textColor) {
+    style.push(`color: ${textColor}`);
+    style.push(`--color-text: ${textColor}`);
+    style.push(`--color-text-title: ${textColor}`);
+    style.push(`--color-text-secondary: ${textColor}`);
+    style.push(`--color-text-tertiary: ${textColor}`);
+  }
+  const borderEnabled = props.borderEnabled ?? props.border_enabled;
+  if (borderEnabled !== undefined) {
+    if (styleBoolean(borderEnabled, true)) {
+      const borderWidth = Number(props.borderWidth ?? props.border_width ?? 1);
+      const borderStyle = props.borderStyle || props.border_style || "solid";
+      const borderColor =
+        styleColor(props.borderColor || props.border_color) ||
+        "var(--color-divider, #f0f2f5)";
+      style.push(`border: ${borderWidth}rpx ${borderStyle} ${borderColor}`);
+    } else {
+      style.push("border: 0");
+    }
+  }
+  const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
+  if (shadowEnabled !== undefined) {
+    style.push(
+      styleBoolean(shadowEnabled)
+        ? "box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.14)"
+        : "box-shadow: none",
+    );
+  }
+  const hasSidePadding =
+    props.paddingTop !== undefined ||
+    props.padding_top !== undefined ||
+    props.paddingRight !== undefined ||
+    props.padding_right !== undefined ||
+    props.paddingBottom !== undefined ||
+    props.padding_bottom !== undefined ||
+    props.paddingLeft !== undefined ||
+    props.padding_left !== undefined;
+  if (hasSidePadding) {
+    const padding = props.padding ?? 0;
+    const paddingY = props.paddingY ?? props.padding_y ?? padding;
+    const paddingX = props.paddingX ?? props.padding_x ?? padding;
+    const paddingTop = props.paddingTop ?? props.padding_top ?? paddingY;
+    const paddingRight = props.paddingRight ?? props.padding_right ?? paddingX;
+    const paddingBottom =
+      props.paddingBottom ?? props.padding_bottom ?? paddingY;
+    const paddingLeft = props.paddingLeft ?? props.padding_left ?? paddingX;
+    style.push(
+      `padding: ${Number(paddingTop)}rpx ${Number(paddingRight)}rpx ${Number(
+        paddingBottom,
+      )}rpx ${Number(paddingLeft)}rpx`,
+    );
+  } else if (
     props.paddingY !== undefined ||
     props.padding_y !== undefined ||
     props.paddingX !== undefined ||
@@ -339,20 +450,20 @@ function moduleStyle(module) {
   } else if (props.padding !== undefined) {
     style.push(`padding: ${Number(props.padding)}rpx`);
   }
-  return style.join('; ');
+  return style.join("; ");
 }
 
 function entryCardStyle(module) {
   const style = [moduleStyle(module)];
   const backgroundImage = getImage(
-    module.props?.background_image || module.props?.backgroundImage || '',
+    module.props?.background_image || module.props?.backgroundImage || "",
   );
   if (backgroundImage) {
     style.push(`background-image: url("${backgroundImage}")`);
-    style.push('background-size: cover');
-    style.push('background-position: center');
+    style.push("background-size: cover");
+    style.push("background-position: center");
   }
-  return style.filter(Boolean).join('; ');
+  return style.filter(Boolean).join("; ");
 }
 
 function entryCardIconStyle(module) {
@@ -362,7 +473,7 @@ function entryCardIconStyle(module) {
   const background = props.icon_background || props.iconBackground;
   if (color) style.push(`color: ${color}`);
   if (background) style.push(`background: ${background}`);
-  return style.join('; ');
+  return style.join("; ");
 }
 
 function bannerStyle(module) {
@@ -381,8 +492,8 @@ function navItemWidth(module) {
 }
 
 function getImage(item) {
-  if (typeof item === 'string') return normalizeImageUrl(item);
-  if (!item || typeof item !== 'object') return '';
+  if (typeof item === "string") return normalizeImageUrl(item);
+  if (!item || typeof item !== "object") return "";
 
   const candidates = [
     item.full_url,
@@ -406,25 +517,25 @@ function getImage(item) {
     if (image) return image;
   }
 
-  return '';
+  return "";
 }
 
 function getFallbackIcon(item) {
-  const key = item?.icon || item?.key || '';
+  const key = item?.icon || item?.key || "";
   const map = {
-    phone: '数',
-    beauty: '美',
-    shirt: '衣',
-    home: '家',
-    food: '食',
+    phone: "数",
+    beauty: "美",
+    shirt: "衣",
+    home: "家",
+    food: "食",
   };
   return (
-    map[key] || (item?.label || item?.title || item?.text || '项').slice(0, 1)
+    map[key] || (item?.label || item?.title || item?.text || "项").slice(0, 1)
   );
 }
 
 function entryCardIconImage(module) {
-  return getImage(module.props?.icon_image || module.props?.iconImage || '');
+  return getImage(module.props?.icon_image || module.props?.iconImage || "");
 }
 
 function entryCardFallbackIcon(module) {
@@ -439,12 +550,12 @@ function cubeItems(module) {
   if (list.length > 0) return list.slice(0, 4);
   const titles = module.props?.titles;
   if (Array.isArray(titles) && titles.length > 0) return titles.slice(0, 4);
-  return ['精选榜单', '本周值得买', '会员专享', '新品榜'];
+  return ["精选榜单", "本周值得买", "会员专享", "新品榜"];
 }
 
 function cubeItemTitle(item) {
-  if (typeof item === 'string') return item;
-  return item?.title || item?.label || item?.text || '精选内容';
+  if (typeof item === "string") return item;
+  return item?.title || item?.label || item?.text || "精选内容";
 }
 
 function openEntryCard(module) {
@@ -453,7 +564,7 @@ function openEntryCard(module) {
       module.props?.target_path ||
       module.props?.link_url ||
       module.props?.url ||
-      '',
+      "",
   );
 }
 
@@ -462,19 +573,19 @@ function titleMorePath(module) {
     module.props?.more_path ||
     module.props?.moreUrl ||
     module.props?.more_url ||
-    ''
+    ""
   );
 }
 
 function titleMoreText(module) {
   return titleMorePath(module)
-    ? module.props?.more_text || module.props?.moreText || '查看全部'
-    : '';
+    ? module.props?.more_text || module.props?.moreText || "查看全部"
+    : "";
 }
 
 function titleAlign(module) {
-  const align = module.props?.title_align || module.props?.titleAlign || 'left';
-  return ['center', 'right'].includes(align) ? align : 'left';
+  const align = module.props?.title_align || module.props?.titleAlign || "left";
+  return ["center", "right"].includes(align) ? align : "left";
 }
 
 function clampNumber(value, fallback, min, max) {
@@ -494,15 +605,15 @@ function titleTextStyle(module) {
   );
   style.push(`font-size: ${fontSize}rpx`);
   if (props.title_bold === false || props.titleBold === false) {
-    style.push('font-weight: 500');
+    style.push("font-weight: 500");
   } else {
-    style.push('font-weight: 800');
+    style.push("font-weight: 800");
   }
-  if (props.title_italic || props.titleItalic) style.push('font-style: italic');
+  if (props.title_italic || props.titleItalic) style.push("font-style: italic");
   if (props.title_color || props.titleColor) {
     style.push(`color: ${props.title_color || props.titleColor}`);
   }
-  return style.join('; ');
+  return style.join("; ");
 }
 
 function titleSubStyle(module) {
@@ -515,12 +626,12 @@ function titleSubStyle(module) {
     56,
   );
   style.push(`font-size: ${fontSize}rpx`);
-  if (props.sub_bold || props.subBold) style.push('font-weight: 700');
-  if (props.sub_italic || props.subItalic) style.push('font-style: italic');
+  if (props.sub_bold || props.subBold) style.push("font-weight: 700");
+  if (props.sub_italic || props.subItalic) style.push("font-style: italic");
   if (props.sub_color || props.subColor) {
     style.push(`color: ${props.sub_color || props.subColor}`);
   }
-  return style.join('; ');
+  return style.join("; ");
 }
 
 function openTitleMore(module) {
@@ -528,28 +639,27 @@ function openTitleMore(module) {
 }
 
 function openItem(item) {
-  if (typeof item === 'string') return;
+  if (typeof item === "string") return;
   openDecorateLink(item);
 }
 
 function looksLikeImageUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  if (url.startsWith('/pages')) return false;
-  if (url.startsWith('/static')) return true;
-  if (url.startsWith('/uploads')) return true;
-  if (url.startsWith('uploads/')) return true;
-  if (url.startsWith('static/')) return true;
+  if (!url || typeof url !== "string") return false;
+  if (url.startsWith("/pages")) return false;
+  if (url.startsWith("/static")) return true;
+  if (url.startsWith("/uploads")) return true;
+  if (url.startsWith("uploads/")) return true;
+  if (url.startsWith("static/")) return true;
   if (/^https?:\/\//.test(url)) return true;
   if (/^(data:image|blob:)/.test(url)) return true;
   return /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
 }
 
 function normalizeImageUrl(url) {
-  if (!looksLikeImageUrl(url)) return '';
+  if (!looksLikeImageUrl(url)) return "";
   if (/^(https?:|data:image|blob:)/.test(url)) return url;
-  if (url.startsWith('/static') || url.startsWith('static/')) return url;
 
-  const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+  const normalizedPath = url.startsWith("/") ? url : `/${url}`;
   return config.baseUrl ? `${config.baseUrl}${normalizedPath}` : normalizedPath;
 }
 
@@ -558,7 +668,7 @@ function openSearch(module) {
     module.props.url ||
       module.props.path ||
       module.props.target_path ||
-      '/pages-sub/search/index',
+      "/pages-sub/search/index",
   );
 }
 
@@ -568,22 +678,22 @@ function productMorePath(module) {
     module.props.more_url ||
     module.props.more_path ||
     module.props.morePath ||
-    ''
+    ""
   );
 }
 
 function productMoreText(module) {
   const value = module.props.moreText ?? module.props.more_text;
-  if (value === false) return '';
-  return value || '查看全部';
+  if (value === false) return "";
+  return value || "查看全部";
 }
 
 function hasProductHead(module) {
   return Boolean(
     module.props.title ||
-      module.props.subtitle ||
-      productMoreText(module) ||
-      productMorePath(module),
+    module.props.subtitle ||
+    productMoreText(module) ||
+    productMorePath(module),
   );
 }
 
@@ -593,32 +703,32 @@ function openMore(module) {
     openDecorateLink(morePath);
     return;
   }
-  openDecorateLink('/pages-sub/goods/list');
+  openDecorateLink("/pages-sub/goods/list");
 }
 
 function resolveGoodsId(goods) {
-  if (typeof goods === 'number' || typeof goods === 'string') {
+  if (typeof goods === "number" || typeof goods === "string") {
     return goods;
   }
-  if (goods && typeof goods === 'object') {
-    return goods.id || goods.goods_id || '';
+  if (goods && typeof goods === "object") {
+    return goods.id || goods.goods_id || "";
   }
-  return '';
+  return "";
 }
 
 function goGoodsDetail(goods) {
   const id = resolveGoodsId(goods);
-  if (!id || typeof id === 'object') return;
+  if (!id || typeof id === "object") return;
   uni.navigateTo({ url: `/pages-sub/goods/detail?id=${id}` });
 }
 
 function productLayout(module) {
-  const layout = module.props.layout || 'grid';
-  return ['grid', 'large', 'list'].includes(layout) ? layout : 'grid';
+  const layout = module.props.layout || "grid";
+  return ["grid", "large", "list"].includes(layout) ? layout : "grid";
 }
 
 function productCardMode(module) {
-  return productLayout(module) === 'list' ? 'list' : 'grid';
+  return productLayout(module) === "list" ? "list" : "grid";
 }
 
 function getProductState(module) {
@@ -688,13 +798,13 @@ function ensureProductStateOnly(module) {
 
 function refresh() {
   props.modules
-    .filter((module) => module.type === 'productGroup')
+    .filter((module) => module.type === "productGroup")
     .forEach((module) => fetchProducts(module, true));
 }
 
 function loadMore() {
   props.modules
-    .filter((module) => module.type === 'productGroup' && module.props.pageable)
+    .filter((module) => module.type === "productGroup" && module.props.pageable)
     .forEach((module) => fetchProducts(module, false));
 }
 
@@ -726,7 +836,7 @@ defineExpose({ refresh, loadMore });
   position: relative;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     right: -10rpx;
     bottom: -6rpx;

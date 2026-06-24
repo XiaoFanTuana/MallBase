@@ -151,6 +151,12 @@ class DecorationService extends BaseService
             if ($isList) {
                 $schema = ['modules' => $schema];
             }
+            $schema['pageStyle'] = array_merge(
+                ['paddingTop' => 10, 'paddingX' => 28],
+                isset($schema['pageStyle']) && is_array($schema['pageStyle'])
+                    ? $schema['pageStyle']
+                    : []
+            );
             if (!isset($schema['modules']) && isset($schema['components']) && is_array($schema['components'])) {
                 $schema['modules'] = $schema['components'];
             }
@@ -219,6 +225,16 @@ class DecorationService extends BaseService
      */
     protected function applyDefaultClientProps(string $type, array $props): array
     {
+        $props = array_merge($this->defaultProfileStyleProps($type), $props);
+        $props = $this->normalizeProfileStyleAliases($props);
+        $textVisibility = $this->normalizeProfileTextVisibility($props['textVisibility'] ?? []);
+        if ($textVisibility !== []) {
+            $props['textVisibility'] = $textVisibility;
+        } else {
+            unset($props['textVisibility']);
+        }
+        unset($props['text_visibility']);
+
         if ($type === 'banner') {
             $items = $props['items'] ?? $props['list'] ?? $props['images'] ?? [];
             if (!is_array($items) || $items === []) {
@@ -281,6 +297,46 @@ class DecorationService extends BaseService
             $props['icon_mode'] = $props['icon_mode'] ?? $props['iconMode'] ?? 'image';
         }
 
+        if (in_array($type, ['orderEntry', 'orderShortcut'], true)) {
+            $items = $props['items'] ?? $props['list'] ?? [];
+            if (!is_array($items) || $items === []) {
+                $items = $this->defaultProfileOrderItems();
+            }
+            $items = $this->normalizeProfileEntryItems($items, 'orderShortcut');
+            $props['title'] = (string) ($props['title'] ?? '我的订单');
+            $props['display'] = 'grid';
+            $props['items'] = $items;
+            $props['list'] = $items;
+        }
+
+        if (in_array($type, ['customMenu', 'serviceMenu'], true)) {
+            $items = $props['items'] ?? $props['list'] ?? [];
+            if (!is_array($items) || $items === []) {
+                $items = $this->defaultProfileServiceItems();
+            }
+            $items = $this->normalizeProfileEntryItems($items, 'serviceMenu');
+            $props['columns'] = max(3, min((int) ($props['columns'] ?? 4), 5));
+            $props['title'] = (string) ($props['title'] ?? '我的服务');
+            $props['display'] = in_array(($props['display'] ?? ''), ['grid', 'list'], true)
+                ? (string) $props['display']
+                : 'list';
+            $props['items'] = $items;
+            $props['list'] = $items;
+        }
+
+        if (in_array($type, ['profileHeader', 'userCard', 'userInfo'], true)) {
+            unset($props['show_level']);
+            $props['show_mobile'] = ($props['show_mobile'] ?? true) !== false;
+        }
+
+        if (in_array($type, ['wallet', 'walletCard', 'walletEntry'], true)) {
+            $props['title'] = (string) ($props['title'] ?? '我的余额');
+            $props['show_balance'] = ($props['show_balance'] ?? true) !== false;
+            unset($props['show_points']);
+            $props['show_records'] = ($props['show_records'] ?? true) !== false;
+            $props['show_view_button'] = ($props['show_view_button'] ?? true) !== false;
+        }
+
         return $props;
     }
 
@@ -330,6 +386,202 @@ class DecorationService extends BaseService
                 'title' => '限时满减',
             ],
         ];
+    }
+
+    /**
+     * @return array<int, array{title:string,label:string,image:string,path:string}>
+     */
+    protected function defaultProfileOrderItems(): array
+    {
+        return [
+            ['title' => '待付款', 'label' => '待付款', 'image' => 'static/demo/profile-order-pay.svg', 'path' => '/pages-sub/order/list?status=10'],
+            ['title' => '待发货', 'label' => '待发货', 'image' => 'static/demo/profile-order-ship.svg', 'path' => '/pages-sub/order/list?status=20'],
+            ['title' => '待收货', 'label' => '待收货', 'image' => 'static/demo/profile-order-receive.svg', 'path' => '/pages-sub/order/list?status=30'],
+            ['title' => '退款售后', 'label' => '退款售后', 'image' => 'static/demo/profile-order-refund.svg', 'path' => '/pages-sub/refund/list'],
+        ];
+    }
+
+    /**
+     * @return array<int, array{title:string,label:string,image:string,path:string}>
+     */
+    protected function defaultProfileServiceItems(): array
+    {
+        return [
+            ['title' => '地址管理', 'label' => '地址管理', 'image' => 'static/demo/profile-service-address.svg', 'path' => '/pages-sub/address/list'],
+            ['title' => '我的收藏', 'label' => '我的收藏', 'image' => 'static/demo/profile-service-favorite.svg', 'path' => ''],
+            ['title' => '主题设置', 'label' => '主题设置', 'image' => 'static/demo/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
+            ['title' => '联系客服', 'label' => '联系客服', 'image' => 'static/demo/profile-service-support.svg', 'path' => ''],
+        ];
+    }
+
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeProfileEntryItems(array $items, string $type): array
+    {
+        $normalized = [];
+        foreach (array_values($items) as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $label = (string) ($item['label'] ?? $item['title'] ?? $item['text'] ?? '入口');
+            $image = $item['image']
+                ?? $item['image_url']
+                ?? $item['imageUrl']
+                ?? $item['icon_image']
+                ?? $item['iconImage']
+                ?? '';
+            if (($item['action'] ?? '') === 'theme' && empty($item['key'])) {
+                $item['key'] = 'theme';
+            }
+
+            unset($item['action'], $item['icon']);
+
+            $normalized[] = array_merge($item, [
+                'image' => $image !== '' && $image !== null ? $image : $this->defaultProfileEntryImage($type, $index),
+                'label' => $label,
+                'path' => (string) ($item['path'] ?? $item['url'] ?? $item['link'] ?? ''),
+                'title' => $label,
+            ]);
+        }
+
+        return $normalized;
+    }
+
+    protected function defaultProfileEntryImage(string $type, int $index): string
+    {
+        $images = $type === 'orderShortcut'
+            ? [
+                'static/demo/profile-order-pay.svg',
+                'static/demo/profile-order-ship.svg',
+                'static/demo/profile-order-receive.svg',
+                'static/demo/profile-order-refund.svg',
+            ]
+            : [
+                'static/demo/profile-service-address.svg',
+                'static/demo/profile-service-favorite.svg',
+                'static/demo/profile-service-settings.svg',
+                'static/demo/profile-service-support.svg',
+            ];
+
+        return $images[$index % count($images)];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultProfileStyleProps(string $type): array
+    {
+        $base = [
+            'background' => '',
+            'backgroundColorEnd' => '#ffffff',
+            'backgroundColorStart' => '#ffffff',
+            'backgroundGradientDirection' => 'horizontal',
+            'backgroundMode' => 'color',
+            'background_image' => '',
+            'borderColor' => '#e5e5e5',
+            'borderEnabled' => true,
+            'borderStyle' => 'dashed',
+            'borderWidth' => 1,
+            'marginBottom' => 0,
+            'marginLeft' => 0,
+            'marginRight' => 0,
+            'marginTop' => 0,
+            'padding' => 0,
+            'paddingX' => 10,
+            'paddingY' => 0,
+            'radius' => 20,
+            'shadowEnabled' => false,
+            'widthPercent' => 100,
+        ];
+        $map = [
+            'customMenu' => $base,
+            'orderEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'orderShortcut' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'profileHeader' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
+            'serviceMenu' => $base,
+            'userCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
+            'userInfo' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
+            'wallet' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'walletCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'walletEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+        ];
+
+        return $map[$type] ?? [];
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @return array<string, mixed>
+     */
+    protected function normalizeProfileStyleAliases(array $props): array
+    {
+        $aliases = [
+            'backgroundColorEnd' => 'background_color_end',
+            'backgroundColorStart' => 'background_color_start',
+            'backgroundGradientDirection' => 'background_gradient_direction',
+            'backgroundMode' => 'background_mode',
+            'borderColor' => 'border_color',
+            'borderEnabled' => 'border_enabled',
+            'borderStyle' => 'border_style',
+            'borderWidth' => 'border_width',
+            'bottomBackground' => 'bottom_background',
+            'componentBackgroundEnd' => 'component_background_end',
+            'componentBackgroundStart' => 'component_background_start',
+            'marginBottom' => 'margin_bottom',
+            'marginLeft' => 'margin_left',
+            'marginRight' => 'margin_right',
+            'marginTop' => 'margin_top',
+            'paddingBottom' => 'padding_bottom',
+            'paddingLeft' => 'padding_left',
+            'paddingRight' => 'padding_right',
+            'paddingTop' => 'padding_top',
+            'paddingX' => 'padding_x',
+            'paddingY' => 'padding_y',
+            'radius' => 'border_radius',
+            'shadowEnabled' => 'shadow_enabled',
+            'textColor' => 'text_color',
+            'textVisibility' => 'text_visibility',
+            'widthPercent' => 'width_percent',
+        ];
+
+        foreach ($aliases as $target => $source) {
+            if (array_key_exists($source, $props)) {
+                $props[$target] = $props[$source];
+            }
+        }
+
+        return $props;
+    }
+
+    /**
+     * @return array<string, false>
+     */
+    protected function normalizeProfileTextVisibility(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $roles = ['action', 'amount', 'itemLabel', 'meta', 'more', 'primaryAction', 'subtitle', 'title'];
+        $visibility = [];
+        foreach ($roles as $role) {
+            if (!array_key_exists($role, $value)) {
+                continue;
+            }
+            $rawValue = $value[$role];
+            $hidden = $rawValue === false || $rawValue === 0 || $rawValue === '0';
+            if (is_string($rawValue) && strtolower(trim($rawValue)) === 'false') {
+                $hidden = true;
+            }
+            if ($hidden) {
+                $visibility[$role] = false;
+            }
+        }
+
+        return $visibility;
     }
 
     /**
@@ -495,10 +747,21 @@ class DecorationService extends BaseService
     {
         $schema = match ($type) {
             ClientDecorationScheme::TYPE_PROFILE => [
+                'pageStyle' => ['paddingTop' => 10, 'paddingX' => 28],
                 'modules' => [
-                    ['id' => 'profile-user', 'type' => 'userInfo', 'props' => []],
-                    ['id' => 'profile-order', 'type' => 'orderEntry', 'props' => []],
-                    ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => ['items' => []]],
+                    ['id' => 'profile-user', 'type' => 'userInfo', 'props' => array_merge($this->defaultProfileStyleProps('userInfo'), ['show_mobile' => true])],
+                    ['id' => 'profile-order', 'type' => 'orderEntry', 'props' => array_merge($this->defaultProfileStyleProps('orderEntry'), [
+                        'title' => '我的订单',
+                        'display' => 'grid',
+                        'items' => $this->defaultProfileOrderItems(),
+                    ])],
+                    ['id' => 'profile-wallet', 'type' => 'walletEntry', 'props' => array_merge($this->defaultProfileStyleProps('walletEntry'), ['title' => '我的余额', 'show_balance' => true, 'show_records' => true, 'show_view_button' => true])],
+                    ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => array_merge($this->defaultProfileStyleProps('serviceMenu'), [
+                        'title' => '我的服务',
+                        'columns' => 4,
+                        'display' => 'list',
+                        'items' => $this->defaultProfileServiceItems(),
+                    ])],
                 ],
             ],
             ClientDecorationScheme::TYPE_TABBAR => [

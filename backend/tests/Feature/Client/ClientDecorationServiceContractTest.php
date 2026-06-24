@@ -331,6 +331,96 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertIsArray($config['theme']['themes']);
     }
 
+    public function testDecorationProfileDefaultsFillOrderAndServiceItems(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'profile', [
+            'modules' => [
+                ['id' => 'profile-user', 'type' => 'userInfo', 'props' => []],
+                ['id' => 'profile-order', 'type' => 'orderEntry', 'props' => []],
+                ['id' => 'profile-wallet', 'type' => 'walletEntry', 'props' => []],
+                ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => ['items' => []]],
+            ],
+        ]);
+
+        $this->assertSame(10, $schema['pageStyle']['paddingTop']);
+        $this->assertSame(28, $schema['pageStyle']['paddingX']);
+
+        $modules = array_column($schema['modules'], null, 'type');
+
+        $this->assertArrayHasKey('userInfo', $modules);
+        $this->assertArrayHasKey('orderEntry', $modules);
+        $this->assertArrayHasKey('walletEntry', $modules);
+        $this->assertArrayHasKey('serviceMenu', $modules);
+        $this->assertCount(4, $modules['orderEntry']['props']['items']);
+        $this->assertCount(4, $modules['serviceMenu']['props']['items']);
+        $this->assertSame(
+            'static/demo/profile-order-pay.svg',
+            $modules['orderEntry']['props']['items'][0]['image']
+        );
+        $this->assertArrayNotHasKey('icon', $modules['orderEntry']['props']['items'][0]);
+        $this->assertSame(
+            'static/demo/profile-service-settings.svg',
+            $modules['serviceMenu']['props']['items'][2]['image']
+        );
+        $this->assertSame('/pages-sub/user/settings', $modules['serviceMenu']['props']['items'][2]['path']);
+        $this->assertArrayNotHasKey('action', $modules['serviceMenu']['props']['items'][2]);
+        $this->assertArrayNotHasKey('icon', $modules['serviceMenu']['props']['items'][2]);
+        $this->assertSame('我的订单', $modules['orderEntry']['props']['title']);
+        $this->assertSame('我的余额', $modules['walletEntry']['props']['title']);
+        $this->assertSame('我的服务', $modules['serviceMenu']['props']['title']);
+        $this->assertSame('grid', $modules['orderEntry']['props']['display']);
+        $this->assertSame('list', $modules['serviceMenu']['props']['display']);
+        $this->assertSame(28, $modules['orderEntry']['props']['paddingX']);
+        $this->assertSame(28, $modules['orderEntry']['props']['paddingY']);
+        $this->assertSame(20, $modules['walletEntry']['props']['radius']);
+        $this->assertSame(10, $modules['serviceMenu']['props']['paddingX']);
+        $this->assertSame(0, $modules['serviceMenu']['props']['paddingY']);
+        $this->assertSame(28, $modules['userInfo']['props']['paddingX']);
+        $this->assertSame(28, $modules['userInfo']['props']['paddingY']);
+        $this->assertSame(0, $modules['userInfo']['props']['radius']);
+        $this->assertSame('#ffffff', $modules['orderEntry']['props']['backgroundColorStart']);
+        $this->assertArrayNotHasKey('bottomBackground', $modules['orderEntry']['props']);
+        $this->assertArrayNotHasKey('componentBackgroundStart', $modules['orderEntry']['props']);
+        $this->assertArrayNotHasKey('componentBackgroundEnd', $modules['orderEntry']['props']);
+        $this->assertArrayNotHasKey('textColor', $modules['orderEntry']['props']);
+        $this->assertTrue($modules['orderEntry']['props']['borderEnabled']);
+        $this->assertSame('dashed', $modules['orderEntry']['props']['borderStyle']);
+        $this->assertFalse($modules['orderEntry']['props']['shadowEnabled']);
+        $this->assertArrayNotHasKey('show_level', $modules['userInfo']['props']);
+        $this->assertArrayNotHasKey('show_points', $modules['walletEntry']['props']);
+        $this->assertTrue($modules['walletEntry']['props']['show_records']);
+        $this->assertTrue($modules['walletEntry']['props']['show_view_button']);
+    }
+
+    public function testDecorationProfileKeepsLegacyThemeEntryKeyForRuntimeCompatibility(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'profile', [
+            'modules' => [
+                [
+                    'id' => 'profile-service',
+                    'type' => 'serviceMenu',
+                    'props' => [
+                        'items' => [
+                            [
+                                'action' => 'theme',
+                                'label' => '主题设置',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $item = $schema['modules'][0]['props']['items'][0];
+        $this->assertSame('theme', $item['key']);
+        $this->assertSame('', $item['path']);
+        $this->assertArrayNotHasKey('action', $item);
+    }
+
     public function testDecorationProductSourcePickerHydratesGoodsMainImageAssetUrl(): void
     {
         $this->requireDbTables(['goods', 'upload_asset', 'upload_asset_location']);
@@ -493,6 +583,27 @@ final class ClientDecorationServiceContractTest extends TestCase
         } catch (Throwable $e) {
             $this->markTestSkipped("{$className} 无法实例化，跳过对应契约测试：" . $e->getMessage());
         }
+    }
+
+    private function makeDecorationServiceForSchemaNormalization(): object
+    {
+        if (!class_exists(\app\service\client\DecorationService::class)) {
+            $this->markTestSkipped('app\\service\\client\\DecorationService 尚未落地，跳过对应契约测试。');
+        }
+
+        return new \app\service\client\DecorationService();
+    }
+
+    private function schemaNormalizerMethod(object $service): \ReflectionMethod
+    {
+        if (!method_exists($service, 'normalizeSchemaByType')) {
+            $this->markTestSkipped(get_class($service) . '::normalizeSchemaByType 尚未落地，跳过对应契约测试。');
+        }
+
+        $method = new \ReflectionMethod($service, 'normalizeSchemaByType');
+        $method->setAccessible(true);
+
+        return $method;
     }
 
     /**

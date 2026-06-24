@@ -34,6 +34,11 @@ import DecorateSchemeList from './components/DecorateSchemeList.vue';
 defineOptions({ name: 'ClientDecorateManagement' });
 
 type ModuleItem = Record<string, any>;
+type PageStyle = {
+  paddingTop?: number;
+  paddingX: number;
+  paddingY?: number;
+};
 type UploadFileInfo = {
   name?: string;
   url?: number | string;
@@ -60,9 +65,29 @@ const DEFAULT_THEME_POLICY: ClientThemeApi.ThemePolicy = {
   default_theme_id: null,
 };
 
-const DEFAULT_HOME_PAGE_STYLE = {
+const DEFAULT_HOME_PAGE_STYLE: PageStyle = {
   paddingX: 28,
   paddingY: 0,
+};
+
+const DEFAULT_PROFILE_PAGE_STYLE: PageStyle = {
+  paddingTop: 10,
+  paddingX: 28,
+};
+
+const PROFILE_STYLE_DEFAULTS = {
+  backgroundColorEnd: '#ffffff',
+  backgroundColorStart: '#ffffff',
+  backgroundGradientDirection: 'horizontal',
+  backgroundMode: 'color',
+  background_image: '',
+  borderColor: '#e5e5e5',
+  borderEnabled: true,
+  borderStyle: 'dashed',
+  borderWidth: 1,
+  marginLeft: 0,
+  marginRight: 0,
+  shadowEnabled: false,
 };
 
 const SCHEME_TABS: Array<{
@@ -145,25 +170,25 @@ const HOME_MODULES: Array<{
 
 const PROFILE_MODULES = [
   {
-    desc: '头像、昵称、手机号',
+    desc: '头像、昵称、手机号和签名',
     icon: 'lucide:user-round',
     label: '用户信息',
     type: 'userInfo',
   },
   {
-    desc: '待付款、待发货等订单入口',
+    desc: '默认四个订单状态入口',
     icon: 'lucide:package-check',
     label: '订单入口',
     type: 'orderEntry',
   },
   {
-    desc: '余额和积分卡片',
+    desc: '余额、明细和查看入口',
     icon: 'lucide:wallet',
     label: '钱包卡片',
     type: 'walletEntry',
   },
   {
-    desc: '常用服务入口',
+    desc: '默认四个常用服务入口',
     icon: 'lucide:layout-list',
     label: '服务菜单',
     type: 'serviceMenu',
@@ -196,6 +221,52 @@ const createDemoAssetFile = (url: string, name: string) => ({
   name,
   url,
 });
+
+const extractUploadName = (value: string) => {
+  const cleanValue = value.split('?')[0] || value;
+  const name = decodeURIComponent(cleanValue.split('/').pop() || '');
+  return name || '图片';
+};
+
+const normalizeEditorUploadImage = (value: any) => {
+  if (!value) return '';
+  if (typeof value === 'number') {
+    return normalizeEditorUploadImage(String(value));
+  }
+  if (typeof value === 'string') {
+    return {
+      full_url: '',
+      name: extractUploadName(value),
+      url: value,
+    };
+  }
+  if (typeof value === 'object') {
+    const url =
+      value.url ||
+      value.path ||
+      value.image ||
+      value.src ||
+      value.response?.url ||
+      value.asset_id ||
+      '';
+    if (!url) return '';
+    const fullUrl =
+      value.full_url ||
+      value.fullUrl ||
+      value.response?.full_url ||
+      value.response?.fullUrl ||
+      value.preview_url ||
+      value.previewUrl ||
+      '';
+    return {
+      ...value,
+      full_url: fullUrl,
+      name: value.name || value.original_name || extractUploadName(String(url)),
+      url: String(url),
+    };
+  }
+  return '';
+};
 
 const DEFAULT_BANNER_IMAGE_BY_INDEX = [
   createDemoAssetFile('48', 'decorate-banner-market.png'),
@@ -261,6 +332,53 @@ const DEFAULT_CUBE_ITEMS = [
     title: '限时满减',
   },
 ];
+
+const DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX = [
+  createDemoAssetFile(
+    'static/demo/profile-order-pay.svg',
+    'profile-order-pay.svg',
+  ),
+  createDemoAssetFile(
+    'static/demo/profile-order-ship.svg',
+    'profile-order-ship.svg',
+  ),
+  createDemoAssetFile(
+    'static/demo/profile-order-receive.svg',
+    'profile-order-receive.svg',
+  ),
+  createDemoAssetFile(
+    'static/demo/profile-order-refund.svg',
+    'profile-order-refund.svg',
+  ),
+];
+
+const DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX = [
+  createDemoAssetFile(
+    'static/demo/profile-service-address.svg',
+    'profile-service-address.svg',
+  ),
+  createDemoAssetFile(
+    'static/demo/profile-service-favorite.svg',
+    'profile-service-favorite.svg',
+  ),
+  createDemoAssetFile(
+    'static/demo/profile-service-settings.svg',
+    'profile-service-settings.svg',
+  ),
+  createDemoAssetFile(
+    'static/demo/profile-service-support.svg',
+    'profile-service-support.svg',
+  ),
+];
+
+const getDefaultProfileEntryImage = (type: string, index: number) =>
+  type === 'orderEntry'
+    ? DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX[
+        index % DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX.length
+      ]
+    : DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[
+        index % DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX.length
+      ];
 
 const getDefaultNavImage = (item: any, fallback = '') => {
   const key = String(item?.icon || item?.key || '').replace(/^lucide:/, '');
@@ -384,6 +502,7 @@ const DEFAULT_TABBAR_PREVIEW_ITEMS = [
   { id: 'preview-home', path: '/pages/index/index', text: '首页' },
   { id: 'preview-category', path: '/pages/category/index', text: '分类' },
   { id: 'preview-cart', path: '/pages/cart/index', text: '购物车' },
+  { id: 'preview-order', path: '/pages/order/index', text: '订单' },
   { id: 'preview-profile', path: '/pages/profile/index', text: '我的' },
 ];
 
@@ -471,14 +590,22 @@ const DRAG_THRESHOLD = 8;
 let dragMoveFrame: null | number = null;
 let pendingDragEvent: MouseEvent | null = null;
 
-const schemeForm = reactive({
+const schemeForm = reactive<{
+  description: string;
+  name: string;
+  pageStyle: PageStyle;
+  schema: ModuleItem[];
+  sort: number;
+  status: number;
+  tabbar_mode: ClientDecorateApi.TabbarMode;
+}>({
   description: '',
   name: '',
   pageStyle: { ...DEFAULT_HOME_PAGE_STYLE },
-  schema: [] as ModuleItem[],
+  schema: [],
   sort: 0,
   status: 1,
-  tabbar_mode: 'native' as ClientDecorateApi.TabbarMode,
+  tabbar_mode: 'native',
 });
 
 const getSchemeSchemaList = (
@@ -492,18 +619,38 @@ const getSchemeSchemaList = (
   return schema?.components || schema?.modules || [];
 };
 
-const normalizeHomePageStyle = (value: any) => ({
-  paddingX: Number(
-    value?.paddingX ?? value?.padding_x ?? DEFAULT_HOME_PAGE_STYLE.paddingX,
-  ),
-  paddingY: Number(
-    value?.paddingY ?? value?.padding_y ?? DEFAULT_HOME_PAGE_STYLE.paddingY,
-  ),
-});
+const getDefaultPageStyle = (type: ClientDecorateApi.SchemeType) =>
+  type === 'profile' ? DEFAULT_PROFILE_PAGE_STYLE : DEFAULT_HOME_PAGE_STYLE;
+
+const normalizePageStyle = (value: any, type: ClientDecorateApi.SchemeType) => {
+  const defaults = getDefaultPageStyle(type);
+  const paddingX = Number(
+    value?.paddingX ?? value?.padding_x ?? defaults.paddingX,
+  );
+  if (type === 'profile') {
+    return {
+      paddingTop: Number(
+        value?.paddingTop ??
+          value?.padding_top ??
+          value?.paddingY ??
+          value?.padding_y ??
+          DEFAULT_PROFILE_PAGE_STYLE.paddingTop,
+      ),
+      paddingX,
+    };
+  }
+  return {
+    paddingX,
+    paddingY: Number(
+      value?.paddingY ?? value?.padding_y ?? DEFAULT_HOME_PAGE_STYLE.paddingY,
+    ),
+  };
+};
 
 const getSchemePageStyle = (
   scheme: ClientDecorateApi.SchemeItem | null | undefined,
-) => normalizeHomePageStyle((scheme?.schema as any)?.pageStyle);
+  type: ClientDecorateApi.SchemeType,
+) => normalizePageStyle((scheme?.schema as any)?.pageStyle, type);
 
 const getActiveSchemeByType = (type: ClientDecorateApi.SchemeType) =>
   overviewSchemes[type].find((item) => item.is_active === 1) ||
@@ -798,6 +945,251 @@ const normalizeBooleanValue = (value: unknown, fallback = false) => {
 const normalizeTitleAlign = (value: unknown) =>
   ['center', 'left', 'right'].includes(String(value)) ? String(value) : 'left';
 
+const normalizeProfileDisplay = (value: unknown) =>
+  ['grid', 'list'].includes(String(value)) ? String(value) : 'list';
+
+const PROFILE_TEXT_STYLE_ROLES = [
+  'action',
+  'amount',
+  'itemLabel',
+  'meta',
+  'more',
+  'primaryAction',
+  'subtitle',
+  'title',
+];
+
+const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
+  customMenu: ['itemLabel', 'title'],
+  orderEntry: ['itemLabel', 'more', 'title'],
+  serviceMenu: ['itemLabel', 'title'],
+  userInfo: ['meta', 'subtitle', 'title'],
+  walletEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
+};
+
+const getProfileTextStyleRoles = (type?: string) =>
+  PROFILE_TEXT_STYLE_ROLES_BY_TYPE[type || ''] || PROFILE_TEXT_STYLE_ROLES;
+
+const normalizeProfileTextAlign = (value: unknown) =>
+  ['center', 'left', 'right'].includes(String(value)) ? String(value) : '';
+
+const normalizeProfileTextStyles = (
+  value: unknown,
+  roles = PROFILE_TEXT_STYLE_ROLES,
+) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const source = value as Record<string, any>;
+  return Object.fromEntries(
+    roles
+      .map((role) => {
+        const rawStyle = source[role];
+        if (
+          !rawStyle ||
+          typeof rawStyle !== 'object' ||
+          Array.isArray(rawStyle)
+        ) {
+          return [role, undefined];
+        }
+        const style: Record<string, any> = {};
+        if (typeof rawStyle.color === 'string' && rawStyle.color.trim()) {
+          style.color = rawStyle.color.trim();
+        }
+        const fontSize = Number(rawStyle.fontSize ?? rawStyle.font_size);
+        if (Number.isFinite(fontSize) && fontSize > 0) {
+          style.fontSize = clampNumber(fontSize, 24, 16, 80);
+        }
+        const fontWeight = String(
+          rawStyle.fontWeight ?? rawStyle.font_weight ?? '',
+        );
+        if (['400', '500', '600', '700', '800'].includes(fontWeight)) {
+          style.fontWeight = fontWeight;
+        }
+        const textAlign = normalizeProfileTextAlign(
+          rawStyle.textAlign ?? rawStyle.text_align,
+        );
+        if (textAlign) {
+          style.textAlign = textAlign;
+        }
+        return [role, Object.keys(style).length > 0 ? style : undefined];
+      })
+      .filter(([, style]) => style !== undefined),
+  );
+};
+
+const normalizeProfileTextVisibility = (
+  value: unknown,
+  roles = PROFILE_TEXT_STYLE_ROLES,
+) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const source = value as Record<string, any>;
+  return Object.fromEntries(
+    roles
+      .map((role) => {
+        const rawValue = source[role];
+        if (typeof rawValue === 'string') {
+          return [
+            ['0', 'false'].includes(rawValue.toLowerCase()) ? role : '',
+            false,
+          ];
+        }
+        return [rawValue === false || rawValue === 0 ? role : '', false];
+      })
+      .filter(([role]) => Boolean(role)),
+  );
+};
+
+const normalizeSpacingNumber = (value: unknown) => {
+  const numberValue = Number(value ?? 0);
+  if (!Number.isFinite(numberValue)) return 0;
+  return Math.max(0, Math.round(numberValue));
+};
+
+const syncProfilePaddingCompat = (config: Record<string, any>) => {
+  const top = normalizeSpacingNumber(
+    config.paddingTop ??
+      config.padding_top ??
+      config.paddingY ??
+      config.padding,
+  );
+  const right = normalizeSpacingNumber(
+    config.paddingRight ??
+      config.padding_right ??
+      config.paddingX ??
+      config.padding,
+  );
+  const bottom = normalizeSpacingNumber(
+    config.paddingBottom ??
+      config.padding_bottom ??
+      config.paddingY ??
+      config.padding,
+  );
+  const left = normalizeSpacingNumber(
+    config.paddingLeft ??
+      config.padding_left ??
+      config.paddingX ??
+      config.padding,
+  );
+  config.paddingTop = top;
+  config.padding_top = top;
+  config.paddingRight = right;
+  config.padding_right = right;
+  config.paddingBottom = bottom;
+  config.padding_bottom = bottom;
+  config.paddingLeft = left;
+  config.padding_left = left;
+  config.paddingY = top === bottom ? top : Math.round((top + bottom) / 2);
+  config.padding_y = config.paddingY;
+  config.paddingX = left === right ? left : Math.round((left + right) / 2);
+  config.padding_x = config.paddingX;
+  config.padding =
+    top === right && right === bottom && bottom === left
+      ? top
+      : Math.round((top + right + bottom + left) / 4);
+};
+
+const syncProfileMarginCompat = (config: Record<string, any>) => {
+  const top = normalizeSpacingNumber(config.marginTop ?? config.margin_top);
+  const right = normalizeSpacingNumber(
+    config.marginRight ?? config.margin_right,
+  );
+  const bottom = normalizeSpacingNumber(
+    config.marginBottom ?? config.margin_bottom,
+  );
+  const left = normalizeSpacingNumber(config.marginLeft ?? config.margin_left);
+
+  config.marginTop = top;
+  config.margin_top = top;
+  config.marginRight = right;
+  config.margin_right = right;
+  config.marginBottom = bottom;
+  config.margin_bottom = bottom;
+  config.marginLeft = left;
+  config.margin_left = left;
+};
+
+const normalizeProfileItems = (
+  items: unknown,
+  type: string,
+): Array<Record<string, any>> => {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item) => item && typeof item === 'object')
+    .map((item: any, index) => {
+      const label =
+        item.label ||
+        item.title ||
+        item.text ||
+        (type === 'orderEntry'
+          ? `订单入口${index + 1}`
+          : `服务入口${index + 1}`);
+      const image =
+        item.image ??
+        item.image_url ??
+        item.imageUrl ??
+        item.icon_image ??
+        item.iconImage ??
+        getDefaultProfileEntryImage(type, index);
+      const rest = { ...item };
+      if (rest.action === 'theme' && !rest.key) {
+        rest.key = 'theme';
+      }
+      delete rest.action;
+      delete rest.icon;
+      return {
+        ...rest,
+        enabled: item.enabled !== false && item.visible !== false,
+        id: item.id || item.key || createId('profile_item'),
+        image,
+        label,
+        path: item.path || item.url || item.link || item.target_path || '',
+        title: label,
+      };
+    });
+};
+
+const getProfileDefaultTitle = (type: string) => {
+  if (type === 'orderEntry') return '我的订单';
+  if (type === 'customMenu') return '自定义菜单';
+  return '我的服务';
+};
+
+const getProfileStyleDefaults = (type: string): Record<string, any> => {
+  const base = {
+    ...PROFILE_STYLE_DEFAULTS,
+    background: '',
+    marginBottom: 0,
+    marginTop: 0,
+    padding: 0,
+    paddingX: 10,
+    paddingY: 0,
+    radius: 20,
+    widthPercent: 100,
+  };
+  const defaults: Record<string, Record<string, any>> = {
+    customMenu: base,
+    orderEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+    serviceMenu: base,
+    userInfo: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+      radius: 0,
+    },
+    walletEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+  };
+  return clone(
+    defaults[normalizeProfileModuleType(type)] || defaults.serviceMenu || base,
+  );
+};
+
 const normalizeUploadValue = (value: any): any => {
   if (Array.isArray(value)) {
     return value.map((item) => normalizeUploadValue(item));
@@ -867,29 +1259,209 @@ const normalizeEditorConfig = (
   type: string,
   rawConfig: Record<string, any>,
 ) => {
-  const config = clone(rawConfig || {});
+  const profileTypes = new Set([
+    'customMenu',
+    'orderEntry',
+    'serviceMenu',
+    'userInfo',
+    'walletEntry',
+  ]);
+  const config = profileTypes.has(normalizeProfileModuleType(type))
+    ? {
+        ...getProfileStyleDefaults(type),
+        ...clone(rawConfig || {}),
+      }
+    : clone(rawConfig || {});
   config.widthPercent = Number(
-    config.widthPercent ?? config.width_percent ?? 100,
+    rawConfig?.widthPercent ??
+      rawConfig?.width_percent ??
+      config.widthPercent ??
+      100,
   );
-  config.marginTop = Number(config.marginTop ?? config.margin_top ?? 0);
+  config.marginTop = Number(
+    rawConfig?.marginTop ?? rawConfig?.margin_top ?? config.marginTop ?? 0,
+  );
   config.marginBottom = Number(
-    config.marginBottom ?? config.margin_bottom ?? 0,
+    rawConfig?.marginBottom ??
+      rawConfig?.margin_bottom ??
+      config.marginBottom ??
+      0,
   );
+  config.radius =
+    rawConfig?.radius === undefined && rawConfig?.border_radius === undefined
+      ? config.radius
+      : (rawConfig?.radius ?? rawConfig?.border_radius);
   config.radius =
     config.radius === undefined || config.radius === null
       ? 0
       : Number(config.radius);
   config.padding =
+    rawConfig?.padding === undefined && rawConfig?.padding_y === undefined
+      ? config.padding
+      : (rawConfig?.padding ?? rawConfig?.padding_y);
+  config.padding =
     config.padding === undefined || config.padding === null
       ? 0
       : Number(config.padding);
   config.paddingY = Number(
-    config.paddingY ?? config.padding_y ?? config.padding,
+    rawConfig?.paddingY ??
+      rawConfig?.padding_y ??
+      config.paddingY ??
+      config.padding,
   );
   config.paddingX = Number(
-    config.paddingX ?? config.padding_x ?? config.padding,
+    rawConfig?.paddingX ??
+      rawConfig?.padding_x ??
+      config.paddingX ??
+      config.padding,
   );
-  config.background = config.background || '';
+  config.paddingTop = Number(
+    rawConfig?.paddingTop ??
+      rawConfig?.padding_top ??
+      config.paddingTop ??
+      config.paddingY ??
+      config.padding,
+  );
+  config.paddingRight = Number(
+    rawConfig?.paddingRight ??
+      rawConfig?.padding_right ??
+      config.paddingRight ??
+      config.paddingX ??
+      config.padding,
+  );
+  config.paddingBottom = Number(
+    rawConfig?.paddingBottom ??
+      rawConfig?.padding_bottom ??
+      config.paddingBottom ??
+      config.paddingY ??
+      config.padding,
+  );
+  config.paddingLeft = Number(
+    rawConfig?.paddingLeft ??
+      rawConfig?.padding_left ??
+      config.paddingLeft ??
+      config.paddingX ??
+      config.padding,
+  );
+  config.background = rawConfig?.background ?? config.background ?? '';
+  const rawBackground =
+    typeof rawConfig?.background === 'string' && rawConfig.background.trim()
+      ? rawConfig.background
+      : undefined;
+  const profileType = normalizeProfileModuleType(type);
+  if (profileTypes.has(profileType)) {
+    config.backgroundMode =
+      rawConfig?.backgroundMode ??
+      rawConfig?.background_mode ??
+      config.backgroundMode ??
+      'color';
+    config.backgroundColorStart =
+      rawConfig?.backgroundColorStart ??
+      rawConfig?.background_color_start ??
+      rawBackground ??
+      config.backgroundColorStart ??
+      PROFILE_STYLE_DEFAULTS.backgroundColorStart;
+    config.backgroundColorEnd =
+      rawConfig?.backgroundColorEnd ??
+      rawConfig?.background_color_end ??
+      rawBackground ??
+      config.backgroundColorEnd ??
+      config.backgroundColorStart ??
+      PROFILE_STYLE_DEFAULTS.backgroundColorEnd;
+    config.backgroundGradientDirection =
+      rawConfig?.backgroundGradientDirection ??
+      rawConfig?.background_gradient_direction ??
+      config.backgroundGradientDirection ??
+      PROFILE_STYLE_DEFAULTS.backgroundGradientDirection;
+    config.background_image = normalizeEditorUploadImage(
+      rawConfig?.background_image &&
+        typeof rawConfig.background_image !== 'object'
+        ? {
+            full_url:
+              rawConfig?.background_image_full_url ||
+              rawConfig?.backgroundImageFullUrl ||
+              '',
+            url: rawConfig.background_image,
+          }
+        : (rawConfig?.background_image ??
+            rawConfig?.backgroundImage ??
+            config.background_image),
+    );
+    delete config.bottomBackground;
+    delete config.bottom_background;
+    delete config.componentBackgroundEnd;
+    delete config.component_background_end;
+    delete config.componentBackgroundStart;
+    delete config.component_background_start;
+    delete config.textColor;
+    delete config.text_color;
+    config.marginLeft = Number(
+      rawConfig?.marginLeft ??
+        rawConfig?.margin_left ??
+        config.marginLeft ??
+        PROFILE_STYLE_DEFAULTS.marginLeft,
+    );
+    config.marginRight = Number(
+      rawConfig?.marginRight ??
+        rawConfig?.margin_right ??
+        config.marginRight ??
+        PROFILE_STYLE_DEFAULTS.marginRight,
+    );
+    config.borderEnabled = normalizeBooleanValue(
+      rawConfig?.borderEnabled ??
+        rawConfig?.border_enabled ??
+        config.borderEnabled,
+      PROFILE_STYLE_DEFAULTS.borderEnabled,
+    );
+    config.borderStyle =
+      rawConfig?.borderStyle ??
+      rawConfig?.border_style ??
+      config.borderStyle ??
+      PROFILE_STYLE_DEFAULTS.borderStyle;
+    config.borderWidth = Number(
+      rawConfig?.borderWidth ??
+        rawConfig?.border_width ??
+        config.borderWidth ??
+        PROFILE_STYLE_DEFAULTS.borderWidth,
+    );
+    config.borderColor =
+      rawConfig?.borderColor ??
+      rawConfig?.border_color ??
+      config.borderColor ??
+      PROFILE_STYLE_DEFAULTS.borderColor;
+    config.shadowEnabled = normalizeBooleanValue(
+      rawConfig?.shadowEnabled ??
+        rawConfig?.shadow_enabled ??
+        config.shadowEnabled,
+      PROFILE_STYLE_DEFAULTS.shadowEnabled,
+    );
+    const profileTextStyleRoles = getProfileTextStyleRoles(profileType);
+    const textStyles = normalizeProfileTextStyles(
+      rawConfig?.textStyles ?? rawConfig?.text_styles ?? config.textStyles,
+      profileTextStyleRoles,
+    );
+    if (Object.keys(textStyles).length > 0) {
+      config.textStyles = textStyles;
+    } else {
+      delete config.textStyles;
+    }
+    delete config.text_styles;
+    const textVisibility =
+      profileType === 'serviceMenu'
+        ? {}
+        : normalizeProfileTextVisibility(
+            rawConfig?.textVisibility ??
+              rawConfig?.text_visibility ??
+              config.textVisibility,
+            profileTextStyleRoles,
+          );
+    if (Object.keys(textVisibility).length > 0) {
+      config.textVisibility = textVisibility;
+    } else {
+      delete config.textVisibility;
+    }
+    delete config.text_visibility;
+  }
   if (type === 'banner') {
     let sourceItems = [];
     if (Array.isArray(config.items) && config.items.length > 0) {
@@ -951,6 +1523,30 @@ const normalizeEditorConfig = (
     );
     config.paddingX = Number(
       rawConfig.paddingX ?? rawConfig.padding_x ?? config.padding,
+    );
+    config.paddingTop = Number(
+      rawConfig.paddingTop ??
+        rawConfig.padding_top ??
+        config.paddingTop ??
+        config.paddingY,
+    );
+    config.paddingRight = Number(
+      rawConfig.paddingRight ??
+        rawConfig.padding_right ??
+        config.paddingRight ??
+        config.paddingX,
+    );
+    config.paddingBottom = Number(
+      rawConfig.paddingBottom ??
+        rawConfig.padding_bottom ??
+        config.paddingBottom ??
+        config.paddingY,
+    );
+    config.paddingLeft = Number(
+      rawConfig.paddingLeft ??
+        rawConfig.padding_left ??
+        config.paddingLeft ??
+        config.paddingX,
     );
     config.interval = Number(config.interval || 3000);
   }
@@ -1015,6 +1611,10 @@ const normalizeEditorConfig = (
     config.padding = Number(config.padding ?? 24);
     config.paddingY = Number(config.paddingY ?? config.padding);
     config.paddingX = Number(config.paddingX ?? config.padding);
+    config.paddingTop = Number(config.paddingTop ?? config.paddingY);
+    config.paddingRight = Number(config.paddingRight ?? config.paddingX);
+    config.paddingBottom = Number(config.paddingBottom ?? config.paddingY);
+    config.paddingLeft = Number(config.paddingLeft ?? config.paddingX);
   }
   if (type === 'productGroup') {
     if (config.source && typeof config.source === 'object') {
@@ -1046,6 +1646,43 @@ const normalizeEditorConfig = (
       };
     });
   }
+  if (['customMenu', 'orderEntry', 'serviceMenu'].includes(type)) {
+    let sourceItems: any[] = [];
+    if (Array.isArray(config.items) && config.items.length > 0) {
+      sourceItems = config.items;
+    } else if (Array.isArray(config.list) && config.list.length > 0) {
+      sourceItems = config.list;
+    } else {
+      sourceItems =
+        type === 'orderEntry'
+          ? defaultProfileOrderItems()
+          : defaultProfileServiceItems();
+    }
+    config.items = normalizeProfileItems(sourceItems, type);
+    config.list = config.items;
+    config.title = config.title || getProfileDefaultTitle(type);
+    config.columns = clampNumber(config.columns, 4, 3, 5);
+    config.display =
+      type === 'orderEntry' ? 'grid' : normalizeProfileDisplay(config.display);
+  }
+  if (type === 'userInfo') {
+    delete config.show_level;
+    config.show_mobile = normalizeBooleanValue(config.show_mobile, true);
+  }
+  if (type === 'walletEntry') {
+    config.title = config.title || '我的余额';
+    config.show_balance = normalizeBooleanValue(config.show_balance, true);
+    delete config.show_points;
+    config.show_records = normalizeBooleanValue(config.show_records, true);
+    config.show_view_button = normalizeBooleanValue(
+      config.show_view_button,
+      true,
+    );
+  }
+  if (profileTypes.has(type)) {
+    syncProfilePaddingCompat(config);
+    syncProfileMarginCompat(config);
+  }
   return config;
 };
 
@@ -1057,10 +1694,11 @@ const normalizeEditorModule = (
   const rawType = String(item.type || item.component || '');
   const type = normalizeModuleTypeByScheme(rawType, schemeType);
   const rawTitle = item.title || item.label || '';
-  const config = normalizeEditorConfig(
-    type,
-    item.config || item.props || item.data || {},
-  );
+  const config = normalizeEditorConfig(type, {
+    ...(item.data && typeof item.data === 'object' ? item.data : {}),
+    ...(item.props && typeof item.props === 'object' ? item.props : {}),
+    ...(item.config && typeof item.config === 'object' ? item.config : {}),
+  });
   return {
     ...item,
     config,
@@ -1199,54 +1837,96 @@ const defaultHomeConfig = (
   return clone(defaults[type] || {});
 };
 
-const defaultProfileItems = () => [
+const defaultProfileOrderItems = () => [
   {
     id: createId('profile_item'),
-    icon: 'ant-design:customer-service-outlined',
+    image: DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX[0],
+    path: '/pages-sub/order/list?status=10',
+    title: '待付款',
+  },
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX[1],
+    path: '/pages-sub/order/list?status=20',
+    title: '待发货',
+  },
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX[2],
+    path: '/pages-sub/order/list?status=30',
+    title: '待收货',
+  },
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX[3],
+    path: '/pages-sub/refund/list',
+    title: '退款售后',
+  },
+];
+
+const defaultProfileServiceItems = () => [
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[0],
+    path: '/pages-sub/address/list',
+    title: '地址管理',
+  },
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[1],
+    path: '',
+    title: '我的收藏',
+  },
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[2],
+    path: '/pages-sub/user/settings',
+    title: '主题设置',
+  },
+  {
+    id: createId('profile_item'),
+    image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[3],
     path: '',
     title: '联系客服',
   },
 ];
 
 const defaultProfileConfig = (type: string): Record<string, any> => {
-  const withStyle = (config: Record<string, any>) => ({
-    background: '',
-    marginBottom: 0,
-    marginTop: 0,
-    radius: 24,
-    widthPercent: 100,
+  const withStyle = (moduleType: string, config: Record<string, any>) => ({
+    ...getProfileStyleDefaults(moduleType),
     ...config,
   });
   const defaults: Record<string, Record<string, any>> = {
-    customMenu: withStyle({ columns: 4, items: defaultProfileItems() }),
-    orderEntry: withStyle({
-      items: [
-        {
-          id: createId('profile_item'),
-          icon: 'ant-design:wallet-outlined',
-          path: '/pages-sub/order/list?status=10',
-          title: '待付款',
-        },
-        {
-          id: createId('profile_item'),
-          icon: 'ant-design:car-outlined',
-          path: '/pages-sub/order/list?status=20',
-          title: '待发货',
-        },
-      ],
-      radius: 24,
-    }),
-    serviceMenu: withStyle({
+    customMenu: withStyle('customMenu', {
       columns: 4,
-      items: defaultProfileItems(),
-      radius: 24,
+      display: 'grid',
+      items: defaultProfileServiceItems(),
+      title: '自定义菜单',
+    }),
+    orderEntry: withStyle('orderEntry', {
+      display: 'grid',
+      items: defaultProfileOrderItems(),
+      title: '我的订单',
+    }),
+    serviceMenu: withStyle('serviceMenu', {
+      columns: 4,
+      display: 'list',
+      items: defaultProfileServiceItems(),
       title: '我的服务',
     }),
-    userInfo: withStyle({ radius: 0, show_level: true, show_mobile: true }),
-    walletEntry: withStyle({ show_balance: true, show_points: true }),
+    userInfo: withStyle('userInfo', {
+      show_mobile: true,
+    }),
+    walletEntry: withStyle('walletEntry', {
+      show_balance: true,
+      show_records: true,
+      show_view_button: true,
+      title: '我的余额',
+    }),
   };
   const config = defaults[normalizeProfileModuleType(type)] ||
     defaults.serviceMenu || { columns: 4, items: [] };
+  syncProfilePaddingCompat(config);
   return clone(config);
 };
 
@@ -1283,7 +1963,7 @@ const resetSchemeForm = (type = activeType.value) => {
   Object.assign(schemeForm, {
     description: '',
     name: `${activeTypeLabel.value}方案`,
-    pageStyle: { ...DEFAULT_HOME_PAGE_STYLE },
+    pageStyle: { ...getDefaultPageStyle(type) },
     schema: type === 'tabbar' ? defaultTabbarItems() : [],
     sort: 0,
     status: 1,
@@ -1362,9 +2042,9 @@ const loadSchemeDetail = async (id: number) => {
     description: detail.description || '',
     name: detail.name,
     pageStyle:
-      activeType.value === 'home'
-        ? getSchemePageStyle(detail)
-        : clone(DEFAULT_HOME_PAGE_STYLE),
+      activeType.value === 'tabbar'
+        ? clone(DEFAULT_HOME_PAGE_STYLE)
+        : getSchemePageStyle(detail, activeType.value),
     schema:
       activeType.value === 'tabbar'
         ? clone(schema)
@@ -1496,12 +2176,82 @@ const normalizeSchemaForClient = (
     normalizeUploadValue(
       clone(schema).map((item: ModuleItem, index: number) => {
         const props = {
+          ...(item.data && typeof item.data === 'object' ? item.data : {}),
           ...(item.props && typeof item.props === 'object' ? item.props : {}),
           ...(item.config && typeof item.config === 'object'
             ? item.config
             : {}),
-          ...(item.data && typeof item.data === 'object' ? item.data : {}),
         };
+        const moduleType = normalizeModuleTypeByScheme(
+          String(item.type || ''),
+          activeType.value,
+        );
+        if (
+          activeType.value === 'profile' &&
+          ['customMenu', 'orderEntry', 'serviceMenu'].includes(moduleType)
+        ) {
+          let sourceItems: any[] = [];
+          if (Array.isArray(props.items) && props.items.length > 0) {
+            sourceItems = props.items;
+          } else if (Array.isArray(props.list) && props.list.length > 0) {
+            sourceItems = props.list;
+          } else {
+            sourceItems =
+              moduleType === 'orderEntry'
+                ? defaultProfileOrderItems()
+                : defaultProfileServiceItems();
+          }
+          props.items = normalizeProfileItems(sourceItems, moduleType);
+          props.list = props.items;
+          props.columns = clampNumber(props.columns, 4, 3, 5);
+          props.display =
+            moduleType === 'orderEntry'
+              ? 'grid'
+              : normalizeProfileDisplay(props.display);
+          props.title = props.title || getProfileDefaultTitle(moduleType);
+        }
+        if (activeType.value === 'profile' && moduleType === 'userInfo') {
+          delete props.show_level;
+          props.show_mobile = normalizeBooleanValue(props.show_mobile, true);
+        }
+        if (activeType.value === 'profile' && moduleType === 'walletEntry') {
+          props.title = props.title || '我的余额';
+          props.show_balance = normalizeBooleanValue(props.show_balance, true);
+          delete props.show_points;
+          props.show_records = normalizeBooleanValue(props.show_records, true);
+          props.show_view_button = normalizeBooleanValue(
+            props.show_view_button,
+            true,
+          );
+        }
+        if (activeType.value === 'profile') {
+          syncProfilePaddingCompat(props);
+          syncProfileMarginCompat(props);
+          const profileTextStyleRoles = getProfileTextStyleRoles(moduleType);
+          const textStyles = normalizeProfileTextStyles(
+            props.textStyles ?? props.text_styles,
+            profileTextStyleRoles,
+          );
+          if (Object.keys(textStyles).length > 0) {
+            props.textStyles = textStyles;
+          } else {
+            delete props.textStyles;
+          }
+          delete props.text_styles;
+          const textVisibility =
+            moduleType === 'serviceMenu'
+              ? {}
+              : normalizeProfileTextVisibility(
+                  props.textVisibility ?? props.text_visibility,
+                  profileTextStyleRoles,
+                );
+          if (Object.keys(textVisibility).length > 0) {
+            props.textVisibility = textVisibility;
+          } else {
+            delete props.textVisibility;
+          }
+          delete props.text_visibility;
+        }
 
         return {
           enabled: item.enabled !== false,
@@ -1519,7 +2269,14 @@ const normalizeSchemaForClient = (
     return {
       components: modules as ClientDecorateApi.DecorationModule[],
       modules: modules as ClientDecorateApi.DecorationModule[],
-      pageStyle: normalizeHomePageStyle(schemeForm.pageStyle),
+      pageStyle: normalizePageStyle(schemeForm.pageStyle, activeType.value),
+    };
+  }
+
+  if (activeType.value === 'profile') {
+    return {
+      modules: modules as ClientDecorateApi.ProfileModule[],
+      pageStyle: normalizePageStyle(schemeForm.pageStyle, activeType.value),
     };
   }
 
@@ -1881,13 +2638,32 @@ const addNavItem = (module: ModuleItem) => {
 
 const addProfileItem = (module: ModuleItem) => {
   if (warnReadonlyScheme()) return;
+  const type = normalizeProfileModuleType(String(module.type || ''));
   const items = (module.config.items ||= []);
-  items.push({
-    id: createId('profile_item'),
-    icon: 'ant-design:customer-service-outlined',
+  const defaults =
+    type === 'orderEntry'
+      ? defaultProfileOrderItems()
+      : defaultProfileServiceItems();
+  const defaultItem: Record<string, any> = defaults[
+    items.length % defaults.length
+  ] || {
+    image: getDefaultProfileEntryImage(type, items.length),
     path: '',
     title: '菜单项',
+  };
+  const label = defaultItem.label || defaultItem.title || '菜单项';
+  const nextItem = clone(defaultItem);
+  delete nextItem.action;
+  delete nextItem.icon;
+  items.push({
+    ...nextItem,
+    enabled: true,
+    id: createId('profile_item'),
+    label,
+    title: label,
+    visible: true,
   });
+  module.config.list = items;
 };
 
 const removeConfigItem = (items: any[], index: number | string) => {
@@ -1896,7 +2672,7 @@ const removeConfigItem = (items: any[], index: number | string) => {
 };
 
 const updateHomePageStyle = (
-  field: 'paddingX' | 'paddingY',
+  field: 'paddingTop' | 'paddingX' | 'paddingY',
   value: unknown,
 ) => {
   if (warnReadonlyScheme()) return;
@@ -1905,7 +2681,7 @@ const updateHomePageStyle = (
 
 const resetHomePageStyle = () => {
   if (warnReadonlyScheme()) return;
-  schemeForm.pageStyle = { ...DEFAULT_HOME_PAGE_STYLE };
+  schemeForm.pageStyle = { ...getDefaultPageStyle(activeType.value) };
   message.success('已重置页面样式');
 };
 

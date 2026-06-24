@@ -104,18 +104,25 @@ defineEmits<{
         </div>
 
         <div class="decorate-overview-card__preview">
-          <ClientPhonePreview
-            :category-tree="previewCategoryTree"
-            :current-path="getSchemePreviewMeta(scheme).currentPath"
-            :goods="previewGoods"
-            :goods-list="previewGoodsList"
-            :kind="getSchemePreviewMeta(scheme).previewKind"
-            :modules="getOverviewSchemeModules(scheme)"
-            size="compact"
-            :tabbar-items="getOverviewSchemeTabbarItems(scheme)"
-            :theme-tokens="currentThemeTokens"
-            :title="getSchemeTypeLabel(scheme.type)"
-          />
+          <div
+            class="decorate-overview-card__preview-phone"
+            :class="{
+              'decorate-overview-card__preview-phone--tabbar':
+                scheme.type === 'tabbar',
+            }"
+          >
+            <ClientPhonePreview
+              :category-tree="previewCategoryTree"
+              :current-path="getSchemePreviewMeta(scheme).currentPath"
+              :goods="previewGoods"
+              :goods-list="previewGoodsList"
+              :kind="getSchemePreviewMeta(scheme).previewKind"
+              :modules="getOverviewSchemeModules(scheme)"
+              :tabbar-items="getOverviewSchemeTabbarItems(scheme)"
+              :theme-tokens="currentThemeTokens"
+              :title="getSchemeTypeLabel(scheme.type)"
+            />
+          </div>
         </div>
 
         <div class="decorate-overview-card__foot">

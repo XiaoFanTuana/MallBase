@@ -39,7 +39,10 @@ export function normalizeSchema(schema, fallback) {
   return {
     ...fallback,
     ...schema,
-    pageStyle: normalizePageStyle(schema.pageStyle || fallback.pageStyle),
+    pageStyle: normalizePageStyle(
+      schema.pageStyle || fallback.pageStyle,
+      fallback.pageStyle,
+    ),
     modules: normalizeModules(
       schema.modules ||
         schema.components ||
@@ -51,11 +54,34 @@ export function normalizeSchema(schema, fallback) {
   };
 }
 
-export function normalizePageStyle(style) {
+export function normalizePageStyle(style, fallback = {}) {
   const source = isPlainObject(style) ? style : {};
   return {
-    paddingX: Number(source.paddingX ?? source.padding_x ?? 28),
-    paddingY: Number(source.paddingY ?? source.padding_y ?? 0),
+    paddingX: Number(
+      source.paddingX ??
+        source.padding_x ??
+        fallback.paddingX ??
+        fallback.padding_x ??
+        28,
+    ),
+    paddingTop: Number(
+      source.paddingTop ??
+        source.padding_top ??
+        source.paddingY ??
+        source.padding_y ??
+        fallback.paddingTop ??
+        fallback.padding_top ??
+        fallback.paddingY ??
+        fallback.padding_y ??
+        0,
+    ),
+    paddingY: Number(
+      source.paddingY ??
+        source.padding_y ??
+        fallback.paddingY ??
+        fallback.padding_y ??
+        0,
+    ),
   };
 }
 

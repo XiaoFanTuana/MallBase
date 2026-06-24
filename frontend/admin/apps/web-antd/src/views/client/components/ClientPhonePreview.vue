@@ -1,5 +1,12 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -53,16 +60,22 @@ const emit = defineEmits<{
 }>();
 
 const bannerPreviewTick = ref(0);
+const previewRootRef = ref<HTMLElement | null>(null);
+const selectedModuleControlReady = ref(false);
+const selectedModuleControlStyle = ref<Record<string, string>>({});
 let bannerPreviewTimer: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
   bannerPreviewTimer = setInterval(() => {
     bannerPreviewTick.value += 1;
   }, 1000);
+  window.addEventListener('resize', updateSelectedModuleControlPosition);
+  updateSelectedModuleControlPosition();
 });
 
 onBeforeUnmount(() => {
   if (bannerPreviewTimer) clearInterval(bannerPreviewTimer);
+  window.removeEventListener('resize', updateSelectedModuleControlPosition);
 });
 
 const DEFAULT_THEME_TOKENS = {
@@ -130,31 +143,215 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
   },
 ];
 
+const DEFAULT_PROFILE_ORDER_ITEMS = [
+  {
+    image: 'static/demo/profile-order-pay.svg',
+    label: '待付款',
+    path: '/pages-sub/order/list?status=10',
+  },
+  {
+    image: 'static/demo/profile-order-ship.svg',
+    label: '待发货',
+    path: '/pages-sub/order/list?status=20',
+  },
+  {
+    image: 'static/demo/profile-order-receive.svg',
+    label: '待收货',
+    path: '/pages-sub/order/list?status=30',
+  },
+  {
+    image: 'static/demo/profile-order-refund.svg',
+    label: '退款售后',
+    path: '/pages-sub/refund/list',
+  },
+];
+
+const DEFAULT_PROFILE_SERVICE_ITEMS = [
+  {
+    image: 'static/demo/profile-service-address.svg',
+    label: '地址管理',
+    path: '/pages-sub/address/list',
+  },
+  {
+    image: 'static/demo/profile-service-favorite.svg',
+    label: '我的收藏',
+    path: '',
+  },
+  {
+    image: 'static/demo/profile-service-settings.svg',
+    label: '主题设置',
+    path: '/pages-sub/user/settings',
+  },
+  {
+    image: 'static/demo/profile-service-support.svg',
+    label: '联系客服',
+    path: '',
+  },
+];
+
+const DEFAULT_PROFILE_ORDER_IMAGES = DEFAULT_PROFILE_ORDER_ITEMS.map(
+  (item) => item.image,
+);
+const DEFAULT_PROFILE_SERVICE_IMAGES = DEFAULT_PROFILE_SERVICE_ITEMS.map(
+  (item) => item.image,
+);
+
+const DEFAULT_PROFILE_STYLE = {
+  background: '',
+  backgroundColorEnd: '#ffffff',
+  backgroundColorStart: '#ffffff',
+  backgroundGradientDirection: 'horizontal',
+  backgroundMode: 'color',
+  background_image: '',
+  borderColor: '#e5e5e5',
+  borderEnabled: true,
+  borderStyle: 'dashed',
+  borderWidth: 1,
+  marginBottom: 0,
+  marginLeft: 0,
+  marginRight: 0,
+  marginTop: 0,
+  padding: 0,
+  radius: 20,
+  shadowEnabled: false,
+  widthPercent: 100,
+};
+
+const DEFAULT_PROFILE_USER_STYLE = {
+  ...DEFAULT_PROFILE_STYLE,
+  paddingX: 28,
+  paddingY: 28,
+  radius: 0,
+};
+
+const DEFAULT_PROFILE_CARD_STYLE = {
+  ...DEFAULT_PROFILE_STYLE,
+  paddingX: 28,
+  paddingY: 28,
+};
+
+const DEFAULT_PROFILE_MENU_STYLE = {
+  ...DEFAULT_PROFILE_STYLE,
+  paddingX: 10,
+  paddingY: 0,
+};
+
+const PROFILE_ICON_PRESETS = [
+  {
+    keywords: [
+      'pending_pay',
+      'pay',
+      'wallet',
+      '待付款',
+      '钱包',
+      'ant-design:wallet-outlined',
+    ],
+    text: '¥',
+    type: 'pay',
+  },
+  {
+    keywords: [
+      'pending_ship',
+      'ship',
+      'car',
+      '待发货',
+      'ant-design:car-outlined',
+    ],
+    text: '发',
+    type: 'ship',
+  },
+  {
+    keywords: [
+      'pending_receive',
+      'receive',
+      'inbox',
+      '待收货',
+      'ant-design:inbox-outlined',
+    ],
+    text: '收',
+    type: 'receive',
+  },
+  {
+    keywords: [
+      'refund',
+      'reload',
+      '退款',
+      '售后',
+      'ant-design:reload-outlined',
+    ],
+    text: '退',
+    type: 'refund',
+  },
+  {
+    keywords: [
+      'address',
+      'environment',
+      '地址',
+      'ant-design:environment-outlined',
+    ],
+    text: '址',
+    type: 'address',
+  },
+  {
+    keywords: ['favorite', 'heart', '收藏', 'ant-design:heart-outlined'],
+    text: '藏',
+    type: 'favorite',
+  },
+  {
+    keywords: ['theme', 'skin', '主题', 'ant-design:skin-outlined'],
+    text: '题',
+    type: 'theme',
+  },
+  {
+    keywords: [
+      'service',
+      'customer',
+      '客服',
+      'ant-design:customer-service-outlined',
+    ],
+    text: '客',
+    type: 'service',
+  },
+];
+
 const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
-  { id: 'preview-user', props: {}, type: 'userCard' },
-  { id: 'preview-wallet', props: {}, type: 'wallet' },
+  {
+    id: 'preview-user',
+    props: {
+      ...DEFAULT_PROFILE_USER_STYLE,
+      show_mobile: true,
+    },
+    type: 'userCard',
+  },
   {
     id: 'preview-orders',
     props: {
-      items: [
-        { icon: '¥', label: '待付款' },
-        { icon: '车', label: '待发货' },
-        { icon: '包', label: '待收货' },
-        { icon: '↩', label: '售后' },
-      ],
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      display: 'grid',
+      items: DEFAULT_PROFILE_ORDER_ITEMS,
       title: '我的订单',
     },
     type: 'orderShortcut',
   },
   {
+    id: 'preview-wallet',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_balance: true,
+      show_records: true,
+      show_view_button: true,
+      title: '我的余额',
+    },
+    type: 'wallet',
+  },
+  {
     id: 'preview-service',
     props: {
-      items: [
-        { icon: '地', label: '地址管理' },
-        { icon: '藏', label: '我的收藏' },
-        { icon: '券', label: '领券中心' },
-        { icon: '题', label: '主题设置' },
-      ],
+      ...DEFAULT_PROFILE_MENU_STYLE,
+      columns: 4,
+      display: 'list',
+      items: DEFAULT_PROFILE_SERVICE_ITEMS,
+      title: '我的服务',
     },
     type: 'serviceMenu',
   },
@@ -164,6 +361,7 @@ const DEFAULT_TABBAR_ITEMS: ModuleItem[] = [
   { id: 'preview-tab-home', path: '/pages/index/index', text: '首页' },
   { id: 'preview-tab-category', path: '/pages/category/index', text: '分类' },
   { id: 'preview-tab-cart', path: '/pages/cart/index', text: '购物车' },
+  { id: 'preview-tab-order', path: '/pages/order/index', text: '订单' },
   { id: 'preview-tab-profile', path: '/pages/profile/index', text: '我的' },
 ];
 
@@ -251,12 +449,13 @@ const previewStyle = computed(() => ({
 }));
 
 const pageTitle = computed(() => {
+  if (props.kind === 'profile') return 'MallBase';
   if (props.title) return props.title;
   const map: Record<PreviewKind, string> = {
     category: '分类',
     goodsDetail: '商品详情',
     home: '首页',
-    profile: '我的',
+    profile: 'MallBase',
     tabbar: '底部导航',
   };
   return map[props.kind];
@@ -287,6 +486,34 @@ const normalizedModules = computed(() => {
     );
 });
 
+const selectedModuleForControls = computed(() => {
+  if (
+    !props.interactive ||
+    !props.selectedModuleId ||
+    props.kind === 'tabbar'
+  ) {
+    return null;
+  }
+
+  return (
+    normalizedModules.value.find(
+      (module) => module.id === props.selectedModuleId,
+    ) || null
+  );
+});
+
+const selectedModuleControlIndex = computed(() =>
+  selectedModuleForControls.value
+    ? Number(selectedModuleForControls.value.__previewIndex)
+    : -1,
+);
+
+const selectedModuleControlTitle = computed(() =>
+  selectedModuleForControls.value
+    ? getModuleTitle(selectedModuleForControls.value)
+    : '',
+);
+
 const normalizedTabbarItems = computed(() => {
   let items = DEFAULT_TABBAR_ITEMS;
   if (props.kind === 'tabbar' || props.tabbarItems.length > 0) {
@@ -301,6 +528,12 @@ const normalizedTabbarItems = computed(() => {
     text: item.text || item.label || item.title || '导航',
   }));
 });
+
+watch(
+  [selectedModuleForControls, normalizedModules],
+  () => updateSelectedModuleControlPosition(),
+  { flush: 'post' },
+);
 
 const categorySidebarItems = computed(() => {
   if (props.categoryTree.length > 0) return props.categoryTree;
@@ -347,7 +580,7 @@ function normalizeModuleProps(module: ModuleItem) {
   const rawData = module.data || {};
   const rawProps = module.props || {};
   const rawConfig = module.config || {};
-  const props = { ...rawProps, ...rawConfig, ...rawData };
+  const props = { ...rawData, ...rawProps, ...rawConfig };
   if (rawConfig.list !== undefined) {
     props.list = rawConfig.list;
   }
@@ -365,6 +598,18 @@ function normalizeModuleProps(module: ModuleItem) {
   const padding = props.padding ?? 0;
   props.paddingY = Number(props.paddingY ?? props.padding_y ?? padding);
   props.paddingX = Number(props.paddingX ?? props.padding_x ?? padding);
+  props.paddingTop = Number(
+    props.paddingTop ?? props.padding_top ?? props.paddingY,
+  );
+  props.paddingRight = Number(
+    props.paddingRight ?? props.padding_right ?? props.paddingX,
+  );
+  props.paddingBottom = Number(
+    props.paddingBottom ?? props.padding_bottom ?? props.paddingY,
+  );
+  props.paddingLeft = Number(
+    props.paddingLeft ?? props.padding_left ?? props.paddingX,
+  );
   if (!props.list && (props.items || props.images)) {
     props.list = props.items || props.images;
   }
@@ -401,14 +646,41 @@ function normalizeProfileType(type: string) {
   return alias[type] || type;
 }
 
+function defaultProfileEntryImage(moduleType: string, index: number) {
+  if (moduleType === 'orderShortcut') {
+    return DEFAULT_PROFILE_ORDER_IMAGES[
+      index % DEFAULT_PROFILE_ORDER_IMAGES.length
+    ];
+  }
+  if (moduleType === 'serviceMenu') {
+    return DEFAULT_PROFILE_SERVICE_IMAGES[
+      index % DEFAULT_PROFILE_SERVICE_IMAGES.length
+    ];
+  }
+  return '';
+}
+
 function moduleList(module: ModuleItem) {
   const list = [
     module.props?.list,
     module.props?.items,
     module.props?.images,
   ].find((value) => Array.isArray(value) && value.length > 0);
-  if (Array.isArray(list)) return list;
-  return [];
+  let source: any[] = [];
+  if (Array.isArray(list)) {
+    source = list;
+  } else if (module.type === 'orderShortcut') {
+    source = DEFAULT_PROFILE_ORDER_ITEMS;
+  } else if (module.type === 'serviceMenu') {
+    source = DEFAULT_PROFILE_SERVICE_ITEMS;
+  }
+  return source
+    .filter((item: any) => item?.enabled !== false && item?.visible !== false)
+    .map((item: any, index: number) => {
+      if (getImage(item)) return item;
+      const image = defaultProfileEntryImage(module.type, index);
+      return image ? { ...item, image } : item;
+    });
 }
 
 function getImage(item: any): string {
@@ -543,6 +815,35 @@ function getEntryIcon(item: any) {
   return item?.icon || item?.selected_icon || '';
 }
 
+function getProfileIconPreset(item: any) {
+  const source = [
+    item?.key,
+    item?.icon,
+    item?.action,
+    item?.label,
+    item?.title,
+    item?.text,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return PROFILE_ICON_PRESETS.find((preset) =>
+    preset.keywords.some((keyword) => source.includes(keyword.toLowerCase())),
+  );
+}
+
+function profileIconType(item: any) {
+  return getProfileIconPreset(item)?.type || 'default';
+}
+
+function profileIconText(item: any) {
+  return getProfileIconPreset(item)?.text || getLabel(item).slice(0, 1) || '•';
+}
+
+function profileIconClass(item: any) {
+  return `profile-entry-icon--${profileIconType(item)}`;
+}
+
 function entryCardIconImage(module: ModuleItem) {
   return getImage(module.props?.icon_image || module.props?.iconImage || '');
 }
@@ -651,6 +952,114 @@ function toPreviewPx(value: unknown, fallback = 0) {
   return Math.max(0, numberValue / 2);
 }
 
+function styleColor(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function normalizePreviewFontWeight(value: unknown) {
+  const weight = String(value || '');
+  return ['400', '500', '600', '700', '800'].includes(weight) ? weight : '';
+}
+
+function normalizePreviewTextAlign(value: unknown) {
+  const align = String(value || '');
+  return ['center', 'left', 'right'].includes(align) ? align : '';
+}
+
+function profileTextVisible(module: ModuleItem, role: string) {
+  if (module.type === 'serviceMenu') return true;
+  const props = module.props || {};
+  const visibility = props.textVisibility || props.text_visibility || {};
+  if (!visibility || typeof visibility !== 'object') return true;
+  const value = visibility[role];
+  if (typeof value === 'string') {
+    return !['0', 'false'].includes(value.toLowerCase());
+  }
+  return value !== false && value !== 0;
+}
+
+function profileTextStyle(module: ModuleItem, role: string) {
+  const props = module.props || {};
+  const textStyles = props.textStyles || props.text_styles || {};
+  const styleConfig = textStyles?.[role];
+  if (!styleConfig || typeof styleConfig !== 'object') return {};
+  const style: Record<string, string> = {};
+  const color = styleColor(styleConfig.color);
+  if (color) style.color = color;
+  const fontSize = Number(styleConfig.fontSize ?? styleConfig.font_size);
+  if (Number.isFinite(fontSize) && fontSize > 0) {
+    style.fontSize = `${toPreviewPx(clampNumber(fontSize, 24, 16, 80))}px`;
+  }
+  const fontWeight = normalizePreviewFontWeight(
+    styleConfig.fontWeight ?? styleConfig.font_weight,
+  );
+  if (fontWeight) style.fontWeight = fontWeight;
+  const textAlign = normalizePreviewTextAlign(
+    styleConfig.textAlign ?? styleConfig.text_align,
+  );
+  if (textAlign) style.textAlign = textAlign;
+  return style;
+}
+
+function gradientDirection(value: unknown) {
+  const map: Record<string, string> = {
+    diagonalLeft: '135deg',
+    diagonalRight: '45deg',
+    horizontal: '90deg',
+    vertical: '180deg',
+  };
+  return map[String(value || 'horizontal')] || map.horizontal;
+}
+
+function gradientBackground(
+  startValue: unknown,
+  endValue: unknown,
+  directionValue: unknown,
+  bottomValue?: unknown,
+) {
+  const start = styleColor(startValue);
+  const end = styleColor(endValue) || start;
+  const bottom = styleColor(bottomValue);
+  if (!start && !bottom) return '';
+  if (bottom && start) {
+    return `linear-gradient(180deg, ${start} 0%, ${end} 68%, ${bottom} 100%)`;
+  }
+  if (!start) return bottom;
+  if (!end || start.toLowerCase() === end.toLowerCase()) return start;
+  return `linear-gradient(${gradientDirection(directionValue)}, ${start}, ${end})`;
+}
+
+function moduleBackgroundStyle(module: ModuleItem) {
+  const props = module.props || {};
+  const style: Record<string, string> = {};
+  const mode = props.backgroundMode || props.background_mode || 'color';
+  const backgroundImage = getImage(
+    props.background_image || props.backgroundImage || '',
+  );
+
+  if (mode === 'image' && backgroundImage) {
+    style.backgroundImage = `url("${backgroundImage}")`;
+    style.backgroundPosition = 'center';
+    style.backgroundSize = 'cover';
+    const fallback =
+      styleColor(props.background) ||
+      styleColor(props.bottomBackground || props.bottom_background);
+    if (fallback) style.backgroundColor = fallback;
+    return style;
+  }
+
+  const background = gradientBackground(
+    props.backgroundColorStart ||
+      props.background_color_start ||
+      props.background,
+    props.backgroundColorEnd || props.background_color_end,
+    props.backgroundGradientDirection || props.background_gradient_direction,
+    props.bottomBackground || props.bottom_background,
+  );
+  if (background) style.background = background;
+  return style;
+}
+
 const homePageStyle = computed(() => {
   const pageStyle = props.pageStyle || {};
   const paddingY = pageStyle.paddingY ?? pageStyle.padding_y ?? 0;
@@ -660,18 +1069,55 @@ const homePageStyle = computed(() => {
   };
 });
 
+const profilePageStyle = computed(() => {
+  const pageStyle = props.pageStyle || {};
+  const paddingTop =
+    pageStyle.paddingTop ??
+    pageStyle.padding_top ??
+    pageStyle.paddingY ??
+    pageStyle.padding_y ??
+    10;
+  const paddingX = pageStyle.paddingX ?? pageStyle.padding_x ?? 28;
+  return {
+    paddingLeft: `${toPreviewPx(paddingX)}px`,
+    paddingRight: `${toPreviewPx(paddingX)}px`,
+    paddingTop: `${toPreviewPx(paddingTop)}px`,
+  };
+});
+
 function moduleOuterStyle(module: ModuleItem) {
   const props = module.props || {};
   const width = Math.max(50, Math.min(Number(props.widthPercent || 100), 100));
+  const marginLeft = props.marginLeft ?? props.margin_left;
+  const marginRight = props.marginRight ?? props.margin_right;
+  const marginLeftPx = marginLeft === undefined ? 0 : toPreviewPx(marginLeft);
+  const marginRightPx =
+    marginRight === undefined ? 0 : toPreviewPx(marginRight);
+  const horizontalMargin = marginLeftPx + marginRightPx;
   const style: Record<string, string> = {
     marginBottom: `${toPreviewPx(props.marginBottom)}px`,
     marginTop: `${toPreviewPx(props.marginTop)}px`,
-    width: `${width}%`,
+    width:
+      horizontalMargin > 0
+        ? `calc(${width}% - ${horizontalMargin}px)`
+        : `${width}%`,
   };
-  if (width < 100) {
+  if (marginLeft !== undefined) {
+    style.marginLeft = `${marginLeftPx}px`;
+  } else if (width < 100) {
     style.marginLeft = 'auto';
+  }
+  if (marginRight !== undefined) {
+    style.marginRight = `${marginRightPx}px`;
+  } else if (width < 100) {
     style.marginRight = 'auto';
   }
+  const componentBackground = gradientBackground(
+    props.componentBackgroundStart || props.component_background_start,
+    props.componentBackgroundEnd || props.component_background_end,
+    props.backgroundGradientDirection || props.background_gradient_direction,
+  );
+  if (componentBackground) style.background = componentBackground;
   return style;
 }
 
@@ -680,12 +1126,61 @@ function moduleBoxStyle(
   extra: Record<string, string> = {},
 ) {
   const props = module.props || {};
-  const style: Record<string, string> = { boxSizing: 'border-box', ...extra };
-  if (props.background) style.background = props.background;
+  const style: Record<string, string> = {
+    boxSizing: 'border-box',
+    ...extra,
+    ...moduleBackgroundStyle(module),
+  };
   if (props.radius !== undefined) {
     style.borderRadius = `${toPreviewPx(props.radius)}px`;
   }
-  if (props.paddingY !== undefined || props.paddingX !== undefined) {
+  const textColor = styleColor(props.textColor || props.text_color);
+  if (textColor) {
+    style.color = textColor;
+    style['--mb-preview-text'] = textColor;
+    style['--mb-preview-text-secondary'] = textColor;
+    style['--mb-preview-text-tertiary'] = textColor;
+    style['--mb-preview-text-title'] = textColor;
+  }
+  const borderEnabled = props.borderEnabled ?? props.border_enabled;
+  if (borderEnabled === false) {
+    style.border = '0';
+  } else if (borderEnabled !== undefined) {
+    const borderWidth = toPreviewPx(props.borderWidth ?? props.border_width, 1);
+    const borderStyle = props.borderStyle || props.border_style || 'solid';
+    const borderColor =
+      styleColor(props.borderColor || props.border_color) ||
+      'var(--mb-preview-divider)';
+    style.border = `${borderWidth}px ${borderStyle} ${borderColor}`;
+  }
+  const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
+  if (shadowEnabled === true) {
+    style.boxShadow = '0 8px 24px rgb(15 23 42 / 14%)';
+  } else if (shadowEnabled === false) {
+    style.boxShadow = 'none';
+  }
+  const hasSidePadding =
+    props.paddingTop !== undefined ||
+    props.padding_top !== undefined ||
+    props.paddingRight !== undefined ||
+    props.padding_right !== undefined ||
+    props.paddingBottom !== undefined ||
+    props.padding_bottom !== undefined ||
+    props.paddingLeft !== undefined ||
+    props.padding_left !== undefined;
+  if (hasSidePadding) {
+    const padding = props.padding ?? 0;
+    const paddingY = props.paddingY ?? props.padding_y ?? padding;
+    const paddingX = props.paddingX ?? props.padding_x ?? padding;
+    const paddingTop = props.paddingTop ?? props.padding_top ?? paddingY;
+    const paddingRight = props.paddingRight ?? props.padding_right ?? paddingX;
+    const paddingBottom =
+      props.paddingBottom ?? props.padding_bottom ?? paddingY;
+    const paddingLeft = props.paddingLeft ?? props.padding_left ?? paddingX;
+    style.padding = `${toPreviewPx(paddingTop)}px ${toPreviewPx(
+      paddingRight,
+    )}px ${toPreviewPx(paddingBottom)}px ${toPreviewPx(paddingLeft)}px`;
+  } else if (props.paddingY !== undefined || props.paddingX !== undefined) {
     const padding = props.padding ?? 0;
     const paddingY = props.paddingY ?? props.padding_y ?? padding;
     const paddingX = props.paddingX ?? props.padding_x ?? padding;
@@ -694,6 +1189,15 @@ function moduleBoxStyle(
     style.padding = `${toPreviewPx(props.padding)}px`;
   }
   return style;
+}
+
+function serviceMenuBoxStyle(module: ModuleItem) {
+  return {
+    ...moduleBoxStyle(module),
+    '--mb-profile-service-columns': String(
+      Math.max(3, Math.min(Number(module.props.columns || 4), 5)),
+    ),
+  };
 }
 
 function bannerHeight(module: ModuleItem) {
@@ -775,6 +1279,19 @@ function walletShowBalance(module: ModuleItem) {
   return module.props.show_balance !== false;
 }
 
+type WalletPreviewAction = { key: string; label: string; primary: boolean };
+
+function walletActions(module: ModuleItem): WalletPreviewAction[] {
+  const actions: WalletPreviewAction[] = [];
+  if (walletShowBalance(module) && module.props.show_records !== false) {
+    actions.push({ key: 'records', label: '余额明细', primary: false });
+  }
+  if (module.props.show_view_button !== false) {
+    actions.push({ key: 'view', label: '去查看', primary: true });
+  }
+  return actions;
+}
+
 function richTextHtml(module: ModuleItem) {
   return (
     module.props?.content ||
@@ -811,6 +1328,30 @@ function getTabbarIcon(item: ModuleItem) {
     : item.icon || item.selected_icon || '';
 }
 
+function getTabbarIconType(item: ModuleItem) {
+  const source = `${item.path || ''} ${item.key || ''} ${item.text || ''}`;
+  if (source.includes('/pages/category') || source.includes('分类')) {
+    return 'category';
+  }
+  if (source.includes('/pages/cart') || source.includes('购物车')) {
+    return 'cart';
+  }
+  if (source.includes('/pages/order') || source.includes('订单')) {
+    return 'order';
+  }
+  if (source.includes('/pages/profile') || source.includes('我的')) {
+    return 'profile';
+  }
+  return 'home';
+}
+
+function tabbarIconClass(item: ModuleItem) {
+  return [
+    `tabbar-icon--${getTabbarIconType(item)}`,
+    { 'tabbar-icon--custom': Boolean(getTabbarIcon(item)) },
+  ];
+}
+
 function isDropBefore(index: unknown) {
   return (
     props.interactive &&
@@ -838,6 +1379,35 @@ function isTabbarDropAppend() {
     Number(item.__previewIndex),
   );
   return !visibleIndexes.includes(props.dropIndex);
+}
+
+function updateSelectedModuleControlPosition() {
+  if (!selectedModuleForControls.value) {
+    selectedModuleControlReady.value = false;
+    return;
+  }
+
+  void nextTick(() => {
+    const root = previewRootRef.value;
+    const target = root?.querySelector<HTMLElement>(
+      '[data-module-selected="true"]',
+    );
+    if (!root || !target) {
+      selectedModuleControlReady.value = false;
+      return;
+    }
+
+    const rootRect = root.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    selectedModuleControlStyle.value = {
+      top: `${targetRect.top - rootRect.top + targetRect.height / 2}px`,
+    };
+    selectedModuleControlReady.value = true;
+  });
+}
+
+function handlePreviewBodyScroll() {
+  updateSelectedModuleControlPosition();
 }
 
 function handlePreviewDelete(index: number, event: MouseEvent) {
@@ -868,8 +1438,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 <template>
   <div
+    ref="previewRootRef"
     class="client-phone-preview"
-    :class="[`client-phone-preview--${size}`, `client-phone-preview--${kind}`]"
+    :class="[
+      `client-phone-preview--${size}`,
+      `client-phone-preview--${kind}`,
+      { 'client-phone-preview--interactive': interactive },
+    ]"
     :style="previewStyle"
   >
     <div class="client-phone-preview__device">
@@ -879,13 +1454,15 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
       </div>
       <div class="client-phone-preview__navbar">
         <span class="client-phone-preview__back">{{
-          kind === 'home' ? '' : '‹'
+          kind === 'home' || kind === 'profile' ? '' : '‹'
         }}</span>
         <strong>{{ pageTitle }}</strong>
-        <span class="client-phone-preview__more">•••</span>
+        <span class="client-phone-preview__more">{{
+          kind === 'profile' ? '' : '•••'
+        }}</span>
       </div>
 
-      <div class="client-phone-preview__body">
+      <div class="client-phone-preview__body" @scroll="handlePreviewBodyScroll">
         <template v-if="kind === 'home'">
           <div class="home-page" :style="homePageStyle">
             <div class="home-brand">
@@ -910,6 +1487,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   },
                 ]"
                 :data-module-index="interactive ? module.__previewIndex : null"
+                :data-module-selected="
+                  selectedModuleId === module.id ? 'true' : null
+                "
                 role="button"
                 :style="moduleOuterStyle(module)"
                 tabindex="0"
@@ -918,57 +1498,6 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   handlePreviewMouseDown(Number(module.__previewIndex), $event)
                 "
               >
-                <span
-                  v-if="interactive && selectedModuleId === module.id"
-                  class="preview-selected-badge"
-                >
-                  {{ getModuleTitle(module) }}
-                  <span class="preview-selected-actions">
-                    <button
-                      type="button"
-                      title="上移"
-                      @click.stop="
-                        handlePreviewMove(
-                          Number(module.__previewIndex),
-                          'up',
-                          $event,
-                        )
-                      "
-                      @mousedown.stop
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      title="下移"
-                      @click.stop="
-                        handlePreviewMove(
-                          Number(module.__previewIndex),
-                          'down',
-                          $event,
-                        )
-                      "
-                      @mousedown.stop
-                    >
-                      ↓
-                    </button>
-                    <button
-                      class="danger"
-                      type="button"
-                      title="删除"
-                      @click.stop="
-                        handlePreviewDelete(
-                          Number(module.__previewIndex),
-                          $event,
-                        )
-                      "
-                      @mousedown.stop
-                    >
-                      ×
-                    </button>
-                  </span>
-                  <i>⋮⋮</i>
-                </span>
                 <div
                   v-if="module.type === 'search'"
                   class="home-search"
@@ -1267,7 +1796,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
         </template>
 
         <template v-else-if="kind === 'profile'">
-          <div class="profile-page">
+          <div class="profile-page" :style="profilePageStyle">
             <template v-for="module in normalizedModules" :key="module.id">
               <div
                 v-if="isDropBefore(module.__previewIndex)"
@@ -1285,6 +1814,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   },
                 ]"
                 :data-module-index="interactive ? module.__previewIndex : null"
+                :data-module-selected="
+                  selectedModuleId === module.id ? 'true' : null
+                "
                 role="button"
                 :style="moduleOuterStyle(module)"
                 tabindex="0"
@@ -1293,70 +1825,35 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   handlePreviewMouseDown(Number(module.__previewIndex), $event)
                 "
               >
-                <span
-                  v-if="interactive && selectedModuleId === module.id"
-                  class="preview-selected-badge"
-                >
-                  {{ getModuleTitle(module) }}
-                  <span class="preview-selected-actions">
-                    <button
-                      type="button"
-                      title="上移"
-                      @click.stop="
-                        handlePreviewMove(
-                          Number(module.__previewIndex),
-                          'up',
-                          $event,
-                        )
-                      "
-                      @mousedown.stop
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      title="下移"
-                      @click.stop="
-                        handlePreviewMove(
-                          Number(module.__previewIndex),
-                          'down',
-                          $event,
-                        )
-                      "
-                      @mousedown.stop
-                    >
-                      ↓
-                    </button>
-                    <button
-                      class="danger"
-                      type="button"
-                      title="删除"
-                      @click.stop="
-                        handlePreviewDelete(
-                          Number(module.__previewIndex),
-                          $event,
-                        )
-                      "
-                      @mousedown.stop
-                    >
-                      ×
-                    </button>
-                  </span>
-                  <i>⋮⋮</i>
-                </span>
                 <div
                   v-if="module.type === 'userCard'"
                   class="profile-header-card"
                   :style="moduleBoxStyle(module)"
                 >
                   <span class="profile-avatar">M</span>
-                  <div>
-                    <strong>点击登录</strong>
-                    <small>登录后享受更多服务</small>
-                    <p v-if="module.props.show_mobile !== false">
-                      完善资料后可展示手机号和签名
+                  <div class="profile-header-card__main">
+                    <strong
+                      v-if="profileTextVisible(module, 'title')"
+                      :style="profileTextStyle(module, 'title')"
+                    >
+                      点击登录
+                    </strong>
+                    <small
+                      v-if="profileTextVisible(module, 'subtitle')"
+                      :style="profileTextStyle(module, 'subtitle')"
+                    >
+                      登录后享受更多服务
+                    </small>
+                    <p
+                      v-if="profileTextVisible(module, 'meta')"
+                      :style="profileTextStyle(module, 'meta')"
+                    >
+                      {{
+                        module.props.show_mobile !== false
+                          ? '完善资料后可展示手机号和签名'
+                          : '完善资料后可展示个性签名'
+                      }}
                     </p>
-                    <p v-else>完善资料后可展示个性签名</p>
                   </div>
                 </div>
 
@@ -1365,15 +1862,56 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   class="profile-wallet-card"
                   :style="moduleBoxStyle(module)"
                 >
-                  <small>{{ module.props.title || '我的余额' }}</small>
-                  <strong v-if="walletShowBalance(module)">¥0.00</strong>
-                  <strong v-else>积分 0</strong>
-                  <div>
-                    <span v-if="walletShowBalance(module)">余额明细</span>
-                    <span v-if="module.props.show_points !== false">
-                      积分记录
+                  <small
+                    v-if="profileTextVisible(module, 'title')"
+                    :style="profileTextStyle(module, 'title')"
+                  >
+                    {{ module.props.title || '我的余额' }}
+                  </small>
+                  <strong
+                    v-if="
+                      walletShowBalance(module) &&
+                      profileTextVisible(module, 'amount')
+                    "
+                    :style="profileTextStyle(module, 'amount')"
+                  >
+                    ¥0.00
+                  </strong>
+                  <p
+                    v-if="
+                      walletShowBalance(module) &&
+                      profileTextVisible(module, 'meta')
+                    "
+                    class="profile-wallet-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span>累计充值 ¥0.00</span>
+                    <i>•</i>
+                    <span>累计消费 ¥0.00</span>
+                  </p>
+                  <div
+                    v-if="walletActions(module).length > 0"
+                    class="profile-wallet-card__actions"
+                  >
+                    <span
+                      v-for="action in walletActions(module)"
+                      :key="action.key"
+                      :style="
+                        profileTextStyle(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                      "
+                    >
+                      {{
+                        profileTextVisible(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                          ? action.label
+                          : ''
+                      }}
                     </span>
-                    <span>去查看</span>
                   </div>
                 </div>
 
@@ -1383,24 +1921,46 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   :style="moduleBoxStyle(module)"
                 >
                   <div class="profile-section-head">
-                    <strong>{{ module.props.title || '我的订单' }}</strong>
-                    <span>查看全部</span>
+                    <strong
+                      v-if="profileTextVisible(module, 'title')"
+                      :style="profileTextStyle(module, 'title')"
+                    >
+                      {{ module.props.title || '我的订单' }}
+                    </strong>
+                    <span
+                      v-if="profileTextVisible(module, 'more')"
+                      class="profile-section-more"
+                      :style="profileTextStyle(module, 'more')"
+                    >
+                      查看全部<i></i>
+                    </span>
                   </div>
                   <div class="profile-grid">
                     <div
-                      v-for="(item, index) in moduleList(module).slice(0, 4)"
+                      v-for="(item, index) in moduleList(module)"
                       :key="index"
                     >
-                      <span>
-                        <IconifyIcon
-                          v-if="isIconifyName(getEntryIcon(item))"
-                          :icon="getEntryIcon(item)"
+                      <span
+                        class="profile-entry-icon profile-entry-icon--order"
+                        :class="profileIconClass(item)"
+                      >
+                        <img
+                          v-if="getImage(item)"
+                          :src="getImage(item)"
+                          alt=""
                         />
                         <template v-else>
-                          {{ item.icon || getLabel(item).slice(0, 1) }}
+                          <span :style="profileTextStyle(module, 'iconText')">
+                            {{ profileIconText(item) }}
+                          </span>
                         </template>
                       </span>
-                      <small>{{ getLabel(item) }}</small>
+                      <small
+                        v-if="profileTextVisible(module, 'itemLabel')"
+                        :style="profileTextStyle(module, 'itemLabel')"
+                      >
+                        {{ getLabel(item) }}
+                      </small>
                     </div>
                   </div>
                 </div>
@@ -1408,29 +1968,77 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                 <div
                   v-else-if="module.type === 'serviceMenu'"
                   class="profile-service-card"
-                  :style="moduleBoxStyle(module)"
+                  :style="serviceMenuBoxStyle(module)"
                 >
-                  <div v-if="module.props.title" class="profile-section-head">
-                    <strong>{{ module.props.title }}</strong>
-                    <span>全部</span>
+                  <div class="profile-section-head">
+                    <strong
+                      v-if="profileTextVisible(module, 'title')"
+                      :style="profileTextStyle(module, 'title')"
+                    >
+                      {{ module.props.title || '我的服务' }}
+                    </strong>
                   </div>
                   <div
-                    v-for="(item, index) in moduleList(module).slice(0, 5)"
-                    :key="index"
-                    class="profile-cell"
+                    v-if="module.props.display === 'grid'"
+                    class="profile-grid profile-grid--service"
                   >
-                    <span>
-                      <IconifyIcon
-                        v-if="isIconifyName(getEntryIcon(item))"
-                        :icon="getEntryIcon(item)"
-                      />
-                      <template v-else>
-                        {{ item.icon || getLabel(item).slice(0, 1) }}
-                      </template>
-                    </span>
-                    <strong>{{ getLabel(item) }}</strong>
-                    <em>›</em>
+                    <div
+                      v-for="(item, index) in moduleList(module)"
+                      :key="index"
+                    >
+                      <span
+                        class="profile-entry-icon profile-entry-icon--grid"
+                        :class="profileIconClass(item)"
+                      >
+                        <img
+                          v-if="getImage(item)"
+                          :src="getImage(item)"
+                          alt=""
+                        />
+                        <template v-else>
+                          <span :style="profileTextStyle(module, 'iconText')">
+                            {{ profileIconText(item) }}
+                          </span>
+                        </template>
+                      </span>
+                      <small
+                        v-if="profileTextVisible(module, 'itemLabel')"
+                        :style="profileTextStyle(module, 'itemLabel')"
+                      >
+                        {{ getLabel(item) }}
+                      </small>
+                    </div>
                   </div>
+                  <template v-else>
+                    <div
+                      v-for="(item, index) in moduleList(module)"
+                      :key="index"
+                      class="profile-cell"
+                    >
+                      <span
+                        class="profile-entry-icon profile-entry-icon--cell"
+                        :class="profileIconClass(item)"
+                      >
+                        <img
+                          v-if="getImage(item)"
+                          :src="getImage(item)"
+                          alt=""
+                        />
+                        <template v-else>
+                          <span :style="profileTextStyle(module, 'iconText')">
+                            {{ profileIconText(item) }}
+                          </span>
+                        </template>
+                      </span>
+                      <strong
+                        v-if="profileTextVisible(module, 'itemLabel')"
+                        :style="profileTextStyle(module, 'itemLabel')"
+                      >
+                        {{ getLabel(item) }}
+                      </strong>
+                      <em>›</em>
+                    </div>
+                  </template>
                 </div>
               </div>
             </template>
@@ -1482,7 +2090,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   @click.stop="
                     handlePreviewMove(Number(item.__previewIndex), 'up', $event)
                   "
-                  @mousedown.stop
+                  @mousedown.stop.prevent
                 >
                   ←
                 </button>
@@ -1496,7 +2104,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                       $event,
                     )
                   "
-                  @mousedown.stop
+                  @mousedown.stop.prevent
                 >
                   →
                 </button>
@@ -1507,13 +2115,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   @click.stop="
                     handlePreviewDelete(Number(item.__previewIndex), $event)
                   "
-                  @mousedown.stop
+                  @mousedown.stop.prevent
                 >
                   ×
                 </button>
               </span>
             </span>
-            <span class="tabbar-icon">
+            <span class="tabbar-icon" :class="tabbarIconClass(item)">
               <img
                 v-if="isImageLike(getTabbarIcon(item))"
                 :src="getTabbarIcon(item)"
@@ -1545,11 +2153,67 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
         <button>立即购买</button>
       </div>
     </div>
+
+    <div
+      v-if="selectedModuleForControls && selectedModuleControlReady"
+      class="preview-external-controls"
+      :style="selectedModuleControlStyle"
+      @click.stop
+      @mousedown.stop
+    >
+      <span class="preview-external-title">
+        {{ selectedModuleControlTitle }}
+      </span>
+      <span class="preview-external-actions">
+        <button
+          type="button"
+          title="上移"
+          @click.stop="
+            handlePreviewMove(selectedModuleControlIndex, 'up', $event)
+          "
+          @mousedown.stop.prevent
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          title="下移"
+          @click.stop="
+            handlePreviewMove(selectedModuleControlIndex, 'down', $event)
+          "
+          @mousedown.stop.prevent
+        >
+          ↓
+        </button>
+        <button
+          class="danger"
+          type="button"
+          title="删除"
+          @click.stop="handlePreviewDelete(selectedModuleControlIndex, $event)"
+          @mousedown.stop.prevent
+        >
+          ×
+        </button>
+        <button
+          class="drag"
+          type="button"
+          title="拖拽排序"
+          @mousedown.stop="
+            handlePreviewMouseDown(selectedModuleControlIndex, $event)
+          "
+        >
+          ⋮⋮
+        </button>
+      </span>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .client-phone-preview {
+  position: relative;
+  width: max-content;
+  margin: 0 auto;
   color: var(--mb-preview-text);
   user-select: none;
   -webkit-user-select: none;
@@ -1594,6 +2258,10 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   font-size: 12px;
   color: var(--mb-preview-text);
   background: var(--mb-preview-bg);
+}
+
+.client-phone-preview--profile .client-phone-preview__status {
+  display: none;
 }
 
 .client-phone-preview--compact .client-phone-preview__status {
@@ -1646,20 +2314,53 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   min-height: 0;
   overflow: auto;
   background: var(--mb-preview-bg-secondary);
+  scrollbar-width: none;
 }
 
-.home-page,
-.profile-page {
+.client-phone-preview__body::-webkit-scrollbar {
+  display: none;
+}
+
+.home-page {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 14px;
 }
 
-.client-phone-preview--compact .home-page,
-.client-phone-preview--compact .profile-page {
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+  padding: 0 14px 16px;
+  background: var(--mb-preview-bg-secondary);
+}
+
+.client-phone-preview--interactive .home-page {
+  padding-top: 46px;
+}
+
+.client-phone-preview--interactive .profile-page {
+  padding-top: 0;
+}
+
+.client-phone-preview--compact .home-page {
   gap: 10px;
   padding: 10px;
+}
+
+.client-phone-preview--compact .profile-page {
+  gap: 10px;
+  padding: 0 10px 12px;
+}
+
+.client-phone-preview--compact.client-phone-preview--interactive .home-page {
+  padding-top: 40px;
+}
+
+.client-phone-preview--compact.client-phone-preview--interactive .profile-page {
+  padding-top: 0;
 }
 
 .home-brand {
@@ -1715,6 +2416,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .preview-module--selected {
+  z-index: 20;
   outline: 2px solid var(--mb-preview-primary);
   outline-offset: 5px;
   border-radius: 12px;
@@ -1744,7 +2446,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .preview-selected-badge {
   position: absolute;
-  z-index: 5;
+  z-index: 30;
   top: -34px;
   left: -6px;
   display: inline-flex;
@@ -1766,6 +2468,41 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   left: 50%;
   white-space: nowrap;
   transform: translateX(-50%);
+}
+
+.preview-selected-title {
+  white-space: nowrap;
+}
+
+.preview-external-controls {
+  position: absolute;
+  z-index: 60;
+  right: 0;
+  left: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.preview-external-title {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  display: inline-flex;
+  align-items: center;
+  max-width: 96px;
+  padding: 7px 9px;
+  overflow: hidden;
+  color: #fff;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--mb-preview-primary);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 16%);
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .preview-selected-actions {
@@ -1798,9 +2535,46 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   background: #ff4d4f;
 }
 
-.preview-selected-badge i {
-  color: rgb(255 255 255 / 78%);
-  font-style: normal;
+.preview-selected-actions button.drag {
+  letter-spacing: -2px;
+}
+
+.preview-external-actions {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+.preview-external-actions button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: white;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mb-preview-primary);
+  box-shadow: 0 5px 14px rgb(13 80 213 / 22%);
+  place-items: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.preview-external-actions button:hover {
+  background: var(--mb-preview-primary-light);
+}
+
+.preview-external-actions button.danger {
+  background: #ff4d4f;
+}
+
+.preview-external-actions button.drag {
   letter-spacing: -2px;
 }
 
@@ -1998,27 +2772,31 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .home-nav__icon,
-.profile-grid span,
-.profile-cell > span {
+.profile-entry-icon {
   display: grid;
   width: 38px;
   height: 38px;
   margin: 0 auto 8px;
   place-items: center;
-  color: var(--mb-preview-primary);
+  color: var(--profile-icon-color, var(--mb-preview-primary));
   border-radius: 14px;
-  background: color-mix(in srgb, var(--mb-preview-primary) 10%, transparent);
+  background: var(
+    --profile-icon-bg,
+    color-mix(in srgb, var(--mb-preview-primary) 10%, transparent)
+  );
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .home-nav__icon svg,
-.profile-grid span svg,
-.profile-cell > span svg {
+.profile-entry-icon svg {
   width: 18px;
   height: 18px;
 }
 
-.home-nav__icon img {
+.home-nav__icon img,
+.profile-entry-icon img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -2026,7 +2804,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .client-phone-preview--compact .home-nav__icon,
-.client-phone-preview--compact .profile-grid span {
+.client-phone-preview--compact .profile-entry-icon {
   width: 30px;
   height: 30px;
   margin-bottom: 5px;
@@ -2119,8 +2897,14 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .profile-wallet-card {
   padding: 14px;
   border: 1px solid var(--mb-preview-divider);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--mb-preview-bg);
+}
+
+.profile-order-card,
+.profile-service-card,
+.profile-wallet-card {
+  margin: 0;
 }
 
 .client-phone-preview--compact .home-products,
@@ -2152,10 +2936,30 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   color: var(--mb-preview-text-title);
 }
 
+.profile-section-head strong {
+  flex: 1;
+  min-width: 0;
+}
+
 .home-section-head span,
 .profile-section-head span {
   font-size: 12px;
   color: var(--mb-preview-text-tertiary);
+}
+
+.profile-section-more {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.profile-section-more i {
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
 }
 
 .home-section-head small {
@@ -2628,17 +3432,18 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   display: flex;
   gap: 12px;
   align-items: center;
-  padding: 18px 14px;
-  border-radius: 0 0 18px 18px;
+  padding: 14px 14px 18px;
+  border: 0;
+  border-radius: 0;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--mb-preview-primary) 12%, transparent) 0%,
+    color-mix(in srgb, var(--mb-preview-primary) 10%, transparent) 0%,
     var(--mb-preview-bg-secondary) 100%
   );
 }
 
 .client-phone-preview--compact .profile-header-card {
-  padding: 14px 10px;
+  padding: 12px 10px 14px;
 }
 
 .profile-avatar {
@@ -2651,6 +3456,18 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   border-radius: 50%;
   background: var(--mb-preview-bg-surface);
   font-weight: 800;
+}
+
+.profile-header-card__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.profile-header-card strong {
+  display: block;
+  color: var(--mb-preview-text-title);
+  font-size: 15px;
+  line-height: 1.3;
 }
 
 .profile-header-card small,
@@ -2667,31 +3484,51 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .profile-wallet-card strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 5px;
   color: var(--mb-preview-text-title);
   font-size: 26px;
+  line-height: 1;
 }
 
 .profile-wallet-card small {
+  display: block;
   color: var(--mb-preview-text-secondary);
 }
 
-.profile-wallet-card > div {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 14px;
+.profile-wallet-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0 0;
+  color: var(--mb-preview-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-.profile-wallet-card > div span {
+.profile-wallet-card__meta i {
+  font-style: normal;
+}
+
+.profile-wallet-card__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-wallet-card__actions span {
   padding: 7px;
+  overflow: hidden;
   text-align: center;
   border-radius: 8px;
   background: var(--mb-preview-bg-surface);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.profile-wallet-card > div span:last-child {
+.profile-wallet-card__actions span:last-child {
   color: white;
   background: var(--mb-preview-primary);
 }
@@ -2699,20 +3536,28 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 8px 4px;
+}
+
+.profile-grid--service {
+  grid-template-columns: repeat(
+    var(--mb-profile-service-columns, 4),
+    minmax(0, 1fr)
+  );
+  padding-top: 2px;
 }
 
 .profile-service-card {
-  padding: 0;
+  padding: 14px;
   overflow: hidden;
 }
 
 .profile-cell {
   display: grid;
-  grid-template-columns: 32px 1fr auto;
+  grid-template-columns: 26px minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 14px 0;
   border-bottom: 1px solid var(--mb-preview-divider);
 }
 
@@ -2720,7 +3565,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   border-bottom: 0;
 }
 
-.profile-cell > span {
+.profile-entry-icon--cell {
   width: 26px;
   height: 26px;
   margin: 0;
@@ -2728,8 +3573,66 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   font-size: 11px;
 }
 
-.profile-cell strong {
+.profile-entry-icon--grid {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 6px;
+  border-radius: 10px;
   font-size: 13px;
+}
+
+.profile-entry-icon--pay {
+  --profile-icon-bg: rgb(13 80 213 / 10%);
+  --profile-icon-color: #0d50d5;
+}
+
+.profile-entry-icon--ship {
+  --profile-icon-bg: rgb(0 128 96 / 10%);
+  --profile-icon-color: #007a5a;
+}
+
+.profile-entry-icon--receive {
+  --profile-icon-bg: rgb(86 77 196 / 10%);
+  --profile-icon-color: #564dc4;
+}
+
+.profile-entry-icon--refund {
+  --profile-icon-bg: rgb(204 94 36 / 12%);
+  --profile-icon-color: #b8501d;
+}
+
+.profile-entry-icon--address {
+  --profile-icon-bg: rgb(0 118 196 / 10%);
+  --profile-icon-color: #006fb8;
+}
+
+.profile-entry-icon--favorite {
+  --profile-icon-bg: rgb(213 62 107 / 10%);
+  --profile-icon-color: #c42c62;
+}
+
+.profile-entry-icon--theme {
+  --profile-icon-bg: rgb(122 89 0 / 12%);
+  --profile-icon-color: #805d00;
+}
+
+.profile-entry-icon--service {
+  --profile-icon-bg: rgb(0 132 135 / 10%);
+  --profile-icon-color: #007f82;
+}
+
+.profile-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-cell__value {
+  color: var(--mb-preview-text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .profile-cell em {
@@ -2753,14 +3656,14 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 4px;
-  padding: 8px 10px 10px;
+  gap: 0;
+  padding: 8px 10px 7px;
   border-top: 1px solid var(--mb-preview-divider);
   background: var(--mb-preview-bg);
 }
 
 .client-phone-preview--compact .client-phone-preview__tabbar {
-  padding: 6px 7px 8px;
+  padding: 6px 7px 6px;
 }
 
 .client-phone-preview__tabbar-item {
@@ -2790,13 +3693,14 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .tabbar-icon {
-  display: grid;
-  width: 21px;
-  height: 21px;
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
   margin: 0 auto 3px;
-  border: 2px solid currentColor;
-  border-radius: 7px;
-  place-items: center;
+  color: currentColor;
+  border: 0;
+  border-radius: 0;
 }
 
 .tabbar-icon img {
@@ -2811,8 +3715,98 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .client-phone-preview--compact .tabbar-icon {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
+}
+
+.tabbar-icon:not(.tabbar-icon--custom)::before,
+.tabbar-icon:not(.tabbar-icon--custom)::after {
+  position: absolute;
+  display: block;
+  content: '';
+  box-sizing: border-box;
+}
+
+.tabbar-icon--home::before {
+  top: 8px;
+  left: 4px;
+  width: 14px;
+  height: 11px;
+  border: 1.8px solid currentColor;
+  border-top: 0;
+  border-radius: 2px 2px 3px 3px;
+}
+
+.tabbar-icon--home::after {
+  top: 3px;
+  left: 4px;
+  width: 14px;
+  height: 14px;
+  border-top: 1.8px solid currentColor;
+  border-left: 1.8px solid currentColor;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.tabbar-icon--category::before {
+  inset: 3px;
+  background: radial-gradient(circle, currentColor 2px, transparent 2.7px) 0 0 /
+    8px 8px;
+}
+
+.tabbar-icon--cart::before {
+  top: 7px;
+  left: 4px;
+  width: 14px;
+  height: 12px;
+  border: 1.8px solid currentColor;
+  border-radius: 4px 4px 5px 5px;
+}
+
+.tabbar-icon--cart::after {
+  top: 3px;
+  left: 8px;
+  width: 6px;
+  height: 7px;
+  border: 1.6px solid currentColor;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.tabbar-icon--order::before {
+  top: 3px;
+  left: 6px;
+  width: 11px;
+  height: 16px;
+  border: 1.7px solid currentColor;
+  border-radius: 2px;
+}
+
+.tabbar-icon--order::after {
+  top: 8px;
+  left: 9px;
+  width: 5px;
+  height: 7px;
+  border-top: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+}
+
+.tabbar-icon--profile::before {
+  top: 3px;
+  left: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tabbar-icon--profile::after {
+  top: 11px;
+  left: 5px;
+  width: 13px;
+  height: 8px;
+  border-radius: 8px 8px 4px 4px;
+  background: currentColor;
 }
 
 .goods-action-bar {

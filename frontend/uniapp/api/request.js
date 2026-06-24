@@ -14,12 +14,43 @@ function getClientType() {
   return 'uniapp'
 }
 
+function parseResponseBody(data) {
+  if (typeof data !== 'string') return data
+  try {
+    return JSON.parse(data)
+  } catch (_) {
+    return null
+  }
+}
+
+function isProtocolBody(body) {
+  return body && typeof body === 'object' && !Array.isArray(body) && 'code' in body
+}
+
+function summarizeResponseData(data) {
+  if (typeof data !== 'string') return data
+  return data.slice(0, 300)
+}
+
+function getResponseMessage(body, fallback) {
+  return body?.message || body?.msg || fallback
+}
+
+function rejectInvalidResponse(reject, context) {
+  console.error('[request:invalid-response]', context)
+  uni.showToast({ title: '接口响应异常', icon: 'none' })
+  reject(new Error('接口响应异常'))
+}
+
 function handleUnauthorized(message = '请重新登录') {
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync('mb_refresh_token')
   let loginUrl = '/pages-sub/user/login'
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
+  if (current?.route === 'pages-sub/user/login') {
+    return new Error(message)
+  }
   if (current && current.route.startsWith('pages-sub/')) {
     const query = Object.entries(current.options || {})
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
@@ -51,14 +82,25 @@ function request(options) {
         ...header
       },
       success(res) {
-        const body = res.data
+        const body = parseResponseBody(res.data)
+        if (!isProtocolBody(body)) {
+          rejectInvalidResponse(reject, {
+            url: requestUrl,
+            method,
+            statusCode: res.statusCode,
+            data: summarizeResponseData(res.data)
+          })
+          return
+        }
+
         if (body.code === 200) {
           resolve(body.data)
         } else if (body.code === 401) {
-          reject(handleUnauthorized(body.message || '请重新登录'))
+          reject(handleUnauthorized(getResponseMessage(body, '请重新登录')))
         } else {
-          uni.showToast({ title: body.message || '请求失败', icon: 'none' })
-          reject(new Error(body.message || '请求失败'))
+          const message = getResponseMessage(body, '请求失败')
+          uni.showToast({ title: message, icon: 'none' })
+          reject(new Error(message))
         }
       },
       fail(err) {
@@ -97,23 +139,25 @@ export function uploadFile(url, filePath, name = 'file', formData = {}) {
       formData,
       header,
       success(res) {
-        let body = res.data
-        if (typeof body === 'string') {
-          try {
-            body = JSON.parse(body)
-          } catch (e) {
-            reject(e)
-            return
-          }
+        const body = parseResponseBody(res.data)
+        if (!isProtocolBody(body)) {
+          rejectInvalidResponse(reject, {
+            url: requestUrl,
+            method: 'UPLOAD',
+            statusCode: res.statusCode,
+            data: summarizeResponseData(res.data)
+          })
+          return
         }
 
         if (body.code === 200) {
           resolve(body.data)
         } else if (body.code === 401) {
-          reject(handleUnauthorized(body.message || '请重新登录'))
+          reject(handleUnauthorized(getResponseMessage(body, '请重新登录')))
         } else {
-          uni.showToast({ title: body.message || '上传失败', icon: 'none' })
-          reject(new Error(body.message || '上传失败'))
+          const message = getResponseMessage(body, '上传失败')
+          uni.showToast({ title: message, icon: 'none' })
+          reject(new Error(message))
         }
       },
       fail(err) {

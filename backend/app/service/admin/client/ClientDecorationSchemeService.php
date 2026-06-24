@@ -371,7 +371,10 @@ class ClientDecorationSchemeService extends BaseService
     protected function blankSchema(string $type): array
     {
         return match ($type) {
-            ClientDecorationScheme::TYPE_PROFILE => ['modules' => []],
+            ClientDecorationScheme::TYPE_PROFILE => [
+                'modules' => [],
+                'pageStyle' => ['paddingTop' => 10, 'paddingX' => 28],
+            ],
             ClientDecorationScheme::TYPE_TABBAR => ['items' => []],
             default => ['components' => [], 'modules' => [], 'pageStyle' => ['paddingY' => 0, 'paddingX' => 28]],
         };
@@ -403,6 +406,12 @@ class ClientDecorationSchemeService extends BaseService
             if ($isList) {
                 $schema = ['modules' => $schema];
             }
+            $schema['pageStyle'] = array_merge(
+                ['paddingTop' => 10, 'paddingX' => 28],
+                isset($schema['pageStyle']) && is_array($schema['pageStyle'])
+                    ? $schema['pageStyle']
+                    : []
+            );
             if (!isset($schema['modules']) && isset($schema['components']) && is_array($schema['components'])) {
                 $schema['modules'] = $schema['components'];
             }

@@ -1,202 +1,699 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { getPayMethods } from '@/api/config'
-import { getWalletInfo } from '@/api/user/wallet'
-import { useDecorateStore } from '@/store/decorate'
-import { useUserStore } from '@/store/user'
+import { computed, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import { getPayMethods } from "@/api/config";
+import { getWalletInfo } from "@/api/user/wallet";
+import config from "@/config/index";
+import { useDecorateStore } from "@/store/decorate";
+import { useUserStore } from "@/store/user";
 
-const userStore = useUserStore()
-const decorateStore = useDecorateStore()
+const userStore = useUserStore();
+const decorateStore = useDecorateStore();
 
 const wallet = ref({
-  balance: '0.00',
-  total_recharge: '0.00',
-  total_consume: '0.00',
-})
-const balancePaymentEnabled = ref(false)
+  balance: "0.00",
+  total_recharge: "0.00",
+  total_consume: "0.00",
+});
+const balancePaymentEnabled = ref(false);
+const profileIconPresets = [
+  {
+    type: "pay",
+    text: "¥",
+    keywords: [
+      "pending_pay",
+      "pay",
+      "wallet",
+      "待付款",
+      "钱包",
+      "ant-design:wallet-outlined",
+    ],
+  },
+  {
+    type: "ship",
+    text: "发",
+    keywords: [
+      "pending_ship",
+      "ship",
+      "car",
+      "待发货",
+      "ant-design:car-outlined",
+    ],
+  },
+  {
+    type: "receive",
+    text: "收",
+    keywords: [
+      "pending_receive",
+      "receive",
+      "inbox",
+      "待收货",
+      "ant-design:inbox-outlined",
+    ],
+  },
+  {
+    type: "refund",
+    text: "退",
+    keywords: [
+      "refund",
+      "reload",
+      "退款",
+      "售后",
+      "ant-design:reload-outlined",
+    ],
+  },
+  {
+    type: "address",
+    text: "址",
+    keywords: [
+      "address",
+      "environment",
+      "地址",
+      "ant-design:environment-outlined",
+    ],
+  },
+  {
+    type: "favorite",
+    text: "藏",
+    keywords: ["favorite", "heart", "收藏", "ant-design:heart-outlined"],
+  },
+  {
+    type: "theme",
+    text: "题",
+    keywords: ["theme", "skin", "主题", "ant-design:skin-outlined"],
+  },
+  {
+    type: "service",
+    text: "客",
+    keywords: [
+      "service",
+      "customer",
+      "客服",
+      "ant-design:customer-service-outlined",
+    ],
+  },
+];
 
-const logged = computed(() => userStore.isLoggedIn)
-const nickname = computed(() => userStore.userInfo?.nickname || '')
-const avatar = computed(() => userStore.userInfo?.avatar_full_url || userStore.userInfo?.avatar || '')
-const bio = computed(() => userStore.userInfo?.bio || '还没有填写个性签名')
+const defaultProfileOrderImages = [
+  "static/demo/profile-order-pay.svg",
+  "static/demo/profile-order-ship.svg",
+  "static/demo/profile-order-receive.svg",
+  "static/demo/profile-order-refund.svg",
+];
+
+const defaultProfileServiceImages = [
+  "static/demo/profile-service-address.svg",
+  "static/demo/profile-service-favorite.svg",
+  "static/demo/profile-service-settings.svg",
+  "static/demo/profile-service-support.svg",
+];
+
+function defaultProfileEntryImage(type, index) {
+  if (type === "orderShortcut") {
+    return defaultProfileOrderImages[index % defaultProfileOrderImages.length];
+  }
+  if (type === "serviceMenu") {
+    return defaultProfileServiceImages[
+      index % defaultProfileServiceImages.length
+    ];
+  }
+  return "";
+}
+
+const logged = computed(() => userStore.isLoggedIn);
+const nickname = computed(() => userStore.userInfo?.nickname || "");
+const avatar = computed(
+  () => userStore.userInfo?.avatar_full_url || userStore.userInfo?.avatar || "",
+);
+const bio = computed(() => userStore.userInfo?.bio || "还没有填写个性签名");
 const mobile = computed(() => {
-  const raw = userStore.userInfo?.mobile || ''
-  if (!raw || raw.length < 7) return raw
-  return raw.slice(0, 3) + ' **** ' + raw.slice(-4)
-})
-const walletBalance = computed(() => formatAmount(wallet.value.balance))
-const walletRecharge = computed(() => formatAmount(wallet.value.total_recharge))
-const walletConsume = computed(() => formatAmount(wallet.value.total_consume))
-
-const profileModules = computed(() => decorateStore.profileModules)
-
+  const raw = userStore.userInfo?.mobile || "";
+  if (!raw || raw.length < 7) return raw;
+  return raw.slice(0, 3) + " **** " + raw.slice(-4);
+});
+const walletBalance = computed(() => formatAmount(wallet.value.balance));
+const walletRecharge = computed(() =>
+  formatAmount(wallet.value.total_recharge),
+);
+const walletConsume = computed(() => formatAmount(wallet.value.total_consume));
 const themeOptions = computed(() => {
   const list = [
-    { mode: 'system', label: '跟随系统' },
-    { mode: 'light', label: '浅色' },
-    { mode: 'dark', label: '深色' },
-  ]
+    { label: "跟随系统", mode: "system" },
+    { label: "浅色", mode: "light" },
+    { label: "深色", mode: "dark" },
+  ];
   if (decorateStore.themes?.custom) {
-    list.push({ mode: 'custom', label: '自定义' })
+    list.push({ label: "自定义", mode: "custom" });
   }
-  return list
-})
+  return list;
+});
+
+const profileModules = computed(() => {
+  const modules = Array.isArray(decorateStore.profileModules)
+    ? decorateStore.profileModules
+    : [];
+  return modules
+    .filter((module) => module && typeof module === "object")
+    .map((module, index) => ({
+      ...module,
+      id: module.id || module.key || `${module.type || "profile"}-${index}`,
+      props: getModuleProps(module),
+    }));
+});
+
+const profilePageStyle = computed(() => {
+  const pageStyle = decorateStore.profilePageStyle || {};
+  const paddingTop =
+    pageStyle.paddingTop ??
+    pageStyle.padding_top ??
+    pageStyle.paddingY ??
+    pageStyle.padding_y ??
+    10;
+  const paddingX = pageStyle.paddingX ?? pageStyle.padding_x ?? 28;
+
+  return {
+    paddingLeft: toRpx(paddingX, 28),
+    paddingRight: toRpx(paddingX, 28),
+    paddingTop: toRpx(paddingTop, 10),
+  };
+});
 
 onShow(() => {
-  userStore.restoreToken()
-  fetchPayMethodState()
+  userStore.restoreToken();
+  fetchPayMethodState();
   if (userStore.isLoggedIn) {
-    userStore.fetchUserInfo()
+    userStore.fetchUserInfo();
     if (balancePaymentEnabled.value) {
-      fetchWallet()
+      fetchWallet();
     }
   }
-})
+});
 
 async function fetchPayMethodState() {
   try {
-    const methods = await getPayMethods()
-    balancePaymentEnabled.value = Array.isArray(methods)
-      && methods.some((item) => Number(item?.code) === 3)
+    const methods = await getPayMethods();
+    balancePaymentEnabled.value =
+      Array.isArray(methods) &&
+      methods.some((item) => Number(item?.code) === 3);
     if (userStore.isLoggedIn && balancePaymentEnabled.value) {
-      fetchWallet()
+      fetchWallet();
     }
   } catch {
-    balancePaymentEnabled.value = false
+    balancePaymentEnabled.value = false;
   }
 }
 
 async function fetchWallet() {
   try {
-    const data = await getWalletInfo()
+    const data = await getWalletInfo();
     wallet.value = {
       ...wallet.value,
       ...(data || {}),
-    }
+    };
   } catch {
     wallet.value = {
-      balance: '0.00',
-      total_recharge: '0.00',
-      total_consume: '0.00',
-    }
+      balance: "0.00",
+      total_recharge: "0.00",
+      total_consume: "0.00",
+    };
   }
 }
 
 function formatAmount(value) {
-  return Number(value || 0).toFixed(2)
+  return Number(value || 0).toFixed(2);
+}
+
+function getModuleProps(module) {
+  const props = module?.props;
+  return props && typeof props === "object" && !Array.isArray(props)
+    ? props
+    : {};
 }
 
 function moduleList(module) {
-  const list = module.props.items || module.props.list || []
-  if (!Array.isArray(list)) return []
+  const props = getModuleProps(module);
+  const list = props.items || props.list || [];
+  if (!Array.isArray(list)) return [];
   return list
+    .filter((item) => item && typeof item === "object")
     .filter((item) => {
-      if (item.requireBalanceEnabled) return balancePaymentEnabled.value
-      if ((item.action === 'theme' || item.key === 'theme') && !decorateStore.allowUserThemeSelect) return false
-      return item.visible !== false && item.enabled !== false
+      if (item.requireBalanceEnabled) return balancePaymentEnabled.value;
+      if (isThemeEntry(item) && !decorateStore.allowUserThemeSelect) {
+        return false;
+      }
+      return item.visible !== false && item.enabled !== false;
     })
-    .map((item) => ({
-      ...item,
-      label: item.label || item.title || item.text || '',
-      path: item.path || item.url || item.link || '',
-    }))
+    .map((item, index) => {
+      const image =
+        item.image ||
+        item.image_url ||
+        item.imageUrl ||
+        item.icon_image ||
+        item.iconImage ||
+        defaultProfileEntryImage(module.type, index);
+      return {
+        ...item,
+        image,
+        label: item.label || item.title || item.text || "",
+        path: item.path || item.url || item.link || "",
+      };
+    });
+}
+
+function isThemeEntry(item) {
+  return item?.action === "theme" || item?.key === "theme";
+}
+
+function showWalletBalance(module) {
+  return module.props?.show_balance !== false;
+}
+
+function showUserMobile(module) {
+  return module.props?.show_mobile !== false && Boolean(mobile.value);
+}
+
+function walletActions(module) {
+  const props = module.props || {};
+  return [
+    showWalletBalance(module) && props.show_records !== false
+      ? { key: "records", label: "余额明细", primary: false }
+      : null,
+    props.show_view_button !== false
+      ? { key: "view", label: "去查看", primary: true }
+      : null,
+  ].filter(Boolean);
+}
+
+function tapWalletAction(action) {
+  if (action.key === "records") {
+    goWalletRecords();
+    return;
+  }
+  goWallet();
+}
+
+function serviceMenuIsGrid(module) {
+  return module.props?.display === "grid";
+}
+
+function serviceGridStyle(module) {
+  const columns = Math.max(3, Math.min(Number(module.props?.columns || 4), 5));
+  return {
+    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+  };
+}
+
+function toRpx(value, fallback = 0) {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return `${fallback}rpx`;
+  return `${Math.max(0, numberValue)}rpx`;
+}
+
+function styleColor(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function gradientDirection(value) {
+  const map = {
+    diagonalLeft: "135deg",
+    diagonalRight: "45deg",
+    horizontal: "90deg",
+    vertical: "180deg",
+  };
+  return map[String(value || "horizontal")] || map.horizontal;
+}
+
+function gradientBackground(startValue, endValue, directionValue, bottomValue) {
+  const start = styleColor(startValue);
+  const end = styleColor(endValue) || start;
+  const bottom = styleColor(bottomValue);
+  if (!start && !bottom) return "";
+  if (bottom && start) {
+    return `linear-gradient(180deg, ${start} 0%, ${end} 68%, ${bottom} 100%)`;
+  }
+  if (!start) return bottom;
+  if (!end || start.toLowerCase() === end.toLowerCase()) return start;
+  return `linear-gradient(${gradientDirection(directionValue)}, ${start}, ${end})`;
+}
+
+function styleBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") return ["1", "true"].includes(value);
+  return Boolean(value);
+}
+
+function normalizeFontWeight(value) {
+  const weight = String(value || "");
+  return ["400", "500", "600", "700", "800"].includes(weight) ? weight : "";
+}
+
+function normalizeTextAlign(value) {
+  const align = String(value || "");
+  return ["center", "left", "right"].includes(align) ? align : "";
+}
+
+function textVisible(module, role) {
+  if (module?.type === "serviceMenu") return true;
+  const props = getModuleProps(module);
+  const visibility = props.textVisibility || props.text_visibility || {};
+  if (!visibility || typeof visibility !== "object") return true;
+  const value = visibility[role];
+  if (typeof value === "string") {
+    return !["0", "false"].includes(value.toLowerCase());
+  }
+  return value !== false && value !== 0;
+}
+
+function textStyle(module, role) {
+  const props = getModuleProps(module);
+  const textStyles = props.textStyles || props.text_styles || {};
+  const styleConfig = textStyles && textStyles[role];
+  if (!styleConfig || typeof styleConfig !== "object") return {};
+  const style = {};
+  const color = styleColor(styleConfig.color);
+  if (color) style.color = color;
+  const fontSize = Number(styleConfig.fontSize ?? styleConfig.font_size);
+  if (Number.isFinite(fontSize) && fontSize > 0) {
+    style.fontSize = `${Math.max(16, Math.min(Math.round(fontSize), 80))}rpx`;
+  }
+  const fontWeight = normalizeFontWeight(
+    styleConfig.fontWeight ?? styleConfig.font_weight,
+  );
+  if (fontWeight) style.fontWeight = fontWeight;
+  const textAlign = normalizeTextAlign(
+    styleConfig.textAlign ?? styleConfig.text_align,
+  );
+  if (textAlign) style.textAlign = textAlign;
+  return style;
+}
+
+function moduleBackgroundImage(props) {
+  return normalizeProfileImageUrl(
+    props.background_image || props.backgroundImage || "",
+  );
+}
+
+function moduleOuterStyle(module) {
+  const props = getModuleProps(module);
+  const width = Math.max(50, Math.min(Number(props.widthPercent || 100), 100));
+  const marginLeft = props.marginLeft ?? props.margin_left;
+  const marginRight = props.marginRight ?? props.margin_right;
+  const marginLeftValue =
+    marginLeft === undefined ? 0 : Math.max(0, Number(marginLeft) || 0);
+  const marginRightValue =
+    marginRight === undefined ? 0 : Math.max(0, Number(marginRight) || 0);
+  const horizontalMargin = marginLeftValue + marginRightValue;
+  const style = {
+    marginBottom: toRpx(props.marginBottom),
+    marginTop: toRpx(props.marginTop),
+    width:
+      horizontalMargin > 0
+        ? `calc(${width}% - ${horizontalMargin}rpx)`
+        : `${width}%`,
+  };
+  if (width < 100) {
+    style.marginLeft = "auto";
+    style.marginRight = "auto";
+  }
+  if (marginLeft !== undefined) {
+    style.marginLeft = `${marginLeftValue}rpx`;
+  }
+  if (marginRight !== undefined) {
+    style.marginRight = `${marginRightValue}rpx`;
+  }
+  const componentBackground = gradientBackground(
+    props.componentBackgroundStart || props.component_background_start,
+    props.componentBackgroundEnd || props.component_background_end,
+    props.backgroundGradientDirection || props.background_gradient_direction,
+  );
+  if (componentBackground) style.background = componentBackground;
+  return style;
+}
+
+function moduleBoxStyle(module) {
+  const props = getModuleProps(module);
+  const style = {};
+  const backgroundMode =
+    props.backgroundMode || props.background_mode || "color";
+  const backgroundImage = moduleBackgroundImage(props);
+  if (backgroundMode === "image" && backgroundImage) {
+    style.backgroundImage = `url("${backgroundImage}")`;
+    style.backgroundSize = "cover";
+    style.backgroundPosition = "center";
+    const fallback =
+      styleColor(props.background) ||
+      styleColor(props.bottomBackground || props.bottom_background);
+    if (fallback) style.backgroundColor = fallback;
+  } else {
+    const background = gradientBackground(
+      props.backgroundColorStart ||
+        props.background_color_start ||
+        props.background,
+      props.backgroundColorEnd || props.background_color_end,
+      props.backgroundGradientDirection || props.background_gradient_direction,
+      props.bottomBackground || props.bottom_background,
+    );
+    if (background) style.background = background;
+  }
+  if (props.radius !== undefined) {
+    style.borderRadius = toRpx(props.radius);
+  }
+  const textColor = styleColor(props.textColor || props.text_color);
+  if (textColor) {
+    style.color = textColor;
+    style["--color-text"] = textColor;
+    style["--color-text-title"] = textColor;
+    style["--color-text-secondary"] = textColor;
+    style["--color-text-tertiary"] = textColor;
+  }
+  const borderEnabled = props.borderEnabled ?? props.border_enabled;
+  if (borderEnabled !== undefined) {
+    if (styleBoolean(borderEnabled, true)) {
+      const borderWidth = Number(props.borderWidth ?? props.border_width ?? 1);
+      const borderStyle = props.borderStyle || props.border_style || "solid";
+      const borderColor =
+        styleColor(props.borderColor || props.border_color) ||
+        "var(--color-divider, #f0f2f5)";
+      style.border = `${borderWidth}rpx ${borderStyle} ${borderColor}`;
+    } else {
+      style.border = "0";
+    }
+  }
+  const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
+  if (shadowEnabled !== undefined) {
+    style.boxShadow = styleBoolean(shadowEnabled)
+      ? "0 12rpx 30rpx rgba(15, 23, 42, 0.14)"
+      : "none";
+  }
+  const hasSidePadding =
+    props.paddingTop !== undefined ||
+    props.padding_top !== undefined ||
+    props.paddingRight !== undefined ||
+    props.padding_right !== undefined ||
+    props.paddingBottom !== undefined ||
+    props.padding_bottom !== undefined ||
+    props.paddingLeft !== undefined ||
+    props.padding_left !== undefined;
+  if (hasSidePadding) {
+    const padding = props.padding ?? 0;
+    const paddingY = props.paddingY ?? props.padding_y ?? padding;
+    const paddingX = props.paddingX ?? props.padding_x ?? padding;
+    const paddingTop = props.paddingTop ?? props.padding_top ?? paddingY;
+    const paddingRight = props.paddingRight ?? props.padding_right ?? paddingX;
+    const paddingBottom =
+      props.paddingBottom ?? props.padding_bottom ?? paddingY;
+    const paddingLeft = props.paddingLeft ?? props.padding_left ?? paddingX;
+    style.padding = `${toRpx(paddingTop)} ${toRpx(paddingRight)} ${toRpx(
+      paddingBottom,
+    )} ${toRpx(paddingLeft)}`;
+  } else if (props.paddingY !== undefined || props.paddingX !== undefined) {
+    const padding = props.padding ?? 0;
+    const paddingY = props.paddingY ?? props.padding_y ?? padding;
+    const paddingX = props.paddingX ?? props.padding_x ?? padding;
+    style.padding = `${toRpx(paddingY)} ${toRpx(paddingX)}`;
+  } else if (props.padding !== undefined) {
+    style.padding = toRpx(props.padding);
+  }
+  return style;
+}
+
+function profileModuleVisible(module) {
+  if (module.type === "wallet") return balancePaymentEnabled.value;
+  if (module.type === "logout") return logged.value;
+  return [
+    "divider",
+    "orderShortcut",
+    "richText",
+    "serviceMenu",
+    "spacing",
+    "title",
+    "userCard",
+  ].includes(module.type);
+}
+
+function getProfileIconPreset(item) {
+  const source = [
+    item?.key,
+    item?.icon,
+    item?.action,
+    item?.label,
+    item?.title,
+    item?.text,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return profileIconPresets.find((preset) =>
+    preset.keywords.some((keyword) => source.includes(keyword.toLowerCase())),
+  );
+}
+
+function profileIconType(item) {
+  return getProfileIconPreset(item)?.type || "default";
+}
+
+function profileIconText(item) {
+  const presetText = getProfileIconPreset(item)?.text;
+  if (presetText) return presetText;
+  const label = item?.label || item?.title || item?.text || "";
+  return label ? label.slice(0, 1) : "•";
+}
+
+function getProfileEntryImage(item) {
+  return normalizeProfileImageUrl(
+    item?.full_url ||
+      item?.fullUrl ||
+      item?.thumbUrl ||
+      item?.thumb_url ||
+      item?.response?.full_url ||
+      item?.response?.fullUrl ||
+      item?.response?.url ||
+      item?.image_full_url ||
+      item?.imageFullUrl ||
+      item?.image ||
+      item?.image_url ||
+      item?.imageUrl ||
+      "",
+  );
+}
+
+function looksLikeProfileImageUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  if (url.startsWith("/pages")) return false;
+  if (url.startsWith("/static") || url.startsWith("static/")) return true;
+  if (url.startsWith("/uploads") || url.startsWith("uploads/")) return true;
+  if (/^https?:\/\//.test(url)) return true;
+  if (/^(data:image|blob:)/.test(url)) return true;
+  return /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(url);
+}
+
+function normalizeProfileImageUrl(url) {
+  if (url && typeof url === "object") {
+    return getProfileEntryImage(url);
+  }
+  if (!looksLikeProfileImageUrl(url)) return "";
+  if (/^(https?:|data:image|blob:)/.test(url)) return url;
+
+  const normalizedPath = url.startsWith("/") ? url : `/${url}`;
+  return config.baseUrl ? `${config.baseUrl}${normalizedPath}` : normalizedPath;
 }
 
 function goLogin() {
-  uni.navigateTo({ url: '/pages-sub/user/login' })
+  uni.navigateTo({ url: "/pages-sub/user/login" });
 }
 
 function goEditProfile() {
   if (userStore.isLoggedIn) {
-    uni.navigateTo({ url: '/pages-sub/user/edit-profile' })
-    return
+    uni.navigateTo({ url: "/pages-sub/user/edit-profile" });
+    return;
   }
-  goLogin()
+  goLogin();
 }
 
 function goOrders(shortcut) {
   if (!userStore.isLoggedIn) {
-    goLogin()
-    return
+    goLogin();
+    return;
   }
   if (shortcut?.path) {
-    uni.navigateTo({ url: shortcut.path })
-    return
+    uni.navigateTo({ url: shortcut.path });
+    return;
   }
   if (shortcut?.key) {
-    uni.setStorageSync('order_initial_tab', shortcut.key)
+    uni.setStorageSync("order_initial_tab", shortcut.key);
   }
-  uni.switchTab({ url: '/pages/order/index' })
+  uni.switchTab({ url: "/pages/order/index" });
 }
 
 function goAllOrders() {
   if (!userStore.isLoggedIn) {
-    goLogin()
-    return
+    goLogin();
+    return;
   }
-  uni.switchTab({ url: '/pages/order/index' })
+  uni.switchTab({ url: "/pages/order/index" });
 }
 
 function goWallet() {
   if (!userStore.isLoggedIn) {
-    goLogin()
-    return
+    goLogin();
+    return;
   }
-  uni.navigateTo({ url: '/pages-sub/wallet/index' })
+  uni.navigateTo({ url: "/pages-sub/wallet/index" });
 }
 
 function goWalletRecords() {
   if (!userStore.isLoggedIn) {
-    goLogin()
-    return
+    goLogin();
+    return;
   }
-  uni.navigateTo({ url: '/pages-sub/wallet/records' })
+  uni.navigateTo({ url: "/pages-sub/wallet/records" });
 }
 
 function goCell(cell) {
-  if (cell.action === 'theme' || cell.key === 'theme') {
-    showThemeSelector()
-    return
+  if (isThemeEntry(cell) && !cell.path && !cell.url) {
+    showThemeSelector();
+    return;
   }
   if (!cell.path && !cell.url) {
-    uni.showToast({ title: '即将开放', icon: 'none' })
-    return
+    uni.showToast({ title: "即将开放", icon: "none" });
+    return;
   }
   if (cell.auth !== false && !userStore.isLoggedIn) {
-    goLogin()
-    return
+    goLogin();
+    return;
   }
-  uni.navigateTo({ url: cell.path || cell.url })
+  uni.navigateTo({ url: cell.path || cell.url });
 }
 
 function showThemeSelector() {
   if (!decorateStore.allowUserThemeSelect) {
-    uni.showToast({ title: '当前不允许切换主题', icon: 'none' })
-    return
+    uni.showToast({ title: "当前不允许切换主题", icon: "none" });
+    return;
   }
   uni.showActionSheet({
     itemList: themeOptions.value.map((item) => item.label),
     success(res) {
-      const selected = themeOptions.value[res.tapIndex]
-      if (!selected) return
-      decorateStore.setThemeMode(selected.mode)
-      uni.showToast({ title: `已切换为${selected.label}`, icon: 'none' })
+      const selected = themeOptions.value[res.tapIndex];
+      if (!selected) return;
+      decorateStore.setThemeMode(selected.mode);
+      uni.showToast({ title: `已切换为${selected.label}`, icon: "none" });
     },
-  })
+  });
 }
 
 function handleLogout() {
   uni.showModal({
-    title: '提示',
-    content: '确定退出登录吗？',
+    title: "提示",
+    content: "确定退出登录吗？",
     success: (res) => {
       if (res.confirm) {
-        userStore.logout()
-        uni.showToast({ title: '已退出登录', icon: 'none' })
+        userStore.logout();
+        uni.showToast({ title: "已退出登录", icon: "none" });
       }
     },
-  })
+  });
 }
 </script>
 
@@ -209,121 +706,371 @@ function handleLogout() {
     ]"
     :style="decorateStore.themeStyle"
   >
-    <mb-navbar title="MallBase" :back="false" bg-color="var(--color-bg, #ffffff)" />
+    <mb-navbar
+      title="MallBase"
+      :back="false"
+      bg-color="var(--color-bg, #ffffff)"
+    />
 
-    <view class="profile-modules">
+    <view class="profile-modules" :style="profilePageStyle">
       <template v-for="module in profileModules" :key="module.id">
-        <view v-if="module.type === 'userCard'" class="profile-header">
-          <view v-if="logged" class="profile-header__body" @tap="goEditProfile">
-            <image v-if="avatar" class="profile-header__avatar" :src="avatar" mode="aspectFill" />
-            <view v-else class="profile-header__avatar profile-header__avatar--placeholder">
-              <text class="profile-header__avatar-text">{{ (nickname || 'M').slice(0, 1) }}</text>
-            </view>
-            <view class="profile-header__main">
-              <text class="profile-header__nickname">{{ nickname || 'MallBase 用户' }}</text>
-              <text v-if="mobile" class="profile-header__mobile">{{ mobile }}</text>
-              <text class="profile-header__bio">{{ bio }}</text>
-              <view class="profile-header__edit-btn" @tap.stop="goEditProfile">
-                <text class="profile-header__edit-text">资料编辑</text>
-              </view>
-            </view>
-          </view>
-          <view v-else class="profile-header__body" @tap="goLogin">
-            <view class="profile-header__avatar profile-header__avatar--placeholder">
-              <text class="profile-header__avatar-text">M</text>
-            </view>
-            <view class="profile-header__main">
-              <text class="profile-header__nickname">点击登录</text>
-              <text class="profile-header__mobile">登录后享受更多服务</text>
-              <text class="profile-header__bio">完善资料后可展示个性签名</text>
-            </view>
-          </view>
-        </view>
-
-        <view v-else-if="module.type === 'wallet' && balancePaymentEnabled" class="wallet-card" @tap="goWallet">
-          <view class="wallet-card__main">
-            <text class="wallet-card__label">{{ module.props.title || '我的余额' }}</text>
-            <view class="wallet-card__amount">
-              <text class="wallet-card__symbol">¥</text>
-              <text class="wallet-card__value">{{ logged ? walletBalance : '0.00' }}</text>
-            </view>
-            <view class="wallet-card__meta">
-              <text class="wallet-card__meta-text">累计充值 ¥{{ logged ? walletRecharge : '0.00' }}</text>
-              <text class="wallet-card__dot">•</text>
-              <text class="wallet-card__meta-text">累计消费 ¥{{ logged ? walletConsume : '0.00' }}</text>
-            </view>
-          </view>
-          <view class="wallet-card__actions">
-            <view class="wallet-card__action" @tap.stop="goWalletRecords">
-              <text class="wallet-card__action-text">余额明细</text>
-            </view>
-            <view class="wallet-card__action wallet-card__action--primary" @tap.stop="goWallet">
-              <text class="wallet-card__action-text wallet-card__action-text--primary">去查看</text>
-            </view>
-          </view>
-        </view>
-
-        <view v-else-if="module.type === 'orderShortcut'" class="order-card">
-          <view class="order-card__title-row">
-            <text class="order-card__title">{{ module.props.title || '我的订单' }}</text>
-            <view class="order-card__all" @tap="goAllOrders">
-              <text class="order-card__all-text">查看全部</text>
-              <view class="arrow-icon arrow-icon--sm" />
-            </view>
-          </view>
-          <view class="order-card__grid">
-            <view
-              v-for="item in moduleList(module)"
-              :key="item.key || item.label"
-              class="order-card__item"
-              @tap="goOrders(item)"
-            >
-              <view class="order-dot">
-                <text class="order-dot__icon">{{ item.icon || item.label.slice(0, 1) }}</text>
-              </view>
-              <text class="order-card__label">{{ item.label }}</text>
-            </view>
-          </view>
-        </view>
-
-        <view v-else-if="module.type === 'serviceMenu'" class="cell-group">
-          <view
-            v-for="(cell, ci) in moduleList(module)"
-            :key="cell.key || cell.label"
-            class="cell"
-            :class="{ 'cell--last': ci === moduleList(module).length - 1 }"
-            @tap="goCell(cell)"
-          >
-            <view class="cell__icon-wrap">
-              <text class="cell__icon">{{ cell.icon || cell.label.slice(0, 1) }}</text>
-            </view>
-            <text class="cell__label">{{ cell.label }}</text>
-            <view class="cell__spacer" />
-            <text v-if="cell.key === 'theme'" class="cell__value">
-              {{ themeOptions.find((item) => item.mode === decorateStore.themeMode)?.label || '跟随系统' }}
-            </text>
-            <view class="arrow-icon" />
-          </view>
-        </view>
-
-        <view v-else-if="module.type === 'title'" class="plain-title">
-          <text class="plain-title__text">{{ module.props.text || module.props.title }}</text>
-        </view>
-
-        <view v-else-if="module.type === 'richText'" class="plain-rich">
-          <rich-text :nodes="module.props.content || module.props.html || ''" />
-        </view>
-
         <view
-          v-else-if="module.type === 'spacing'"
-          :style="{ height: `${Number(module.props.height || 24)}rpx` }"
-        />
+          v-if="profileModuleVisible(module)"
+          class="profile-module-shell"
+          :style="moduleOuterStyle(module)"
+        >
+          <view
+            v-if="module.type === 'userCard'"
+            class="profile-header"
+            :style="moduleBoxStyle(module)"
+          >
+            <view
+              v-if="logged"
+              class="profile-header__body"
+              @tap="goEditProfile"
+            >
+              <image
+                v-if="avatar"
+                class="profile-header__avatar"
+                :src="avatar"
+                mode="aspectFill"
+              />
+              <view
+                v-else
+                class="profile-header__avatar profile-header__avatar--placeholder"
+              >
+                <text class="profile-header__avatar-text">{{
+                  (nickname || "M").slice(0, 1)
+                }}</text>
+              </view>
+              <view class="profile-header__main">
+                <text
+                  v-if="textVisible(module, 'title')"
+                  class="profile-header__nickname"
+                  :style="textStyle(module, 'title')"
+                  >{{ nickname || "MallBase 用户" }}</text
+                >
+                <text
+                  v-if="
+                    showUserMobile(module) && textVisible(module, 'subtitle')
+                  "
+                  class="profile-header__mobile"
+                  :style="textStyle(module, 'subtitle')"
+                  >{{ mobile }}</text
+                >
+                <text
+                  v-if="textVisible(module, 'meta')"
+                  class="profile-header__bio"
+                  :style="textStyle(module, 'meta')"
+                  >{{ bio }}</text
+                >
+                <view
+                  class="profile-header__edit-btn"
+                  @tap.stop="goEditProfile"
+                >
+                  <text class="profile-header__edit-text">资料编辑</text>
+                </view>
+              </view>
+            </view>
+            <view v-else class="profile-header__body" @tap="goLogin">
+              <view
+                class="profile-header__avatar profile-header__avatar--placeholder"
+              >
+                <text class="profile-header__avatar-text">M</text>
+              </view>
+              <view class="profile-header__main">
+                <text
+                  v-if="textVisible(module, 'title')"
+                  class="profile-header__nickname"
+                  :style="textStyle(module, 'title')"
+                  >点击登录</text
+                >
+                <text
+                  v-if="textVisible(module, 'subtitle')"
+                  class="profile-header__mobile"
+                  :style="textStyle(module, 'subtitle')"
+                  >登录后享受更多服务</text
+                >
+                <text
+                  v-if="textVisible(module, 'meta')"
+                  class="profile-header__bio"
+                  :style="textStyle(module, 'meta')"
+                  >完善资料后可展示个性签名</text
+                >
+              </view>
+            </view>
+          </view>
 
-        <view v-else-if="module.type === 'divider'" class="plain-divider" />
+          <view
+            v-else-if="module.type === 'wallet' && balancePaymentEnabled"
+            class="wallet-card"
+            :style="moduleBoxStyle(module)"
+            @tap="goWallet"
+          >
+            <view class="wallet-card__main">
+              <text
+                v-if="textVisible(module, 'title')"
+                class="wallet-card__label"
+                :style="textStyle(module, 'title')"
+                >{{ module.props.title || "我的余额" }}</text
+              >
+              <view
+                v-if="
+                  showWalletBalance(module) && textVisible(module, 'amount')
+                "
+                class="wallet-card__amount"
+              >
+                <text
+                  class="wallet-card__symbol"
+                  :style="textStyle(module, 'amount')"
+                  >¥</text
+                >
+                <text
+                  class="wallet-card__value"
+                  :style="textStyle(module, 'amount')"
+                  >{{ logged ? walletBalance : "0.00" }}</text
+                >
+              </view>
+              <view
+                v-if="showWalletBalance(module) && textVisible(module, 'meta')"
+                class="wallet-card__meta"
+              >
+                <text
+                  class="wallet-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >累计充值 ¥{{ logged ? walletRecharge : "0.00" }}</text
+                >
+                <text
+                  class="wallet-card__dot"
+                  :style="textStyle(module, 'meta')"
+                  >•</text
+                >
+                <text
+                  class="wallet-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >累计消费 ¥{{ logged ? walletConsume : "0.00" }}</text
+                >
+              </view>
+            </view>
+            <view
+              v-if="walletActions(module).length > 0"
+              class="wallet-card__actions"
+            >
+              <view
+                v-for="action in walletActions(module)"
+                :key="action.key"
+                class="wallet-card__action"
+                :class="{ 'wallet-card__action--primary': action.primary }"
+                @tap.stop="tapWalletAction(action)"
+              >
+                <text
+                  class="wallet-card__action-text"
+                  :class="{
+                    'wallet-card__action-text--primary': action.primary,
+                  }"
+                  :style="
+                    textStyle(
+                      module,
+                      action.primary ? 'primaryAction' : 'action',
+                    )
+                  "
+                >
+                  {{
+                    textVisible(
+                      module,
+                      action.primary ? "primaryAction" : "action",
+                    )
+                      ? action.label
+                      : ""
+                  }}
+                </text>
+              </view>
+            </view>
+          </view>
 
-        <view v-else-if="module.type === 'logout' && logged" class="logout-wrap">
-          <view class="logout-btn" @tap="handleLogout">
-            <text class="logout-btn__text">{{ module.props.text || '退出登录' }}</text>
+          <view
+            v-else-if="module.type === 'orderShortcut'"
+            class="order-card"
+            :style="moduleBoxStyle(module)"
+          >
+            <view class="order-card__title-row">
+              <text
+                v-if="textVisible(module, 'title')"
+                class="order-card__title"
+                :style="textStyle(module, 'title')"
+                >{{ module.props.title || "我的订单" }}</text
+              >
+              <view
+                v-if="textVisible(module, 'more')"
+                class="order-card__all"
+                @tap="goAllOrders"
+              >
+                <text
+                  class="order-card__all-text"
+                  :style="textStyle(module, 'more')"
+                  >查看全部</text
+                >
+                <view class="arrow-icon arrow-icon--sm" />
+              </view>
+            </view>
+            <view class="order-card__grid">
+              <view
+                v-for="item in moduleList(module)"
+                :key="item.key || item.label"
+                class="order-card__item"
+                @tap="goOrders(item)"
+              >
+                <view
+                  class="order-dot"
+                  :class="`profile-icon--${profileIconType(item)}`"
+                >
+                  <image
+                    v-if="getProfileEntryImage(item)"
+                    class="order-dot__image"
+                    :src="getProfileEntryImage(item)"
+                    mode="aspectFill"
+                  />
+                  <text
+                    v-else
+                    class="order-dot__icon"
+                    :style="textStyle(module, 'iconText')"
+                    >{{ profileIconText(item) }}</text
+                  >
+                </view>
+                <text
+                  v-if="textVisible(module, 'itemLabel')"
+                  class="order-card__label"
+                  :style="textStyle(module, 'itemLabel')"
+                  >{{ item.label }}</text
+                >
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-else-if="module.type === 'serviceMenu'"
+            class="cell-group"
+            :style="moduleBoxStyle(module)"
+          >
+            <view
+              v-if="module.props.title && textVisible(module, 'title')"
+              class="cell-group__head"
+            >
+              <text
+                class="cell-group__title"
+                :style="textStyle(module, 'title')"
+                >{{ module.props.title }}</text
+              >
+            </view>
+            <view
+              v-if="serviceMenuIsGrid(module)"
+              class="service-grid"
+              :style="serviceGridStyle(module)"
+            >
+              <view
+                v-for="cell in moduleList(module)"
+                :key="cell.key || cell.label"
+                class="service-grid__item"
+                @tap="goCell(cell)"
+              >
+                <view
+                  class="cell__icon-wrap cell__icon-wrap--grid"
+                  :class="`profile-icon--${profileIconType(cell)}`"
+                >
+                  <image
+                    v-if="getProfileEntryImage(cell)"
+                    class="cell__icon-image"
+                    :src="getProfileEntryImage(cell)"
+                    mode="aspectFill"
+                  />
+                  <text
+                    v-else
+                    class="cell__icon"
+                    :style="textStyle(module, 'iconText')"
+                    >{{ profileIconText(cell) }}</text
+                  >
+                </view>
+                <text
+                  v-if="textVisible(module, 'itemLabel')"
+                  class="service-grid__label"
+                  :style="textStyle(module, 'itemLabel')"
+                  >{{ cell.label }}</text
+                >
+              </view>
+            </view>
+            <template v-else>
+              <view
+                v-for="(cell, ci) in moduleList(module)"
+                :key="cell.key || cell.label"
+                class="cell"
+                :class="{ 'cell--last': ci === moduleList(module).length - 1 }"
+                @tap="goCell(cell)"
+              >
+                <view
+                  class="cell__icon-wrap"
+                  :class="`profile-icon--${profileIconType(cell)}`"
+                >
+                  <image
+                    v-if="getProfileEntryImage(cell)"
+                    class="cell__icon-image"
+                    :src="getProfileEntryImage(cell)"
+                    mode="aspectFill"
+                  />
+                  <text
+                    v-else
+                    class="cell__icon"
+                    :style="textStyle(module, 'iconText')"
+                    >{{ profileIconText(cell) }}</text
+                  >
+                </view>
+                <text
+                  v-if="textVisible(module, 'itemLabel')"
+                  class="cell__label"
+                  :style="textStyle(module, 'itemLabel')"
+                  >{{ cell.label }}</text
+                >
+                <view class="cell__spacer" />
+                <view class="arrow-icon" />
+              </view>
+            </template>
+          </view>
+
+          <view
+            v-else-if="module.type === 'title'"
+            class="plain-title"
+            :style="moduleBoxStyle(module)"
+          >
+            <text class="plain-title__text">{{
+              module.props.text || module.props.title
+            }}</text>
+          </view>
+
+          <view
+            v-else-if="module.type === 'richText'"
+            class="plain-rich"
+            :style="moduleBoxStyle(module)"
+          >
+            <rich-text
+              :nodes="module.props.content || module.props.html || ''"
+            />
+          </view>
+
+          <view
+            v-else-if="module.type === 'spacing'"
+            :style="{ height: `${Number(module.props.height || 24)}rpx` }"
+          />
+
+          <view v-else-if="module.type === 'divider'" class="plain-divider" />
+
+          <view
+            v-else-if="module.type === 'logout' && logged"
+            class="logout-wrap"
+          >
+            <view class="logout-btn" @tap="handleLogout">
+              <text class="logout-btn__text">{{
+                module.props.text || "退出登录"
+              }}</text>
+            </view>
           </view>
         </view>
       </template>
@@ -347,11 +1094,21 @@ function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 24rpx;
+  box-sizing: border-box;
+  padding: 0 28rpx 24rpx;
+}
+
+.profile-module-shell {
+  box-sizing: border-box;
 }
 
 .profile-header {
   padding: 28rpx 28rpx 36rpx;
-  background: linear-gradient(180deg, rgba(13, 80, 213, 0.1) 0%, var(--color-bg-secondary, #faf8ff) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(13, 80, 213, 0.1) 0%,
+    var(--color-bg-secondary, #faf8ff) 100%
+  );
 }
 
 .profile-header__body {
@@ -388,6 +1145,8 @@ function handleLogout() {
 }
 
 .profile-header__nickname {
+  display: block;
+  width: 100%;
   font-size: 30rpx;
   font-weight: 700;
   color: var(--color-text-title, #191b23);
@@ -395,12 +1154,16 @@ function handleLogout() {
 }
 
 .profile-header__mobile {
+  display: block;
+  width: 100%;
   margin-top: 6rpx;
   font-size: 24rpx;
   color: var(--color-text-tertiary, #737686);
 }
 
 .profile-header__bio {
+  display: block;
+  width: 100%;
   margin-top: 8rpx;
   font-size: 22rpx;
   color: var(--color-text-secondary, #434654);
@@ -432,7 +1195,6 @@ function handleLogout() {
 .order-card,
 .cell-group,
 .plain-rich {
-  margin: 0 28rpx;
   background: var(--color-bg, #ffffff);
   border-radius: 20rpx;
   border: 1rpx solid var(--color-divider, #f0f2f5);
@@ -443,6 +1205,8 @@ function handleLogout() {
 }
 
 .wallet-card__label {
+  display: block;
+  width: 100%;
   font-size: 24rpx;
   color: var(--color-text-secondary, #434654);
 }
@@ -525,6 +1289,8 @@ function handleLogout() {
 }
 
 .order-card__title {
+  flex: 1;
+  min-width: 0;
   font-size: 30rpx;
   font-weight: 700;
   color: var(--color-text-title, #191b23);
@@ -532,6 +1298,7 @@ function handleLogout() {
 
 .order-card__all {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6rpx;
 }
@@ -558,7 +1325,7 @@ function handleLogout() {
   width: 80rpx;
   height: 80rpx;
   border-radius: 18rpx;
-  background: rgba(13, 80, 213, 0.08);
+  background: var(--profile-icon-bg, rgba(13, 80, 213, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -566,17 +1333,64 @@ function handleLogout() {
 
 .order-dot__icon {
   font-size: 32rpx;
-  color: var(--color-primary, #0d50d5);
+  line-height: 1;
+  color: var(--profile-icon-color, var(--color-primary, #0d50d5));
   font-weight: 700;
 }
 
+.order-dot__image,
+.cell__icon-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
 .order-card__label {
+  display: block;
+  width: 100%;
   font-size: 24rpx;
   color: var(--color-text-secondary, #434654);
 }
 
 .cell-group {
   overflow: hidden;
+}
+
+.cell-group__head {
+  padding: 28rpx 28rpx 8rpx;
+}
+
+.cell-group__title {
+  display: block;
+  width: 100%;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--color-text-title, #191b23);
+}
+
+.service-grid {
+  display: grid;
+  gap: 20rpx 8rpx;
+  padding: 24rpx 24rpx 28rpx;
+}
+
+.service-grid__item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.service-grid__label {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-size: 24rpx;
+  color: var(--color-text-secondary, #434654);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cell {
@@ -586,7 +1400,7 @@ function handleLogout() {
   position: relative;
 
   &:not(.cell--last)::after {
-    content: '';
+    content: "";
     position: absolute;
     left: 96rpx;
     right: 28rpx;
@@ -600,20 +1414,68 @@ function handleLogout() {
   width: 52rpx;
   height: 52rpx;
   border-radius: 12rpx;
-  background: rgba(13, 80, 213, 0.08);
+  background: var(--profile-icon-bg, rgba(13, 80, 213, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 24rpx;
 }
 
+.cell__icon-wrap--grid {
+  width: 64rpx;
+  height: 64rpx;
+  margin-right: 0;
+}
+
 .cell__icon {
   font-size: 22rpx;
-  color: var(--color-primary, #0d50d5);
+  line-height: 1;
+  color: var(--profile-icon-color, var(--color-primary, #0d50d5));
   font-weight: 700;
 }
 
+.profile-icon--pay {
+  --profile-icon-bg: rgba(13, 80, 213, 0.1);
+  --profile-icon-color: #0d50d5;
+}
+
+.profile-icon--ship {
+  --profile-icon-bg: rgba(0, 128, 96, 0.1);
+  --profile-icon-color: #007a5a;
+}
+
+.profile-icon--receive {
+  --profile-icon-bg: rgba(86, 77, 196, 0.1);
+  --profile-icon-color: #564dc4;
+}
+
+.profile-icon--refund {
+  --profile-icon-bg: rgba(204, 94, 36, 0.12);
+  --profile-icon-color: #b8501d;
+}
+
+.profile-icon--address {
+  --profile-icon-bg: rgba(0, 118, 196, 0.1);
+  --profile-icon-color: #006fb8;
+}
+
+.profile-icon--favorite {
+  --profile-icon-bg: rgba(213, 62, 107, 0.1);
+  --profile-icon-color: #c42c62;
+}
+
+.profile-icon--theme {
+  --profile-icon-bg: rgba(122, 89, 0, 0.12);
+  --profile-icon-color: #805d00;
+}
+
+.profile-icon--service {
+  --profile-icon-bg: rgba(0, 132, 135, 0.1);
+  --profile-icon-color: #007f82;
+}
+
 .cell__label {
+  min-width: 0;
   font-size: 28rpx;
   color: var(--color-text, #191b23);
   font-weight: 500;
