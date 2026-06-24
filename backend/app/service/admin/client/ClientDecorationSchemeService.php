@@ -373,7 +373,7 @@ class ClientDecorationSchemeService extends BaseService
         return match ($type) {
             ClientDecorationScheme::TYPE_PROFILE => [
                 'modules' => [],
-                'pageStyle' => ['paddingTop' => 10, 'paddingX' => 28],
+                'pageStyle' => $this->defaultProfilePageStyle(),
             ],
             ClientDecorationScheme::TYPE_TABBAR => ['items' => []],
             default => ['components' => [], 'modules' => [], 'pageStyle' => ['paddingY' => 0, 'paddingX' => 28]],
@@ -406,12 +406,7 @@ class ClientDecorationSchemeService extends BaseService
             if ($isList) {
                 $schema = ['modules' => $schema];
             }
-            $schema['pageStyle'] = array_merge(
-                ['paddingTop' => 10, 'paddingX' => 28],
-                isset($schema['pageStyle']) && is_array($schema['pageStyle'])
-                    ? $schema['pageStyle']
-                    : []
-            );
+            $schema['pageStyle'] = $this->normalizeProfilePageStyle($schema['pageStyle'] ?? []);
             if (!isset($schema['modules']) && isset($schema['components']) && is_array($schema['components'])) {
                 $schema['modules'] = $schema['components'];
             }
@@ -468,6 +463,59 @@ class ClientDecorationSchemeService extends BaseService
         }
 
         return array_values(array_filter($list, fn (array $item): bool => $item['type'] !== ''));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultProfilePageStyle(): array
+    {
+        return [
+            'backgroundColorEnd' => '',
+            'backgroundColorStart' => '',
+            'backgroundGradientDirection' => 'horizontal',
+            'backgroundMode' => 'color',
+            'background_image' => '',
+            'padding' => 23,
+            'paddingBottom' => 24,
+            'paddingLeft' => 28,
+            'paddingRight' => 28,
+            'paddingTop' => 10,
+            'paddingX' => 28,
+            'paddingY' => 17,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function normalizeProfilePageStyle(mixed $pageStyle): array
+    {
+        $style = is_array($pageStyle) ? $pageStyle : [];
+        $defaults = $this->defaultProfilePageStyle();
+        $paddingX = (int) ($style['paddingX'] ?? $style['padding_x'] ?? $defaults['paddingX']);
+        $paddingY = (int) ($style['paddingY'] ?? $style['padding_y'] ?? $defaults['paddingY']);
+        $paddingTop = (int) ($style['paddingTop'] ?? $style['padding_top'] ?? $style['paddingY'] ?? $style['padding_y'] ?? $defaults['paddingTop']);
+        $paddingRight = (int) ($style['paddingRight'] ?? $style['padding_right'] ?? $style['paddingX'] ?? $style['padding_x'] ?? $defaults['paddingRight']);
+        $paddingBottom = (int) ($style['paddingBottom'] ?? $style['padding_bottom'] ?? $style['paddingY'] ?? $style['padding_y'] ?? $defaults['paddingBottom']);
+        $paddingLeft = (int) ($style['paddingLeft'] ?? $style['padding_left'] ?? $style['paddingX'] ?? $style['padding_x'] ?? $defaults['paddingLeft']);
+
+        return [
+            'backgroundColorEnd' => (string) ($style['backgroundColorEnd'] ?? $style['background_color_end'] ?? $defaults['backgroundColorEnd']),
+            'backgroundColorStart' => (string) ($style['backgroundColorStart'] ?? $style['background_color_start'] ?? $defaults['backgroundColorStart']),
+            'backgroundGradientDirection' => (string) ($style['backgroundGradientDirection'] ?? $style['background_gradient_direction'] ?? $defaults['backgroundGradientDirection']),
+            'backgroundMode' => (string) ($style['backgroundMode'] ?? $style['background_mode'] ?? $defaults['backgroundMode']),
+            'background_image' => $style['background_image'] ?? $style['backgroundImage'] ?? $defaults['background_image'],
+            'padding' => $paddingTop === $paddingRight && $paddingRight === $paddingBottom && $paddingBottom === $paddingLeft
+                ? $paddingTop
+                : (int) round(($paddingTop + $paddingRight + $paddingBottom + $paddingLeft) / 4),
+            'paddingBottom' => $paddingBottom,
+            'paddingLeft' => $paddingLeft,
+            'paddingRight' => $paddingRight,
+            'paddingTop' => $paddingTop,
+            'paddingX' => $paddingLeft === $paddingRight ? $paddingLeft : (int) round(($paddingLeft + $paddingRight) / 2),
+            'paddingY' => $paddingTop === $paddingBottom ? $paddingTop : (int) round(($paddingTop + $paddingBottom) / 2),
+        ];
     }
 
     /**

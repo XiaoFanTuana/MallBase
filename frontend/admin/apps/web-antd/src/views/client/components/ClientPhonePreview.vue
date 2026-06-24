@@ -956,6 +956,16 @@ function styleColor(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
 }
 
+function styleBoolean(value: unknown, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    return ['1', 'true'].includes(value.toLowerCase());
+  }
+  return Boolean(value);
+}
+
 function normalizePreviewFontWeight(value: unknown) {
   const weight = String(value || '');
   return ['400', '500', '600', '700', '800'].includes(weight) ? weight : '';
@@ -966,16 +976,8 @@ function normalizePreviewTextAlign(value: unknown) {
   return ['center', 'left', 'right'].includes(align) ? align : '';
 }
 
-function profileTextVisible(module: ModuleItem, role: string) {
-  if (module.type === 'serviceMenu') return true;
-  const props = module.props || {};
-  const visibility = props.textVisibility || props.text_visibility || {};
-  if (!visibility || typeof visibility !== 'object') return true;
-  const value = visibility[role];
-  if (typeof value === 'string') {
-    return !['0', 'false'].includes(value.toLowerCase());
-  }
-  return value !== false && value !== 0;
+function profileTextVisible(_module: ModuleItem, _role: string) {
+  return true;
 }
 
 function profileTextStyle(module: ModuleItem, role: string) {
@@ -1029,6 +1031,63 @@ function gradientBackground(
   return `linear-gradient(${gradientDirection(directionValue)}, ${start}, ${end})`;
 }
 
+function clampStyleNumber(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.max(min, Math.min(numberValue, max));
+}
+
+function hexToRgba(value: unknown, opacity: unknown, fallback = '#0f172a') {
+  const color = styleColor(value) || fallback;
+  const alpha = clampStyleNumber(opacity, 14, 0, 100) / 100;
+  const shortHex = color.match(/^#([\da-f])([\da-f])([\da-f])$/i);
+  const fullHex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  const match = fullHex || shortHex;
+  if (!match) return color;
+  const red = Number.parseInt(
+    fullHex ? match[1]! : `${match[1]}${match[1]}`,
+    16,
+  );
+  const green = Number.parseInt(
+    fullHex ? match[2]! : `${match[2]}${match[2]}`,
+    16,
+  );
+  const blue = Number.parseInt(
+    fullHex ? match[3]! : `${match[3]}${match[3]}`,
+    16,
+  );
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function moduleShadowStyle(props: Record<string, any>) {
+  const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
+  const enabled = styleBoolean(shadowEnabled);
+  if (shadowEnabled !== undefined && !enabled) return 'none';
+  if (!enabled) return '';
+  const offsetX = toPreviewPx(
+    clampStyleNumber(props.shadowOffsetX ?? props.shadow_offset_x, 0, -80, 80),
+  );
+  const offsetY = toPreviewPx(
+    clampStyleNumber(props.shadowOffsetY ?? props.shadow_offset_y, 12, -80, 80),
+  );
+  const blur = toPreviewPx(
+    clampStyleNumber(props.shadowBlur ?? props.shadow_blur, 30, 0, 160),
+  );
+  const spread = toPreviewPx(
+    clampStyleNumber(props.shadowSpread ?? props.shadow_spread, 0, -80, 80),
+  );
+  const color = hexToRgba(
+    props.shadowColor ?? props.shadow_color,
+    props.shadowOpacity ?? props.shadow_opacity,
+  );
+  return `${offsetX}px ${offsetY}px ${blur}px ${spread}px ${color}`;
+}
+
 function moduleBackgroundStyle(module: ModuleItem) {
   const props = module.props || {};
   const style: Record<string, string> = {};
@@ -1060,6 +1119,30 @@ function moduleBackgroundStyle(module: ModuleItem) {
   return style;
 }
 
+function pageBackgroundStyle(pageStyle: Record<string, any>) {
+  const style: Record<string, string> = {};
+  const mode = pageStyle.backgroundMode || pageStyle.background_mode || 'color';
+  const backgroundImage = getImage(
+    pageStyle.background_image || pageStyle.backgroundImage || '',
+  );
+
+  if (mode === 'image' && backgroundImage) {
+    style.backgroundImage = `url("${backgroundImage}")`;
+    style.backgroundPosition = 'center';
+    style.backgroundSize = 'cover';
+    return style;
+  }
+
+  const background = gradientBackground(
+    pageStyle.backgroundColorStart || pageStyle.background_color_start,
+    pageStyle.backgroundColorEnd || pageStyle.background_color_end,
+    pageStyle.backgroundGradientDirection ||
+      pageStyle.background_gradient_direction,
+  );
+  if (background) style.background = background;
+  return style;
+}
+
 const homePageStyle = computed(() => {
   const pageStyle = props.pageStyle || {};
   const paddingY = pageStyle.paddingY ?? pageStyle.padding_y ?? 0;
@@ -1071,16 +1154,21 @@ const homePageStyle = computed(() => {
 
 const profilePageStyle = computed(() => {
   const pageStyle = props.pageStyle || {};
-  const paddingTop =
-    pageStyle.paddingTop ??
-    pageStyle.padding_top ??
-    pageStyle.paddingY ??
-    pageStyle.padding_y ??
-    10;
+  const paddingY = pageStyle.paddingY ?? pageStyle.padding_y;
   const paddingX = pageStyle.paddingX ?? pageStyle.padding_x ?? 28;
+  const paddingTop =
+    pageStyle.paddingTop ?? pageStyle.padding_top ?? paddingY ?? 10;
+  const paddingRight =
+    pageStyle.paddingRight ?? pageStyle.padding_right ?? paddingX;
+  const paddingBottom =
+    pageStyle.paddingBottom ?? pageStyle.padding_bottom ?? paddingY ?? 24;
+  const paddingLeft =
+    pageStyle.paddingLeft ?? pageStyle.padding_left ?? paddingX;
   return {
-    paddingLeft: `${toPreviewPx(paddingX)}px`,
-    paddingRight: `${toPreviewPx(paddingX)}px`,
+    ...pageBackgroundStyle(pageStyle),
+    paddingBottom: `${toPreviewPx(paddingBottom)}px`,
+    paddingLeft: `${toPreviewPx(paddingLeft)}px`,
+    paddingRight: `${toPreviewPx(paddingRight)}px`,
     paddingTop: `${toPreviewPx(paddingTop)}px`,
   };
 });
@@ -1154,10 +1242,9 @@ function moduleBoxStyle(
     style.border = `${borderWidth}px ${borderStyle} ${borderColor}`;
   }
   const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
-  if (shadowEnabled === true) {
-    style.boxShadow = '0 8px 24px rgb(15 23 42 / 14%)';
-  } else if (shadowEnabled === false) {
-    style.boxShadow = 'none';
+  if (shadowEnabled !== undefined) {
+    const boxShadow = moduleShadowStyle(props);
+    if (boxShadow) style.boxShadow = boxShadow;
   }
   const hasSidePadding =
     props.paddingTop !== undefined ||

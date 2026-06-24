@@ -163,17 +163,22 @@ const profileModules = computed(() => {
 
 const profilePageStyle = computed(() => {
   const pageStyle = decorateStore.profilePageStyle || {};
-  const paddingTop =
-    pageStyle.paddingTop ??
-    pageStyle.padding_top ??
-    pageStyle.paddingY ??
-    pageStyle.padding_y ??
-    10;
+  const paddingY = pageStyle.paddingY ?? pageStyle.padding_y;
   const paddingX = pageStyle.paddingX ?? pageStyle.padding_x ?? 28;
+  const paddingTop =
+    pageStyle.paddingTop ?? pageStyle.padding_top ?? paddingY ?? 10;
+  const paddingRight =
+    pageStyle.paddingRight ?? pageStyle.padding_right ?? paddingX;
+  const paddingBottom =
+    pageStyle.paddingBottom ?? pageStyle.padding_bottom ?? paddingY ?? 24;
+  const paddingLeft =
+    pageStyle.paddingLeft ?? pageStyle.padding_left ?? paddingX;
 
   return {
-    paddingLeft: toRpx(paddingX, 28),
-    paddingRight: toRpx(paddingX, 28),
+    ...pageBackgroundStyle(pageStyle),
+    paddingBottom: toRpx(paddingBottom, 24),
+    paddingLeft: toRpx(paddingLeft, 28),
+    paddingRight: toRpx(paddingRight, 28),
     paddingTop: toRpx(paddingTop, 10),
   };
 });
@@ -336,6 +341,93 @@ function gradientBackground(startValue, endValue, directionValue, bottomValue) {
   return `linear-gradient(${gradientDirection(directionValue)}, ${start}, ${end})`;
 }
 
+function pageBackgroundStyle(pageStyle) {
+  const style = {};
+  const backgroundMode =
+    pageStyle.backgroundMode || pageStyle.background_mode || "color";
+  const backgroundImage = moduleBackgroundImage(pageStyle);
+  if (backgroundMode === "image" && backgroundImage) {
+    style.backgroundImage = `url("${backgroundImage}")`;
+    style.backgroundSize = "cover";
+    style.backgroundPosition = "center";
+    return style;
+  }
+
+  const background = gradientBackground(
+    pageStyle.backgroundColorStart || pageStyle.background_color_start,
+    pageStyle.backgroundColorEnd || pageStyle.background_color_end,
+    pageStyle.backgroundGradientDirection ||
+      pageStyle.background_gradient_direction,
+  );
+  if (background) style.background = background;
+  return style;
+}
+
+function clampStyleNumber(value, fallback, min, max) {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.max(min, Math.min(numberValue, max));
+}
+
+function hexToRgba(value, opacity, fallback = "#0f172a") {
+  const color = styleColor(value) || fallback;
+  const alpha = clampStyleNumber(opacity, 14, 0, 100) / 100;
+  const shortHex = color.match(/^#([\da-f])([\da-f])([\da-f])$/i);
+  const fullHex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  const match = fullHex || shortHex;
+  if (!match) return color;
+  const red = Number.parseInt(
+    fullHex ? match[1] : `${match[1]}${match[1]}`,
+    16,
+  );
+  const green = Number.parseInt(
+    fullHex ? match[2] : `${match[2]}${match[2]}`,
+    16,
+  );
+  const blue = Number.parseInt(
+    fullHex ? match[3] : `${match[3]}${match[3]}`,
+    16,
+  );
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function moduleShadowStyle(props) {
+  const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
+  if (shadowEnabled !== undefined && !styleBoolean(shadowEnabled)) {
+    return "none";
+  }
+  if (!styleBoolean(shadowEnabled)) return "";
+  const offsetX = clampStyleNumber(
+    props.shadowOffsetX ?? props.shadow_offset_x,
+    0,
+    -80,
+    80,
+  );
+  const offsetY = clampStyleNumber(
+    props.shadowOffsetY ?? props.shadow_offset_y,
+    12,
+    -80,
+    80,
+  );
+  const blur = clampStyleNumber(
+    props.shadowBlur ?? props.shadow_blur,
+    30,
+    0,
+    160,
+  );
+  const spread = clampStyleNumber(
+    props.shadowSpread ?? props.shadow_spread,
+    0,
+    -80,
+    80,
+  );
+  const color = hexToRgba(
+    props.shadowColor ?? props.shadow_color,
+    props.shadowOpacity ?? props.shadow_opacity,
+  );
+  return `${offsetX}rpx ${offsetY}rpx ${blur}rpx ${spread}rpx ${color}`;
+}
+
 function styleBoolean(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value === "boolean") return value;
@@ -354,16 +446,8 @@ function normalizeTextAlign(value) {
   return ["center", "left", "right"].includes(align) ? align : "";
 }
 
-function textVisible(module, role) {
-  if (module?.type === "serviceMenu") return true;
-  const props = getModuleProps(module);
-  const visibility = props.textVisibility || props.text_visibility || {};
-  if (!visibility || typeof visibility !== "object") return true;
-  const value = visibility[role];
-  if (typeof value === "string") {
-    return !["0", "false"].includes(value.toLowerCase());
-  }
-  return value !== false && value !== 0;
+function textVisible() {
+  return true;
 }
 
 function textStyle(module, role) {
@@ -483,9 +567,8 @@ function moduleBoxStyle(module) {
   }
   const shadowEnabled = props.shadowEnabled ?? props.shadow_enabled;
   if (shadowEnabled !== undefined) {
-    style.boxShadow = styleBoolean(shadowEnabled)
-      ? "0 12rpx 30rpx rgba(15, 23, 42, 0.14)"
-      : "none";
+    const boxShadow = moduleShadowStyle(props);
+    if (boxShadow) style.boxShadow = boxShadow;
   }
   const hasSidePadding =
     props.paddingTop !== undefined ||

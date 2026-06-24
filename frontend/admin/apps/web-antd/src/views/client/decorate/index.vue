@@ -35,6 +35,15 @@ defineOptions({ name: 'ClientDecorateManagement' });
 
 type ModuleItem = Record<string, any>;
 type PageStyle = {
+  background_image?: unknown;
+  backgroundColorEnd?: string;
+  backgroundColorStart?: string;
+  backgroundGradientDirection?: string;
+  backgroundMode?: string;
+  padding?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
   paddingTop?: number;
   paddingX: number;
   paddingY?: number;
@@ -71,8 +80,18 @@ const DEFAULT_HOME_PAGE_STYLE: PageStyle = {
 };
 
 const DEFAULT_PROFILE_PAGE_STYLE: PageStyle = {
+  backgroundColorEnd: '',
+  backgroundColorStart: '',
+  backgroundGradientDirection: 'horizontal',
+  backgroundMode: 'color',
+  background_image: '',
+  padding: 23,
+  paddingBottom: 24,
+  paddingLeft: 28,
+  paddingRight: 28,
   paddingTop: 10,
   paddingX: 28,
+  paddingY: 17,
 };
 
 const PROFILE_STYLE_DEFAULTS = {
@@ -88,7 +107,46 @@ const PROFILE_STYLE_DEFAULTS = {
   marginLeft: 0,
   marginRight: 0,
   shadowEnabled: false,
+  shadowBlur: 30,
+  shadowColor: '#0f172a',
+  shadowOffsetX: 0,
+  shadowOffsetY: 12,
+  shadowOpacity: 14,
+  shadowSpread: 0,
 };
+
+const PROFILE_MODULE_STYLE_FIELDS = [
+  'background',
+  'backgroundColorEnd',
+  'backgroundColorStart',
+  'backgroundGradientDirection',
+  'backgroundMode',
+  'background_image',
+  'borderColor',
+  'borderEnabled',
+  'borderStyle',
+  'borderWidth',
+  'marginBottom',
+  'marginLeft',
+  'marginRight',
+  'marginTop',
+  'padding',
+  'paddingBottom',
+  'paddingLeft',
+  'paddingRight',
+  'paddingTop',
+  'paddingX',
+  'paddingY',
+  'radius',
+  'shadowBlur',
+  'shadowColor',
+  'shadowEnabled',
+  'shadowOffsetX',
+  'shadowOffsetY',
+  'shadowOpacity',
+  'shadowSpread',
+  'widthPercent',
+] as const;
 
 const SCHEME_TABS: Array<{
   help: string;
@@ -622,27 +680,90 @@ const getSchemeSchemaList = (
 const getDefaultPageStyle = (type: ClientDecorateApi.SchemeType) =>
   type === 'profile' ? DEFAULT_PROFILE_PAGE_STYLE : DEFAULT_HOME_PAGE_STYLE;
 
+const normalizePageSpacingNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return Math.max(0, fallback);
+  return Math.max(0, Math.round(numberValue));
+};
+
 const normalizePageStyle = (value: any, type: ClientDecorateApi.SchemeType) => {
   const defaults = getDefaultPageStyle(type);
-  const paddingX = Number(
-    value?.paddingX ?? value?.padding_x ?? defaults.paddingX,
+  const paddingX = normalizePageSpacingNumber(
+    value?.paddingX ?? value?.padding_x,
+    defaults.paddingX,
   );
   if (type === 'profile') {
+    const paddingTop = normalizePageSpacingNumber(
+      value?.paddingTop ?? value?.padding_top ?? value?.paddingY,
+      DEFAULT_PROFILE_PAGE_STYLE.paddingTop,
+    );
+    const paddingRight = normalizePageSpacingNumber(
+      value?.paddingRight ?? value?.padding_right ?? value?.paddingX,
+      DEFAULT_PROFILE_PAGE_STYLE.paddingRight,
+    );
+    const paddingBottom = normalizePageSpacingNumber(
+      value?.paddingBottom ?? value?.padding_bottom ?? value?.paddingY,
+      DEFAULT_PROFILE_PAGE_STYLE.paddingBottom,
+    );
+    const paddingLeft = normalizePageSpacingNumber(
+      value?.paddingLeft ?? value?.padding_left ?? value?.paddingX,
+      DEFAULT_PROFILE_PAGE_STYLE.paddingLeft,
+    );
     return {
-      paddingTop: Number(
-        value?.paddingTop ??
-          value?.padding_top ??
-          value?.paddingY ??
-          value?.padding_y ??
-          DEFAULT_PROFILE_PAGE_STYLE.paddingTop,
+      backgroundColorEnd:
+        value?.backgroundColorEnd ??
+        value?.background_color_end ??
+        DEFAULT_PROFILE_PAGE_STYLE.backgroundColorEnd,
+      backgroundColorStart:
+        value?.backgroundColorStart ??
+        value?.background_color_start ??
+        DEFAULT_PROFILE_PAGE_STYLE.backgroundColorStart,
+      backgroundGradientDirection:
+        value?.backgroundGradientDirection ??
+        value?.background_gradient_direction ??
+        DEFAULT_PROFILE_PAGE_STYLE.backgroundGradientDirection,
+      backgroundMode:
+        value?.backgroundMode ??
+        value?.background_mode ??
+        DEFAULT_PROFILE_PAGE_STYLE.backgroundMode,
+      background_image: normalizeEditorUploadImage(
+        value?.background_image && typeof value.background_image !== 'object'
+          ? {
+              full_url:
+                value?.background_image_full_url ||
+                value?.backgroundImageFullUrl ||
+                '',
+              url: value.background_image,
+            }
+          : (value?.background_image ?? value?.backgroundImage ?? ''),
       ),
-      paddingX,
+      padding:
+        paddingTop === paddingRight &&
+        paddingRight === paddingBottom &&
+        paddingBottom === paddingLeft
+          ? paddingTop
+          : Math.round(
+              (paddingTop + paddingRight + paddingBottom + paddingLeft) / 4,
+            ),
+      paddingBottom,
+      paddingLeft,
+      paddingRight,
+      paddingTop,
+      paddingX:
+        paddingLeft === paddingRight
+          ? paddingLeft
+          : Math.round((paddingLeft + paddingRight) / 2),
+      paddingY:
+        paddingTop === paddingBottom
+          ? paddingTop
+          : Math.round((paddingTop + paddingBottom) / 2),
     };
   }
   return {
     paddingX,
-    paddingY: Number(
-      value?.paddingY ?? value?.padding_y ?? DEFAULT_HOME_PAGE_STYLE.paddingY,
+    paddingY: normalizePageSpacingNumber(
+      value?.paddingY ?? value?.padding_y,
+      DEFAULT_HOME_PAGE_STYLE.paddingY,
     ),
   };
 };
@@ -942,6 +1063,54 @@ const normalizeBooleanValue = (value: unknown, fallback = false) => {
   return Boolean(value);
 };
 
+const normalizeShadowStyle = (config: Record<string, any>) => {
+  config.shadowEnabled = normalizeBooleanValue(
+    config.shadowEnabled ?? config.shadow_enabled,
+    PROFILE_STYLE_DEFAULTS.shadowEnabled,
+  );
+  config.shadowOffsetX = clampNumber(
+    config.shadowOffsetX ?? config.shadow_offset_x,
+    PROFILE_STYLE_DEFAULTS.shadowOffsetX,
+    -80,
+    80,
+  );
+  config.shadowOffsetY = clampNumber(
+    config.shadowOffsetY ?? config.shadow_offset_y,
+    PROFILE_STYLE_DEFAULTS.shadowOffsetY,
+    -80,
+    80,
+  );
+  config.shadowBlur = clampNumber(
+    config.shadowBlur ?? config.shadow_blur,
+    PROFILE_STYLE_DEFAULTS.shadowBlur,
+    0,
+    160,
+  );
+  config.shadowSpread = clampNumber(
+    config.shadowSpread ?? config.shadow_spread,
+    PROFILE_STYLE_DEFAULTS.shadowSpread,
+    -80,
+    80,
+  );
+  config.shadowColor =
+    config.shadowColor ??
+    config.shadow_color ??
+    PROFILE_STYLE_DEFAULTS.shadowColor;
+  config.shadowOpacity = clampNumber(
+    config.shadowOpacity ?? config.shadow_opacity,
+    PROFILE_STYLE_DEFAULTS.shadowOpacity,
+    0,
+    100,
+  );
+  delete config.shadow_enabled;
+  delete config.shadow_offset_x;
+  delete config.shadow_offset_y;
+  delete config.shadow_blur;
+  delete config.shadow_spread;
+  delete config.shadow_color;
+  delete config.shadow_opacity;
+};
+
 const normalizeTitleAlign = (value: unknown) =>
   ['center', 'left', 'right'].includes(String(value)) ? String(value) : 'left';
 
@@ -1013,28 +1182,6 @@ const normalizeProfileTextStyles = (
         return [role, Object.keys(style).length > 0 ? style : undefined];
       })
       .filter(([, style]) => style !== undefined),
-  );
-};
-
-const normalizeProfileTextVisibility = (
-  value: unknown,
-  roles = PROFILE_TEXT_STYLE_ROLES,
-) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const source = value as Record<string, any>;
-  return Object.fromEntries(
-    roles
-      .map((role) => {
-        const rawValue = source[role];
-        if (typeof rawValue === 'string') {
-          return [
-            ['0', 'false'].includes(rawValue.toLowerCase()) ? role : '',
-            false,
-          ];
-        }
-        return [rawValue === false || rawValue === 0 ? role : '', false];
-      })
-      .filter(([role]) => Boolean(role)),
   );
 };
 
@@ -1429,12 +1576,7 @@ const normalizeEditorConfig = (
       rawConfig?.border_color ??
       config.borderColor ??
       PROFILE_STYLE_DEFAULTS.borderColor;
-    config.shadowEnabled = normalizeBooleanValue(
-      rawConfig?.shadowEnabled ??
-        rawConfig?.shadow_enabled ??
-        config.shadowEnabled,
-      PROFILE_STYLE_DEFAULTS.shadowEnabled,
-    );
+    normalizeShadowStyle(config);
     const profileTextStyleRoles = getProfileTextStyleRoles(profileType);
     const textStyles = normalizeProfileTextStyles(
       rawConfig?.textStyles ?? rawConfig?.text_styles ?? config.textStyles,
@@ -1446,20 +1588,7 @@ const normalizeEditorConfig = (
       delete config.textStyles;
     }
     delete config.text_styles;
-    const textVisibility =
-      profileType === 'serviceMenu'
-        ? {}
-        : normalizeProfileTextVisibility(
-            rawConfig?.textVisibility ??
-              rawConfig?.text_visibility ??
-              config.textVisibility,
-            profileTextStyleRoles,
-          );
-    if (Object.keys(textVisibility).length > 0) {
-      config.textVisibility = textVisibility;
-    } else {
-      delete config.textVisibility;
-    }
+    delete config.textVisibility;
     delete config.text_visibility;
   }
   if (type === 'banner') {
@@ -2227,6 +2356,7 @@ const normalizeSchemaForClient = (
         if (activeType.value === 'profile') {
           syncProfilePaddingCompat(props);
           syncProfileMarginCompat(props);
+          normalizeShadowStyle(props);
           const profileTextStyleRoles = getProfileTextStyleRoles(moduleType);
           const textStyles = normalizeProfileTextStyles(
             props.textStyles ?? props.text_styles,
@@ -2238,18 +2368,7 @@ const normalizeSchemaForClient = (
             delete props.textStyles;
           }
           delete props.text_styles;
-          const textVisibility =
-            moduleType === 'serviceMenu'
-              ? {}
-              : normalizeProfileTextVisibility(
-                  props.textVisibility ?? props.text_visibility,
-                  profileTextStyleRoles,
-                );
-          if (Object.keys(textVisibility).length > 0) {
-            props.textVisibility = textVisibility;
-          } else {
-            delete props.textVisibility;
-          }
+          delete props.textVisibility;
           delete props.text_visibility;
         }
 
@@ -2671,12 +2790,18 @@ const removeConfigItem = (items: any[], index: number | string) => {
   items.splice(Number(index), 1);
 };
 
-const updateHomePageStyle = (
-  field: 'paddingTop' | 'paddingX' | 'paddingY',
-  value: unknown,
-) => {
+const updateHomePageStyle = (field: string, value: unknown) => {
   if (warnReadonlyScheme()) return;
-  schemeForm.pageStyle[field] = Math.max(0, Number(value || 0));
+  const nextValue = field.startsWith('padding')
+    ? normalizePageSpacingNumber(value)
+    : value;
+  (schemeForm.pageStyle as Record<string, unknown>)[field] = nextValue;
+  if (activeType.value === 'profile') {
+    Object.assign(
+      schemeForm.pageStyle,
+      normalizePageStyle(schemeForm.pageStyle, activeType.value),
+    );
+  }
 };
 
 const resetHomePageStyle = () => {
@@ -2696,6 +2821,56 @@ const resetModuleConfig = (module: ModuleItem) => {
     module.config = defaultProfileConfig(String(module.type || ''));
   }
   message.success('已重置组件属性');
+};
+
+const resetProfileModuleStyle = (module: ModuleItem) => {
+  if (warnReadonlyScheme()) return;
+  if (!module || activeType.value !== 'profile') return;
+  const type = normalizeProfileModuleType(String(module.type || ''));
+  const defaults = defaultProfileConfig(type);
+  const nextConfig = { ...module.config };
+  PROFILE_MODULE_STYLE_FIELDS.forEach((field) => {
+    if (field in defaults) {
+      nextConfig[field] = clone(defaults[field]);
+    } else {
+      delete nextConfig[field];
+    }
+  });
+  syncProfilePaddingCompat(nextConfig);
+  syncProfileMarginCompat(nextConfig);
+  normalizeShadowStyle(nextConfig);
+  module.config = nextConfig;
+  message.success('已重置基础样式');
+};
+
+const resetProfileModuleContent = (module: ModuleItem) => {
+  if (warnReadonlyScheme()) return;
+  if (!module || activeType.value !== 'profile') return;
+  const type = normalizeProfileModuleType(String(module.type || ''));
+  const currentConfig = { ...module.config };
+  syncProfilePaddingCompat(currentConfig);
+  syncProfileMarginCompat(currentConfig);
+  normalizeShadowStyle(currentConfig);
+  const styleSnapshot: Record<string, any> = {};
+  for (const field of PROFILE_MODULE_STYLE_FIELDS) {
+    if (field in currentConfig) {
+      styleSnapshot[field] = clone(currentConfig[field]);
+    }
+  }
+  if (
+    currentConfig.textStyles &&
+    typeof currentConfig.textStyles === 'object'
+  ) {
+    styleSnapshot.textStyles = clone(currentConfig.textStyles);
+  }
+  module.config = {
+    ...defaultProfileConfig(type),
+    ...styleSnapshot,
+  };
+  syncProfilePaddingCompat(module.config);
+  syncProfileMarginCompat(module.config);
+  normalizeShadowStyle(module.config);
+  message.success('已重置组件内容');
 };
 
 watch(
@@ -2726,7 +2901,10 @@ onBeforeUnmount(resetMouseDrag);
 <template>
   <div
     class="decorate-page"
-    :class="{ 'decorate-page--editor': viewMode !== 'overview' }"
+    :class="{
+      'decorate-page--editor': viewMode !== 'overview',
+      'decorate-page--profile': activeType === 'profile',
+    }"
   >
     <div
       v-if="dragPreview.visible"
@@ -2889,7 +3067,9 @@ onBeforeUnmount(resetMouseDrag);
       @palette-click="handlePaletteClick"
       @palette-mouse-down="handlePaletteMouseDown"
       @remove-config-item="removeConfigItem"
+      @reset-module-content="resetProfileModuleContent"
       @reset-module-config="resetModuleConfig"
+      @reset-module-style="resetProfileModuleStyle"
       @reset-page-style="resetHomePageStyle"
       @select-module="selectModuleFromPreview"
       @update-page-style="updateHomePageStyle"

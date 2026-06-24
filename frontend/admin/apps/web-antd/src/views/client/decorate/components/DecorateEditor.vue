@@ -70,7 +70,7 @@ const props = defineProps<{
   tabbarPreviewItems: ModuleItem[];
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   addNavItem: [module: ModuleItem];
   addProfileItem: [module: ModuleItem];
   moduleDelete: [index: number];
@@ -80,12 +80,11 @@ defineEmits<{
   paletteMouseDown: [item: PaletteItem, event: MouseEvent];
   removeConfigItem: [items: any[], index: number | string];
   resetModuleConfig: [module: ModuleItem];
+  resetModuleContent: [module: ModuleItem];
+  resetModuleStyle: [module: ModuleItem];
   resetPageStyle: [];
   selectModule: [module: ModuleItem];
-  updatePageStyle: [
-    field: 'paddingTop' | 'paddingX' | 'paddingY',
-    value: unknown,
-  ];
+  updatePageStyle: [field: string, value: unknown];
 }>();
 
 const previewCurrentPath = computed(() =>
@@ -143,14 +142,19 @@ const profileStyleColorDefaults: Record<string, string> = {
   backgroundColorEnd: '#ffffff',
   backgroundColorStart: '#ffffff',
   borderColor: '#e5e5e5',
+  shadowColor: '#0f172a',
 };
 
-const profileStyleValueDefaults: Record<string, any> = {
-  backgroundMode: 'color',
-  borderEnabled: true,
-  borderStyle: 'dashed',
-  borderWidth: 1,
-  shadowEnabled: false,
+const profilePageStyleColorDefaults: Record<string, string> = {
+  backgroundColorEnd: '#ffffff',
+  backgroundColorStart: '#ffffff',
+};
+
+const profilePagePaddingDefaults: Record<string, number> = {
+  paddingBottom: 24,
+  paddingLeft: 28,
+  paddingRight: 28,
+  paddingTop: 10,
 };
 
 const backgroundModeOptions = [
@@ -363,6 +367,12 @@ const getProfileStyleColorInputValue = (
     profileStyleColorDefaults[field] || '#ffffff',
   );
 
+const getProfilePageStyleColorInputValue = (field: string) =>
+  normalizeStyleColorValue(
+    props.schemeForm.pageStyle[field],
+    profilePageStyleColorDefaults[field] || '#ffffff',
+  );
+
 const syncModuleBackgroundShortcut = (config: Record<string, any>) => {
   const start = String(config.backgroundColorStart || '').trim();
   const end = String(config.backgroundColorEnd || '').trim();
@@ -384,6 +394,82 @@ const syncModuleBackgroundShortcut = (config: Record<string, any>) => {
     directionMap[String(config.backgroundGradientDirection || 'horizontal')] ||
     directionMap.horizontal;
   config.background = `linear-gradient(${direction}, ${start}, ${end})`;
+};
+
+const updatePageStyleColor = (field: string, value: unknown) => {
+  emit('updatePageStyle', field, value);
+  const pageStyle = props.schemeForm.pageStyle;
+  if (field === 'backgroundColorStart' || field === 'backgroundColorEnd') {
+    syncModuleBackgroundShortcut(pageStyle);
+  }
+};
+
+const updatePageStyleColorFromEvent = (field: string, event: Event) => {
+  const value = (event.target as HTMLInputElement | null)?.value;
+  if (value) updatePageStyleColor(field, value);
+};
+
+const updatePageStyleColorByField = (field: string) => {
+  updatePageStyleColor(field, props.schemeForm.pageStyle[field]);
+};
+
+const updatePageStyleField = (field: string, value: unknown) => {
+  emit('updatePageStyle', field, value);
+};
+
+const syncPageBackgroundShortcut = () => {
+  syncModuleBackgroundShortcut(props.schemeForm.pageStyle);
+};
+
+const normalizeSpacingControlNumber = (value: unknown, fallback = 0) => {
+  const numberValue = Number(value ?? fallback);
+  if (!Number.isFinite(numberValue)) return Math.max(0, fallback);
+  return Math.max(0, Math.min(Math.round(numberValue), 160));
+};
+
+const getProfilePagePaddingSide = (field: string) => {
+  const pageStyle = props.schemeForm.pageStyle;
+  if (field === 'paddingTop') {
+    return normalizeSpacingControlNumber(
+      pageStyle.paddingTop ?? pageStyle.padding_top ?? pageStyle.paddingY,
+      profilePagePaddingDefaults.paddingTop,
+    );
+  }
+  if (field === 'paddingRight') {
+    return normalizeSpacingControlNumber(
+      pageStyle.paddingRight ?? pageStyle.padding_right ?? pageStyle.paddingX,
+      profilePagePaddingDefaults.paddingRight,
+    );
+  }
+  if (field === 'paddingBottom') {
+    return normalizeSpacingControlNumber(
+      pageStyle.paddingBottom ?? pageStyle.padding_bottom ?? pageStyle.paddingY,
+      profilePagePaddingDefaults.paddingBottom,
+    );
+  }
+  return normalizeSpacingControlNumber(
+    pageStyle.paddingLeft ?? pageStyle.padding_left ?? pageStyle.paddingX,
+    profilePagePaddingDefaults.paddingLeft,
+  );
+};
+
+const getProfilePagePaddingOverall = () => {
+  const sides = paddingSideFields.map((item) =>
+    getProfilePagePaddingSide(item.field),
+  );
+  if (sides.every((value) => value === sides[0])) return sides[0] || 0;
+  return Math.round(sides.reduce((total, value) => total + value, 0) / 4);
+};
+
+const updateProfilePagePaddingAll = (value: unknown) => {
+  const nextValue = normalizeSpacingControlNumber(value);
+  paddingSideFields.forEach((item) => {
+    emit('updatePageStyle', item.field, nextValue);
+  });
+};
+
+const updateProfilePagePaddingSide = (field: string, value: unknown) => {
+  emit('updatePageStyle', field, normalizeSpacingControlNumber(value));
 };
 
 const updateModuleStyleColor = (
@@ -419,26 +505,6 @@ const updateModuleStyleColorByField = (
 const syncModuleBackgroundShortcutByModule = (module: ModuleItem | null) => {
   if (!module?.config) return;
   syncModuleBackgroundShortcut(module.config);
-};
-
-const resetModuleStyleFields = (
-  module: ModuleItem | null,
-  fields: string[],
-) => {
-  if (!module) return;
-  const config = (module.config ||= {});
-  fields.forEach((field) => {
-    config[field] =
-      field in profileStyleColorDefaults
-        ? profileStyleColorDefaults[field]
-        : profileStyleValueDefaults[field];
-  });
-  if (
-    fields.includes('backgroundColorStart') ||
-    fields.includes('backgroundColorEnd')
-  ) {
-    syncModuleBackgroundShortcut(config);
-  }
 };
 
 const updateSelectedRichTextContent = (value: string) => {
@@ -1553,87 +1619,13 @@ const updateProfileTextStyleColorFromEvent = (
   updateProfileTextStyleField(module, role, 'color', value);
 };
 
-const resetProfileTextStyle = (
-  module: ModuleItem | null,
-  role: ProfileTextStyleRole,
-) => {
+const resetProfileTextStyles = (module: ModuleItem | null) => {
   if (!module?.config) return;
-  if (
-    module.config.textStyles &&
-    typeof module.config.textStyles === 'object'
-  ) {
-    delete module.config.textStyles[role];
-  }
-  if (
-    module.config.text_styles &&
-    typeof module.config.text_styles === 'object'
-  ) {
-    delete module.config.text_styles[role];
-  }
-};
-
-const getProfileTextVisible = (
-  module: ModuleItem | null,
-  role: ProfileTextStyleRole,
-) => {
-  if (
-    module &&
-    props.normalizeProfileModuleType(String(module.type || '')) ===
-      'serviceMenu'
-  ) {
-    return true;
-  }
-  const config = module?.config || {};
-  const visibility = config.textVisibility || config.text_visibility;
-  if (!visibility || typeof visibility !== 'object') return true;
-  const value = visibility[role];
-  if (typeof value === 'string') {
-    return !['0', 'false'].includes(value.toLowerCase());
-  }
-  return value !== false && value !== 0;
-};
-
-const updateProfileTextVisible = (
-  module: ModuleItem | null,
-  role: ProfileTextStyleRole,
-  checked: boolean,
-) => {
-  if (!module?.config) return;
-  if (
-    props.normalizeProfileModuleType(String(module.type || '')) ===
-    'serviceMenu'
-  ) {
-    delete module.config.textVisibility;
-    delete module.config.text_visibility;
-    return;
-  }
-  if (
-    !module.config.textVisibility ||
-    typeof module.config.textVisibility !== 'object'
-  ) {
-    module.config.textVisibility =
-      module.config.text_visibility &&
-      typeof module.config.text_visibility === 'object'
-        ? { ...module.config.text_visibility }
-        : {};
-  }
-  if (checked) {
-    delete module.config.textVisibility[role];
-  } else {
-    module.config.textVisibility[role] = false;
-  }
-  if (Object.keys(module.config.textVisibility).length === 0) {
-    delete module.config.textVisibility;
-  }
+  delete module.config.textStyles;
+  delete module.config.text_styles;
+  delete module.config.textVisibility;
   delete module.config.text_visibility;
 };
-
-const canToggleProfileTextVisible = (module: ModuleItem | null) =>
-  !(
-    module &&
-    props.normalizeProfileModuleType(String(module.type || '')) ===
-      'serviceMenu'
-  );
 
 const getProfileItemVisible = (item: any) =>
   item?.enabled !== false && item?.visible !== false;
@@ -1683,7 +1675,10 @@ const updateSelectedSubTitleColor = (event: Event) => {
 <template>
   <div
     class="decorate-editor"
-    :class="{ 'decorate-editor--tabbar': activeType === 'tabbar' }"
+    :class="{
+      'decorate-editor--profile': activeType === 'profile',
+      'decorate-editor--tabbar': activeType === 'tabbar',
+    }"
   >
     <aside v-if="activeType !== 'tabbar'" class="component-library">
       <a-card size="small" title="组件库">
@@ -1799,6 +1794,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
             <div class="property-section__head">
               <div class="property-section__title">页面样式</div>
               <a-button
+                class="decorate-capsule-button"
                 :disabled="isReadonlyScheme"
                 size="small"
                 type="link"
@@ -1807,27 +1803,126 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 重置
               </a-button>
             </div>
-            <div class="style-grid">
-              <a-form-item
-                :label="activeType === 'profile' ? '顶部内边距' : '上下内边距'"
-              >
+            <template v-if="activeType === 'profile'">
+              <div class="profile-style-settings">
+                <div class="style-control-row">
+                  <div class="style-control-row__label">背景设置</div>
+                  <div class="style-control-row__body">
+                    <a-radio-group
+                      :value="schemeForm.pageStyle.backgroundMode"
+                      :options="backgroundModeOptions"
+                      @update:value="
+                        (value: unknown) =>
+                          updatePageStyleField('backgroundMode', value)
+                      "
+                    />
+                  </div>
+                </div>
+
+                <template
+                  v-if="schemeForm.pageStyle.backgroundMode !== 'image'"
+                >
+                  <div class="style-control-row">
+                    <div class="style-control-row__label">背景颜色</div>
+                    <div class="style-control-row__body">
+                      <div class="style-color-stack">
+                        <div
+                          v-for="field in [
+                            'backgroundColorStart',
+                            'backgroundColorEnd',
+                          ]"
+                          :key="field"
+                          class="style-color-field style-color-field--no-action"
+                        >
+                          <input
+                            :aria-label="`选择页面${field}颜色`"
+                            class="style-color-field__picker"
+                            type="color"
+                            :value="getProfilePageStyleColorInputValue(field)"
+                            @input="
+                              (event: Event) =>
+                                updatePageStyleColorFromEvent(field, event)
+                            "
+                          />
+                          <a-input
+                            :value="schemeForm.pageStyle[field]"
+                            allow-clear
+                            class="style-color-field__input"
+                            placeholder="跟随主题背景"
+                            @change="() => updatePageStyleColorByField(field)"
+                            @update:value="
+                              (value: string) =>
+                                $emit('updatePageStyle', field, value)
+                            "
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="style-control-row">
+                    <div class="style-control-row__label">渐变方向</div>
+                    <div class="style-control-row__body">
+                      <a-radio-group
+                        :value="
+                          schemeForm.pageStyle.backgroundGradientDirection
+                        "
+                        :options="gradientDirectionOptions"
+                        @change="syncPageBackgroundShortcut"
+                        @update:value="
+                          (value: unknown) =>
+                            updatePageStyleField(
+                              'backgroundGradientDirection',
+                              value,
+                            )
+                        "
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <div v-else class="style-control-row">
+                  <div class="style-control-row__label">背景图片</div>
+                  <div class="style-control-row__body">
+                    <Upload
+                      :value="schemeForm.pageStyle.background_image"
+                      :disabled="isReadonlyScheme"
+                      module="client"
+                      type="image"
+                      @update:value="
+                        (value: unknown) =>
+                          updatePageStyleField('background_image', value)
+                      "
+                    />
+                  </div>
+                </div>
+
+                <div class="style-control-row style-control-row--spacing">
+                  <div class="style-control-row__label">页面内边距</div>
+                  <div class="style-control-row__body">
+                    <SpacingControl
+                      :disabled="isReadonlyScheme"
+                      :get-side-value="getProfilePagePaddingSide"
+                      :overall-value="getProfilePagePaddingOverall()"
+                      :side-fields="paddingSideFields"
+                      @update:all="updateProfilePagePaddingAll"
+                      @update:side="updateProfilePagePaddingSide"
+                    />
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div v-else class="style-grid">
+              <a-form-item label="上下内边距">
                 <a-input-number
-                  :value="
-                    activeType === 'profile'
-                      ? schemeForm.pageStyle.paddingTop
-                      : schemeForm.pageStyle.paddingY
-                  "
+                  :value="schemeForm.pageStyle.paddingY"
                   :min="0"
                   :max="120"
                   addon-after="rpx"
                   class="w-full"
                   @change="
                     (value: unknown) =>
-                      $emit(
-                        'updatePageStyle',
-                        activeType === 'profile' ? 'paddingTop' : 'paddingY',
-                        value,
-                      )
+                      $emit('updatePageStyle', 'paddingY', value)
                   "
                 />
               </a-form-item>
@@ -1880,7 +1975,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
                 "
                 :gradient-direction-options="gradientDirectionOptions"
                 :module="editableModule"
-                :reset-module-style-fields="resetModuleStyleFields"
                 :sync-module-background-shortcut-by-module="
                   syncModuleBackgroundShortcutByModule
                 "
@@ -1891,7 +1985,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                   updateModuleStyleColorFromEvent
                 "
                 :visibility-options="visibilityOptions"
-                @reset="$emit('resetModuleConfig', $event)"
+                @reset="$emit('resetModuleStyle', $event)"
               />
               <div v-else class="property-section">
                 <div class="property-section__head">
@@ -2692,6 +2786,15 @@ const updateSelectedSubTitleColor = (event: Event) => {
                   }}
                 </div>
               </div>
+              <a-button
+                class="decorate-capsule-button"
+                :disabled="isReadonlyScheme"
+                size="small"
+                type="link"
+                @click="$emit('resetModuleContent', editableModule)"
+              >
+                重置
+              </a-button>
             </div>
 
             <template v-if="editableProfileType === 'userInfo'">
@@ -2812,7 +2915,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       @update:value="updateProfileItemPath(item, $event)"
                     />
                     <div
-                      v-if="editableProfileType === 'serviceMenu'"
+                      v-if="isProfileEntryModule"
                       class="entry-row__visibility"
                     >
                       <span>显示</span>
@@ -2827,6 +2930,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                       />
                     </div>
                     <a-button
+                      class="decorate-capsule-button"
                       danger
                       size="small"
                       @click="
@@ -2841,6 +2945,7 @@ const updateSelectedSubTitleColor = (event: Event) => {
                     </a-button>
                   </div>
                   <a-button
+                    class="decorate-capsule-button"
                     size="small"
                     @click="$emit('addProfileItem', editableModule)"
                   >
@@ -2851,7 +2956,18 @@ const updateSelectedSubTitleColor = (event: Event) => {
             </template>
 
             <template v-if="profileTextStyleFields.length > 0">
-              <div class="property-subsection__title">文字样式</div>
+              <div class="property-subsection__head">
+                <div class="property-subsection__title">文字样式</div>
+                <a-button
+                  class="decorate-capsule-button"
+                  :disabled="isReadonlyScheme"
+                  size="small"
+                  type="link"
+                  @click="resetProfileTextStyles(editableModule)"
+                >
+                  重置
+                </a-button>
+              </div>
               <div class="profile-text-style-list">
                 <div
                   v-for="item in profileTextStyleFields"
@@ -2870,36 +2986,6 @@ const updateSelectedSubTitleColor = (event: Event) => {
                           profileTextStyleTargetText(editableModule, item.role)
                         }}
                       </small>
-                    </span>
-                    <span class="profile-text-style-card__actions">
-                      <a-switch
-                        v-if="canToggleProfileTextVisible(editableModule)"
-                        :checked="
-                          getProfileTextVisible(editableModule, item.role)
-                        "
-                        :disabled="isReadonlyScheme"
-                        checked-children="显示"
-                        size="small"
-                        un-checked-children="隐藏"
-                        @change="
-                          (checked: boolean) =>
-                            updateProfileTextVisible(
-                              editableModule,
-                              item.role,
-                              checked,
-                            )
-                        "
-                      />
-                      <a-button
-                        :disabled="isReadonlyScheme"
-                        size="small"
-                        type="link"
-                        @click="
-                          resetProfileTextStyle(editableModule, item.role)
-                        "
-                      >
-                        重置
-                      </a-button>
                     </span>
                   </div>
                   <div class="profile-text-style-card__body">

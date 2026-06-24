@@ -38,7 +38,6 @@ const props = defineProps<{
   ) => string;
   gradientDirectionOptions: RadioOption[];
   module: ModuleItem;
-  resetModuleStyleFields: (module: ModuleItem | null, fields: string[]) => void;
   syncModuleBackgroundShortcutByModule: (module: ModuleItem | null) => void;
   updateModuleStyleColorByField: (
     module: ModuleItem | null,
@@ -84,6 +83,7 @@ const updateMarginSide = (field: string, value: unknown) => {
     <div class="property-section__head">
       <div class="property-section__title">基础样式</div>
       <a-button
+        class="decorate-capsule-button"
         :disabled="disabled"
         size="small"
         type="link"
@@ -112,7 +112,7 @@ const updateMarginSide = (field: string, value: unknown) => {
               <div
                 v-for="field in profileColorFields"
                 :key="field"
-                class="style-color-field"
+                class="style-color-field style-color-field--no-action"
               >
                 <input
                   :aria-label="`选择${field}颜色`"
@@ -137,14 +137,6 @@ const updateMarginSide = (field: string, value: unknown) => {
                     () => updateModuleStyleColorByField(editableModule, field)
                   "
                 />
-                <a-button
-                  :disabled="disabled"
-                  size="small"
-                  type="link"
-                  @click="resetModuleStyleFields(editableModule, [field])"
-                >
-                  重置
-                </a-button>
               </div>
             </div>
           </div>
@@ -274,7 +266,7 @@ const updateMarginSide = (field: string, value: unknown) => {
         <div class="style-control-row">
           <div class="style-control-row__label">边框颜色</div>
           <div class="style-control-row__body">
-            <div class="style-color-field">
+            <div class="style-color-field style-color-field--no-action">
               <input
                 aria-label="选择边框颜色"
                 class="style-color-field__picker"
@@ -298,14 +290,6 @@ const updateMarginSide = (field: string, value: unknown) => {
                 v-model:value="editableModule.config.borderColor"
                 class="style-color-field__input"
               />
-              <a-button
-                :disabled="disabled"
-                size="small"
-                type="link"
-                @click="resetModuleStyleFields(editableModule, ['borderColor'])"
-              >
-                重置
-              </a-button>
             </div>
           </div>
         </div>
@@ -320,6 +304,88 @@ const updateMarginSide = (field: string, value: unknown) => {
           />
         </div>
       </div>
+
+      <template v-if="editableModule.config.shadowEnabled">
+        <div class="style-control-row style-control-row--shadow">
+          <div class="style-control-row__label">阴影参数</div>
+          <div class="style-control-row__body">
+            <div class="shadow-control-grid">
+              <a-form-item label="X 偏移">
+                <a-input-number
+                  v-model:value="editableModule.config.shadowOffsetX"
+                  :max="80"
+                  :min="-80"
+                  addon-after="rpx"
+                  class="w-full"
+                />
+              </a-form-item>
+              <a-form-item label="Y 偏移">
+                <a-input-number
+                  v-model:value="editableModule.config.shadowOffsetY"
+                  :max="80"
+                  :min="-80"
+                  addon-after="rpx"
+                  class="w-full"
+                />
+              </a-form-item>
+              <a-form-item label="模糊">
+                <a-input-number
+                  v-model:value="editableModule.config.shadowBlur"
+                  :max="160"
+                  :min="0"
+                  addon-after="rpx"
+                  class="w-full"
+                />
+              </a-form-item>
+              <a-form-item label="扩散">
+                <a-input-number
+                  v-model:value="editableModule.config.shadowSpread"
+                  :max="80"
+                  :min="-80"
+                  addon-after="rpx"
+                  class="w-full"
+                />
+              </a-form-item>
+              <a-form-item label="颜色">
+                <div class="style-color-field style-color-field--no-action">
+                  <input
+                    aria-label="选择阴影颜色"
+                    class="style-color-field__picker"
+                    type="color"
+                    :value="
+                      getProfileStyleColorInputValue(
+                        editableModule.config,
+                        'shadowColor',
+                      )
+                    "
+                    @input="
+                      (event: Event) =>
+                        updateModuleStyleColorFromEvent(
+                          editableModule,
+                          'shadowColor',
+                          event,
+                        )
+                    "
+                  />
+                  <a-input
+                    v-model:value="editableModule.config.shadowColor"
+                    class="style-color-field__input"
+                  />
+                </div>
+              </a-form-item>
+              <a-form-item label="透明度">
+                <a-input-number
+                  v-model:value="editableModule.config.shadowOpacity"
+                  :max="100"
+                  :min="0"
+                  addon-after="%"
+                  class="w-full"
+                />
+              </a-form-item>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>

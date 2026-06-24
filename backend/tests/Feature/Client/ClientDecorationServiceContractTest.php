@@ -346,6 +346,12 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $this->assertSame(10, $schema['pageStyle']['paddingTop']);
         $this->assertSame(28, $schema['pageStyle']['paddingX']);
+        $this->assertSame(28, $schema['pageStyle']['paddingLeft']);
+        $this->assertSame(28, $schema['pageStyle']['paddingRight']);
+        $this->assertSame(24, $schema['pageStyle']['paddingBottom']);
+        $this->assertSame(23, $schema['pageStyle']['padding']);
+        $this->assertSame('color', $schema['pageStyle']['backgroundMode']);
+        $this->assertSame('', $schema['pageStyle']['backgroundColorStart']);
 
         $modules = array_column($schema['modules'], null, 'type');
 
@@ -359,6 +365,8 @@ final class ClientDecorationServiceContractTest extends TestCase
             'static/demo/profile-order-pay.svg',
             $modules['orderEntry']['props']['items'][0]['image']
         );
+        $this->assertTrue(($modules['orderEntry']['props']['items'][0]['visible'] ?? true) !== false);
+        $this->assertTrue(($modules['orderEntry']['props']['items'][0]['enabled'] ?? true) !== false);
         $this->assertArrayNotHasKey('icon', $modules['orderEntry']['props']['items'][0]);
         $this->assertSame(
             'static/demo/profile-service-settings.svg',
@@ -388,10 +396,85 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertTrue($modules['orderEntry']['props']['borderEnabled']);
         $this->assertSame('dashed', $modules['orderEntry']['props']['borderStyle']);
         $this->assertFalse($modules['orderEntry']['props']['shadowEnabled']);
+        $this->assertSame(30, $modules['orderEntry']['props']['shadowBlur']);
+        $this->assertSame('#0f172a', $modules['orderEntry']['props']['shadowColor']);
+        $this->assertSame(0, $modules['orderEntry']['props']['shadowOffsetX']);
+        $this->assertSame(12, $modules['orderEntry']['props']['shadowOffsetY']);
+        $this->assertSame(14, $modules['orderEntry']['props']['shadowOpacity']);
+        $this->assertSame(0, $modules['orderEntry']['props']['shadowSpread']);
+        $this->assertArrayNotHasKey('textVisibility', $modules['orderEntry']['props']);
         $this->assertArrayNotHasKey('show_level', $modules['userInfo']['props']);
         $this->assertArrayNotHasKey('show_points', $modules['walletEntry']['props']);
         $this->assertTrue($modules['walletEntry']['props']['show_records']);
         $this->assertTrue($modules['walletEntry']['props']['show_view_button']);
+    }
+
+    public function testDecorationProfileKeepsLegacyPageAndModuleStyleAliases(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'profile', [
+            'pageStyle' => [
+                'background_color_end' => '#222222',
+                'background_color_start' => '#111111',
+                'background_gradient_direction' => 'vertical',
+                'background_mode' => 'color',
+                'padding_x' => 20,
+                'padding_y' => 36,
+            ],
+            'modules' => [
+                [
+                    'id' => 'profile-order',
+                    'type' => 'orderEntry',
+                    'props' => [
+                        'items' => [
+                            [
+                                'image' => 'static/demo/profile-order-pay.svg',
+                                'label' => '待付款',
+                                'path' => '/pages-sub/order/list?status=10',
+                                'visible' => false,
+                            ],
+                        ],
+                        'padding_bottom' => 3,
+                        'padding_left' => 4,
+                        'padding_right' => 2,
+                        'padding_top' => 1,
+                        'paddingX' => 8,
+                        'paddingY' => 6,
+                        'shadow_blur' => 40,
+                        'shadow_color' => '#123456',
+                        'shadow_enabled' => true,
+                        'shadow_offset_x' => 5,
+                        'shadow_offset_y' => 20,
+                        'shadow_opacity' => 35,
+                        'shadow_spread' => 2,
+                        'textVisibility' => ['title' => false],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertSame('#111111', $schema['pageStyle']['backgroundColorStart']);
+        $this->assertSame('#222222', $schema['pageStyle']['backgroundColorEnd']);
+        $this->assertSame('vertical', $schema['pageStyle']['backgroundGradientDirection']);
+        $this->assertSame(36, $schema['pageStyle']['paddingTop']);
+        $this->assertSame(20, $schema['pageStyle']['paddingLeft']);
+        $this->assertSame(20, $schema['pageStyle']['paddingRight']);
+
+        $props = $schema['modules'][0]['props'];
+        $this->assertSame(1, $props['paddingTop']);
+        $this->assertSame(2, $props['paddingRight']);
+        $this->assertSame(3, $props['paddingBottom']);
+        $this->assertSame(4, $props['paddingLeft']);
+        $this->assertTrue($props['shadowEnabled']);
+        $this->assertSame(5, $props['shadowOffsetX']);
+        $this->assertSame(20, $props['shadowOffsetY']);
+        $this->assertSame(40, $props['shadowBlur']);
+        $this->assertSame(2, $props['shadowSpread']);
+        $this->assertSame('#123456', $props['shadowColor']);
+        $this->assertSame(35, $props['shadowOpacity']);
+        $this->assertFalse($props['items'][0]['visible']);
+        $this->assertArrayNotHasKey('textVisibility', $props);
     }
 
     public function testDecorationProfileKeepsLegacyThemeEntryKeyForRuntimeCompatibility(): void
