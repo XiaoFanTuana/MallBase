@@ -306,7 +306,7 @@
   width: 100%;
 }
 
-.spacing-side-field span {
+.spacing-side-field > .spacing-side-field__label {
   display: grid;
   width: 22px;
   height: 22px;
@@ -317,6 +317,18 @@
   place-items: center;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* 让原生 a-input-number 真正撑满栅格：默认内层 .ant-input-number 固定 90px，
+   不拉伸会导致步进箭头与 rpx 后缀挤在窄宽度里变形 */
+.spacing-control :where(.ant-input-number, .ant-input-number-group-wrapper) {
+  width: 100%;
+  min-width: 0;
+}
+
+.spacing-control :where(.ant-input-number-input),
+.spacing-control :where(.ant-input-number-group-addon) {
+  padding-inline: 6px;
 }
 
 .property-form-item--full .ant-form-item-row {

@@ -59,7 +59,7 @@ const emitSide = (field: string, value: unknown) => {
         :key="side.field"
         class="spacing-side-field"
       >
-        <span>{{ side.label }}</span>
+        <span class="spacing-side-field__label">{{ side.label }}</span>
         <a-input-number
           :addon-after="unit ?? 'rpx'"
           :disabled="disabled"
