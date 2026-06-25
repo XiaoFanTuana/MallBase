@@ -893,10 +893,6 @@ const defaultProfileServiceImageByIndex = [
     'profile-service-address.svg',
   ),
   createDemoAssetFile(
-    'static/demo/profile-service-favorite.svg',
-    'profile-service-favorite.svg',
-  ),
-  createDemoAssetFile(
     'static/demo/profile-service-settings.svg',
     'profile-service-settings.svg',
   ),

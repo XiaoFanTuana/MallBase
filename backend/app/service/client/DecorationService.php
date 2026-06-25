@@ -620,8 +620,7 @@ class DecorationService extends BaseService
     {
         return [
             ['title' => '地址管理', 'label' => '地址管理', 'image' => 'static/demo/profile-service-address.svg', 'path' => '/pages-sub/address/list'],
-            ['title' => '我的收藏', 'label' => '我的收藏', 'image' => 'static/demo/profile-service-favorite.svg', 'path' => ''],
-            ['title' => '主题设置', 'label' => '主题设置', 'image' => 'static/demo/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
+            ['title' => '系统设置', 'label' => '系统设置', 'image' => 'static/demo/profile-service-settings.svg', 'path' => '/pages-sub/user/settings'],
             ['title' => '联系客服', 'label' => '联系客服', 'image' => 'static/demo/profile-service-support.svg', 'path' => ''],
         ];
     }
@@ -699,7 +698,6 @@ class DecorationService extends BaseService
             ]
             : [
                 'static/demo/profile-service-address.svg',
-                'static/demo/profile-service-favorite.svg',
                 'static/demo/profile-service-settings.svg',
                 'static/demo/profile-service-support.svg',
             ];

@@ -632,7 +632,7 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertArrayHasKey('walletEntry', $modules);
         $this->assertArrayHasKey('serviceMenu', $modules);
         $this->assertCount(4, $modules['orderEntry']['props']['items']);
-        $this->assertCount(4, $modules['serviceMenu']['props']['items']);
+        $this->assertCount(3, $modules['serviceMenu']['props']['items']);
         $this->assertSame(
             'static/demo/profile-order-pay.svg',
             $modules['orderEntry']['props']['items'][0]['image']
@@ -642,11 +642,12 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertArrayNotHasKey('icon', $modules['orderEntry']['props']['items'][0]);
         $this->assertSame(
             'static/demo/profile-service-settings.svg',
-            $modules['serviceMenu']['props']['items'][2]['image']
+            $modules['serviceMenu']['props']['items'][1]['image']
         );
-        $this->assertSame('/pages-sub/user/settings', $modules['serviceMenu']['props']['items'][2]['path']);
-        $this->assertArrayNotHasKey('action', $modules['serviceMenu']['props']['items'][2]);
-        $this->assertArrayNotHasKey('icon', $modules['serviceMenu']['props']['items'][2]);
+        $this->assertSame('系统设置', $modules['serviceMenu']['props']['items'][1]['label']);
+        $this->assertSame('/pages-sub/user/settings', $modules['serviceMenu']['props']['items'][1]['path']);
+        $this->assertArrayNotHasKey('action', $modules['serviceMenu']['props']['items'][1]);
+        $this->assertArrayNotHasKey('icon', $modules['serviceMenu']['props']['items'][1]);
         $this->assertSame('我的订单', $modules['orderEntry']['props']['title']);
         $this->assertSame('我的余额', $modules['walletEntry']['props']['title']);
         $this->assertSame('我的服务', $modules['serviceMenu']['props']['title']);

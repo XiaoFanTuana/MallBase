@@ -290,14 +290,8 @@ export const DEFAULT_PROFILE_MODULES = [
           path: "/pages-sub/address/list",
         },
         {
-          key: "favorite",
-          label: "我的收藏",
-          image: "static/demo/profile-service-favorite.svg",
-          path: "",
-        },
-        {
-          key: "theme",
-          label: "主题设置",
+          key: "settings",
+          label: "系统设置",
           image: "static/demo/profile-service-settings.svg",
           path: "/pages-sub/user/settings",
         },

@@ -177,13 +177,8 @@ const DEFAULT_PROFILE_SERVICE_ITEMS = [
     path: '/pages-sub/address/list',
   },
   {
-    image: 'static/demo/profile-service-favorite.svg',
-    label: '我的收藏',
-    path: '',
-  },
-  {
     image: 'static/demo/profile-service-settings.svg',
-    label: '主题设置',
+    label: '系统设置',
     path: '/pages-sub/user/settings',
   },
   {

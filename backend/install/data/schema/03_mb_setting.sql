@@ -239,6 +239,7 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (105, '分享默认标题', 'client_share_title', '', 'input', NULL, NULL, NULL, NULL, 50),
 (105, '分享默认简介', 'client_share_desc', '', 'input', NULL, NULL, NULL, NULL, 60),
 (105, '分享默认封面', 'client_share_cover', '/static/client/share-cover.png', 'image', NULL, NULL, NULL, '推荐 5:4，建议 500×400 PNG/JPG，<200KB', 70),
+(105, '客服手机号', 'client_customer_service_phone', '', 'input', NULL, '[{"type":"phone","message":"请输入正确的客服手机号"}]', '请输入客服手机号', '客户端“联系客服”入口拨打的手机号，留空时前端提示未配置', 75),
 (105, '商品保障', 'client_goods_guarantees', '[{"title":"正品保障","desc":"平台严选商品来源","icon":"shield"},{"title":"极速发货","desc":"现货商品优先出库","icon":"truck"},{"title":"七天无理由","desc":"符合条件可无理由退货","icon":"refresh"},{"title":"售后无忧","desc":"订单售后进度可追踪","icon":"service"}]', 'json', NULL, NULL, NULL, '客户端商品详情页保障说明，JSON 数组', 80),
 (105, '用户协议', 'client_agreement', '', 'editor', NULL, NULL, NULL, NULL, 90),
 (105, '隐私政策', 'client_privacy', '', 'editor', NULL, NULL, NULL, NULL, 100),

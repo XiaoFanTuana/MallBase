@@ -4,10 +4,12 @@ import { onShow } from "@dcloudio/uni-app";
 import { getPayMethods } from "@/api/config";
 import { getWalletInfo } from "@/api/user/wallet";
 import config from "@/config/index";
+import { useAppStore } from "@/store/app";
 import { useDecorateStore } from "@/store/decorate";
 import { useUserStore } from "@/store/user";
 
 const userStore = useUserStore();
+const appStore = useAppStore();
 const decorateStore = useDecorateStore();
 
 const wallet = ref({
@@ -73,14 +75,19 @@ const profileIconPresets = [
     ],
   },
   {
-    type: "favorite",
-    text: "藏",
-    keywords: ["favorite", "heart", "收藏", "ant-design:heart-outlined"],
-  },
-  {
-    type: "theme",
-    text: "题",
-    keywords: ["theme", "skin", "主题", "ant-design:skin-outlined"],
+    type: "settings",
+    text: "设",
+    keywords: [
+      "settings",
+      "setting",
+      "theme",
+      "skin",
+      "系统",
+      "设置",
+      "主题",
+      "ant-design:skin-outlined",
+      "ant-design:setting-outlined",
+    ],
   },
   {
     type: "service",
@@ -103,7 +110,6 @@ const defaultProfileOrderImages = [
 
 const defaultProfileServiceImages = [
   "static/demo/profile-service-address.svg",
-  "static/demo/profile-service-favorite.svg",
   "static/demo/profile-service-settings.svg",
   "static/demo/profile-service-support.svg",
 ];
@@ -262,6 +268,22 @@ function moduleList(module) {
 
 function isThemeEntry(item) {
   return item?.action === "theme" || item?.key === "theme";
+}
+
+function isCustomerServiceEntry(item) {
+  const key = String(item?.key || item?.action || "").toLowerCase();
+  const label = String(item?.label || item?.title || item?.text || "");
+  return (
+    key === "service" ||
+    key === "customer" ||
+    key === "customer_service" ||
+    label.includes("客服")
+  );
+}
+
+function getCustomerServicePhone() {
+  const raw = appStore.siteConfig?.client_customer_service_phone || "";
+  return String(raw).replace(/[\s-]/g, "");
 }
 
 function showWalletBalance(module) {
@@ -793,9 +815,32 @@ function goWalletRecords() {
   uni.navigateTo({ url: "/pages-sub/wallet/records" });
 }
 
-function goCell(cell) {
+async function callCustomerService() {
+  if (!appStore.siteConfig) {
+    await appStore.fetchBasicConfig();
+  }
+
+  const phone = getCustomerServicePhone();
+  if (!phone) {
+    uni.showToast({ title: "未配置客服手机号", icon: "none" });
+    return;
+  }
+
+  uni.makePhoneCall({
+    phoneNumber: phone,
+    fail() {
+      uni.showToast({ title: "拨号失败", icon: "none" });
+    },
+  });
+}
+
+async function goCell(cell) {
   if (isThemeEntry(cell) && !cell.path && !cell.url) {
     showThemeSelector();
+    return;
+  }
+  if (isCustomerServiceEntry(cell) && !cell.path && !cell.url) {
+    await callCustomerService();
     return;
   }
   if (!cell.path && !cell.url) {

@@ -436,10 +436,6 @@ const DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX = [
     'profile-service-address.svg',
   ),
   createDemoAssetFile(
-    'static/demo/profile-service-favorite.svg',
-    'profile-service-favorite.svg',
-  ),
-  createDemoAssetFile(
     'static/demo/profile-service-settings.svg',
     'profile-service-settings.svg',
   ),
@@ -2456,18 +2452,12 @@ const defaultProfileServiceItems = () => [
   {
     id: createId('profile_item'),
     image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[1],
-    path: '',
-    title: '我的收藏',
+    path: '/pages-sub/user/settings',
+    title: '系统设置',
   },
   {
     id: createId('profile_item'),
     image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[2],
-    path: '/pages-sub/user/settings',
-    title: '主题设置',
-  },
-  {
-    id: createId('profile_item'),
-    image: DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX[3],
     path: '',
     title: '联系客服',
   },
