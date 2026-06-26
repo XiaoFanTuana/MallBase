@@ -166,7 +166,7 @@ return [
             'affix_tab' => 0,
             'no_basic_layout' => 0,
             'remark' => '商品新增/编辑页面',
-            'parent' => 'SystemGoodsList',
+            'parent' => 'SystemGoodsManagement',
         ],
         [
             'name' => '订单管理',
