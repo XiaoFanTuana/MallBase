@@ -67,6 +67,8 @@ interface Props {
   multiple?: boolean;
   /** 上传模式：direct=直接上传，library=只选素材库，both=素材库选择+直接上传 */
   mode?: 'both' | 'direct' | 'library';
+  /** 触发方式：inline=显示默认上传入口，manual=仅暴露 open 方法由外部触发 */
+  trigger?: 'inline' | 'manual';
   /**
    * 自定义上传方法（可选）
    * 不传则组件内部自动调用 uploadSingleApi
@@ -102,6 +104,7 @@ const props = withDefaults(defineProps<Props>(), {
   customRemove: undefined,
   secure: false,
   mode: 'both',
+  trigger: 'inline',
 });
 
 const emit = defineEmits<{
@@ -151,6 +154,7 @@ const showAssetPickerTrigger = computed(
     !uploadOptionsError.value,
 );
 const showDirectUploadControl = computed(() => !useAssetPickerMode.value);
+const showInlineTrigger = computed(() => props.trigger !== 'manual');
 
 const loadUploadOptions = async () => {
   if (props.secure) return undefined;
@@ -250,6 +254,10 @@ const loadAssets = async () => {
 };
 
 const openAssetPicker = async () => {
+  if (props.disabled) {
+    return;
+  }
+
   // uploadOptions 是字典接口：当前 type -> asset_type/multiple，以及驱动/素材类型 label。
   await loadUploadOptions();
   const option = uploadTypeOption.value;
@@ -268,6 +276,10 @@ const openAssetPicker = async () => {
     loadAssets(),
   ]);
 };
+
+defineExpose({
+  open: openAssetPicker,
+});
 
 const assetToFileInfo = (asset: UploadAssetApi.AssetItem): FileInfo => ({
   url: String(asset.id),
@@ -1142,6 +1154,7 @@ const handlePreview = (file: UploadFile) => {
 
 <template>
   <div
+    v-if="showInlineTrigger"
     class="upload-field"
     :class="{ 'upload-field--compact': !props.showUploadList }"
   >
@@ -1208,7 +1221,10 @@ const handlePreview = (file: UploadFile) => {
     </a-upload>
   </div>
 
-  <div v-if="inlineUploadNoticeLines.length > 0" class="upload-warning-text">
+  <div
+    v-if="showInlineTrigger && inlineUploadNoticeLines.length > 0"
+    class="upload-warning-text"
+  >
     <span
       v-for="line in inlineUploadNoticeLines"
       :key="line"
@@ -1219,7 +1235,7 @@ const handlePreview = (file: UploadFile) => {
   </div>
 
   <div
-    v-if="isVideoType && inlineVideoList.length > 0"
+    v-if="showInlineTrigger && isVideoType && inlineVideoList.length > 0"
     class="video-inline-preview"
   >
     <div
