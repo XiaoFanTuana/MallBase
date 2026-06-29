@@ -38,7 +38,7 @@ class UserController extends BaseController
             return $this->error('请输入密码');
         }
 
-        $result = $this->service()->login($data['account'], $data['password']);
+        $result = $this->service()->login($data['account'], $data['password'], $this->clientType());
         return $this->success($result, '登录成功');
     }
 
@@ -56,7 +56,7 @@ class UserController extends BaseController
             return $this->error('请输入密码');
         }
 
-        $result = $this->service()->loginByUsername($data['username'], $data['password']);
+        $result = $this->service()->loginByUsername($data['username'], $data['password'], $this->clientType());
         return $this->success($result, '登录成功');
     }
 
@@ -74,8 +74,23 @@ class UserController extends BaseController
             return $this->error('请输入验证码');
         }
 
-        $result = $this->service()->loginBySms($data['mobile'], $data['code']);
+        $result = $this->service()->loginBySms($data['mobile'], $data['code'], $this->clientType());
         return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 刷新 Token
+     */
+    public function refreshToken()
+    {
+        $refreshToken = (string) $this->request->param('refresh_token', '');
+
+        if ($refreshToken === '') {
+            return $this->error('刷新令牌不能为空');
+        }
+
+        $result = $this->service()->refreshToken($refreshToken);
+        return $this->success($result, '刷新成功');
     }
 
     /**
@@ -112,7 +127,7 @@ class UserController extends BaseController
             return $this->error('未登录');
         }
 
-        $this->service()->logout((int) $userId);
+        $this->service()->logout((int) $userId, $this->request->sid ?? null);
         return $this->success(null, '登出成功');
     }
 
@@ -482,5 +497,12 @@ class UserController extends BaseController
         }
 
         return $successMessage;
+    }
+
+    private function clientType(): string
+    {
+        $clientType = (string) $this->request->header('X-MallBase-Client', 'uniapp');
+
+        return $clientType !== '' ? $clientType : 'uniapp';
     }
 }

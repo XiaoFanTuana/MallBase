@@ -475,10 +475,14 @@ class WechatService extends BaseService
         ]);
 
         $jwtService = app()->make(JwtService::class);
+        $sid = bin2hex(random_bytes(16));
         $token = $jwtService->encode([
             'user_id'       => $user->id,
             'account'       => $account,
             'register_type' => $registerType,
+            'guard'         => JwtCacheService::GUARD_CLIENT,
+            'client_type'   => $registerType,
+            'sid'           => $sid,
         ]);
 
         $jwtCacheService = app()->make(JwtCacheService::class);
@@ -486,6 +490,8 @@ class WechatService extends BaseService
             $token['refresh_token'],
             $user->id,
             $jwtService->getRefreshExpire(),
+            JwtCacheService::GUARD_CLIENT,
+            $sid,
         );
 
         return $token;

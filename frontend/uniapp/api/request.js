@@ -1,10 +1,27 @@
 import config from '@/config/index'
 
 const TOKEN_KEY = 'mb_access_token'
+const REFRESH_KEY = 'mb_refresh_token'
 const REQUEST_TIMEOUT = 15000
+const REFRESH_URL = '/client/api/user/auth/refreshToken'
+
+let refreshingPromise = null
 
 function getToken() {
   return uni.getStorageSync(TOKEN_KEY) || ''
+}
+
+function getRefreshToken() {
+  return uni.getStorageSync(REFRESH_KEY) || ''
+}
+
+function setStoredTokens(accessToken, refreshToken) {
+  if (accessToken) {
+    uni.setStorageSync(TOKEN_KEY, accessToken)
+  }
+  if (refreshToken) {
+    uni.setStorageSync(REFRESH_KEY, refreshToken)
+  }
 }
 
 function getClientType() {
@@ -44,7 +61,7 @@ function rejectInvalidResponse(reject, context) {
 
 function handleUnauthorized(message = '请重新登录') {
   uni.removeStorageSync(TOKEN_KEY)
-  uni.removeStorageSync('mb_refresh_token')
+  uni.removeStorageSync(REFRESH_KEY)
   let loginUrl = '/pages-sub/user/login'
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
@@ -62,7 +79,50 @@ function handleUnauthorized(message = '请重新登录') {
   return new Error(message)
 }
 
-function request(options) {
+function refreshAccessToken() {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) {
+    return Promise.reject(new Error('刷新令牌不存在'))
+  }
+
+  if (refreshingPromise) {
+    return refreshingPromise
+  }
+
+  refreshingPromise = new Promise((resolve, reject) => {
+    uni.request({
+      url: `${config.baseUrl}${REFRESH_URL}`,
+      method: 'POST',
+      data: {
+        refresh_token: refreshToken
+      },
+      timeout: REQUEST_TIMEOUT,
+      header: {
+        'Content-Type': 'application/json',
+        'X-MallBase-Client': getClientType()
+      },
+      success(res) {
+        const body = parseResponseBody(res.data)
+        if (body?.code === 200 && body.data?.access_token) {
+          setStoredTokens(body.data.access_token, body.data.refresh_token)
+          resolve(body.data.access_token)
+          return
+        }
+        reject(new Error(getResponseMessage(body, '登录态已过期')))
+      },
+      fail(err) {
+        reject(err)
+      },
+      complete() {
+        refreshingPromise = null
+      }
+    })
+  })
+
+  return refreshingPromise
+}
+
+function request(options, allowRefresh = true) {
   const { url, method = 'GET', data, header = {} } = options
   const requestUrl = `${config.baseUrl}${url}`
   const token = getToken()
@@ -81,7 +141,7 @@ function request(options) {
         'X-MallBase-Client': getClientType(),
         ...header
       },
-      success(res) {
+      async success(res) {
         const body = parseResponseBody(res.data)
         if (!isProtocolBody(body)) {
           rejectInvalidResponse(reject, {
@@ -96,6 +156,15 @@ function request(options) {
         if (body.code === 200) {
           resolve(body.data)
         } else if (body.code === 401) {
+          if (allowRefresh) {
+            try {
+              await refreshAccessToken()
+              resolve(request(options, false))
+              return
+            } catch (_) {
+              // 继续走统一登录态失效处理
+            }
+          }
           reject(handleUnauthorized(getResponseMessage(body, '请重新登录')))
         } else {
           const message = getResponseMessage(body, '请求失败')
@@ -122,7 +191,7 @@ export const post = (url, data) => request({ url, method: 'POST', data })
 export const put = (url, data) => request({ url, method: 'PUT', data })
 export const del = (url, data) => request({ url, method: 'DELETE', data })
 
-export function uploadFile(url, filePath, name = 'file', formData = {}) {
+export function uploadFile(url, filePath, name = 'file', formData = {}, allowRefresh = true) {
   const requestUrl = `${config.baseUrl}${url}`
   const token = getToken()
   const header = {}
@@ -138,7 +207,7 @@ export function uploadFile(url, filePath, name = 'file', formData = {}) {
       name,
       formData,
       header,
-      success(res) {
+      async success(res) {
         const body = parseResponseBody(res.data)
         if (!isProtocolBody(body)) {
           rejectInvalidResponse(reject, {
@@ -153,6 +222,15 @@ export function uploadFile(url, filePath, name = 'file', formData = {}) {
         if (body.code === 200) {
           resolve(body.data)
         } else if (body.code === 401) {
+          if (allowRefresh) {
+            try {
+              await refreshAccessToken()
+              resolve(uploadFile(url, filePath, name, formData, false))
+              return
+            } catch (_) {
+              // 继续走统一登录态失效处理
+            }
+          }
           reject(handleUnauthorized(getResponseMessage(body, '请重新登录')))
         } else {
           const message = getResponseMessage(body, '上传失败')

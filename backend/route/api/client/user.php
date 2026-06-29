@@ -9,6 +9,7 @@ Route::group('user/auth', function () {
     Route::post('login/username', 'loginByUsername');       // 用户名 + 密码
     Route::post('login/sms', 'loginBySms');                 // 手机号 + SMS
     Route::post('login', 'login')->completeMatch();         // 手机号 + 密码
+    Route::post('refreshToken', 'refreshToken');             // refresh_token 换取新 Token
 
     // 短信验证码下发(scene 由参数指定)
     Route::post('sms/send', 'sendSmsCode');
