@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ClientUserApi, UserGroupApi, UserTagApi } from '#/api/user';
 
-import { h, onMounted, reactive, ref } from 'vue';
+import { computed, h, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
@@ -112,25 +112,6 @@ const handleExport = async () => {
   } catch (error: any) {
     message.error(error?.message || '导出失败');
   }
-};
-
-const handleTableWheel = (event: WheelEvent) => {
-  const target = event.target as HTMLElement | null;
-  if (!target?.closest('.ant-table-content')) {
-    return;
-  }
-
-  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
-    return;
-  }
-
-  const scrollElement = document.scrollingElement;
-  if (!scrollElement) {
-    return;
-  }
-
-  event.preventDefault();
-  scrollElement.scrollTop += event.deltaY;
 };
 
 /* ---------------- 弹窗 ---------------- */
@@ -305,7 +286,7 @@ const handleDelete = (record: ClientUserApi.UserItem) => {
 };
 
 /* ---------------- 表格列 ---------------- */
-const columns = [
+const baseColumns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
   {
     title: '头像',
@@ -420,6 +401,16 @@ const columns = [
   { title: '操作', fixed: 'right', key: 'action', width: 380 },
 ];
 
+const columns = computed(() => baseColumns);
+
+const tableScrollX = computed(() =>
+  columns.value.reduce(
+    (total, column) =>
+      total + Number((column as { width?: number | string }).width || 0),
+    0,
+  ),
+);
+
 /* ---------------- 初始化 ---------------- */
 onMounted(async () => {
   try {
@@ -524,7 +515,7 @@ onMounted(async () => {
       </a-form>
     </div>
 
-    <div class="user-table-panel" @wheel="handleTableWheel">
+    <div class="user-table-panel">
       <a-tabs
         :active-key="activeStatusTab"
         class="user-status-tabs"
@@ -543,7 +534,7 @@ onMounted(async () => {
         :data-source="tableData"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1980 }"
+        :scroll="{ x: tableScrollX }"
         row-key="id"
         @change="
           (newPagination: any) => {
