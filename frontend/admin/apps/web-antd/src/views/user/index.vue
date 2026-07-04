@@ -7,17 +7,22 @@ import { useAccess } from '@vben/access';
 
 import { message, Modal, Switch, Tag } from 'ant-design-vue';
 
+import { getSettingConfigApi } from '#/api/setting';
 import {
+  adjustClientUserPointsApi,
   adjustClientUserWalletApi,
   deleteClientUserApi,
   exportClientUserCsvApi,
   getClientUserInfoApi,
   getClientUserListApi,
+  getClientUserMemberLevelOptionsApi,
+  getClientUserPointsLogsApi,
   getClientUserStatsApi,
   getClientUserWalletLogsApi,
   getUserGroupListApi,
   getUserTagListApi,
   resetClientUserPasswordApi,
+  setClientUserMemberApi,
   updateClientUserStatusApi,
 } from '#/api/user';
 import { useTableCrud } from '#/composables/useTableCrud';
@@ -45,6 +50,9 @@ const REGISTER_TYPE_MAP: Record<string, { color: string; label: string }> = {
 // ==================== 分组和标签选项 ====================
 const groupOptions = ref<UserGroupApi.GroupItem[]>([]);
 const tagOptions = ref<UserTagApi.TagItem[]>([]);
+const memberLevelOptions = ref<ClientUserApi.MemberLevelOption[]>([]);
+const pointsEnabled = ref(true);
+const memberEnabled = ref(false);
 
 /* ---------------- 表格 CRUD ---------------- */
 const { tableData, loading, pagination, loadData } = useTableCrud<
@@ -243,6 +251,175 @@ const submitWalletAdjust = async () => {
   }
 };
 
+/* ---------------- 积分记录 / 调整 ---------------- */
+const pointsDrawerVisible = ref(false);
+const pointsLogLoading = ref(false);
+const pointsLogs = ref<ClientUserApi.PointsLogItem[]>([]);
+const pointsUser = ref<ClientUserApi.UserItem | null>(null);
+const pointsLogPagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true,
+});
+
+const pointsAdjustVisible = ref(false);
+const pointsAdjustSubmitting = ref(false);
+const pointsAdjustMax = 999_999;
+const pointsAdjustForm = ref({
+  user_id: 0,
+  direction: 'income' as 'expense' | 'income',
+  points: 0,
+  remark: '',
+});
+
+const pointsLogColumns = [
+  { title: '时间', dataIndex: 'create_time', width: 170 },
+  {
+    title: '方向',
+    dataIndex: 'direction',
+    width: 90,
+    customRender: ({ record }: { record: ClientUserApi.PointsLogItem }) =>
+      record.direction === 'income' ? '收入' : '支出',
+  },
+  {
+    title: '积分',
+    dataIndex: 'change_points',
+    width: 110,
+    customRender: ({ record }: { record: ClientUserApi.PointsLogItem }) =>
+      `${record.direction === 'income' ? '+' : '-'}${record.change_points}`,
+  },
+  { title: '变动前', dataIndex: 'before_points', width: 110 },
+  { title: '变动后', dataIndex: 'after_points', width: 110 },
+  {
+    title: '业务类型',
+    dataIndex: 'biz_type_text',
+    width: 130,
+    customRender: ({ record }: { record: ClientUserApi.PointsLogItem }) =>
+      record.biz_type_text || record.biz_type || '-',
+  },
+  { title: '业务单号', dataIndex: 'biz_id', width: 180, ellipsis: true },
+  { title: '备注', dataIndex: 'remark', width: 220, ellipsis: true },
+  { title: '操作人', dataIndex: 'operator_id', width: 100 },
+];
+
+const loadPointsLogs = async (record = pointsUser.value) => {
+  if (!record) return;
+  pointsLogLoading.value = true;
+  try {
+    const result = await getClientUserPointsLogsApi({
+      user_id: record.id,
+      page: pointsLogPagination.current,
+      limit: pointsLogPagination.pageSize,
+    });
+    pointsLogs.value = result.list;
+    pointsLogPagination.total = result.total;
+  } finally {
+    pointsLogLoading.value = false;
+  }
+};
+
+const handlePointsLogs = async (record: ClientUserApi.UserItem) => {
+  pointsUser.value = record;
+  pointsLogPagination.current = 1;
+  pointsDrawerVisible.value = true;
+  await loadPointsLogs(record);
+};
+
+const handlePointsAdjust = (record: ClientUserApi.UserItem) => {
+  pointsUser.value = record;
+  pointsAdjustForm.value = {
+    user_id: record.id,
+    direction: 'income',
+    points: 0,
+    remark: '',
+  };
+  pointsAdjustVisible.value = true;
+};
+
+const submitPointsAdjust = async () => {
+  if (!pointsAdjustForm.value.points || !pointsAdjustForm.value.remark) {
+    message.warning('请填写积分和调整原因');
+    return;
+  }
+  pointsAdjustSubmitting.value = true;
+  try {
+    await adjustClientUserPointsApi(pointsAdjustForm.value);
+    message.success('积分调整成功');
+    pointsAdjustVisible.value = false;
+    await refreshData();
+    if (pointsDrawerVisible.value) {
+      await loadPointsLogs();
+    }
+  } finally {
+    pointsAdjustSubmitting.value = false;
+  }
+};
+
+/* ---------------- 设置会员 ---------------- */
+const memberSetVisible = ref(false);
+const memberSetSubmitting = ref(false);
+const memberSetUser = ref<ClientUserApi.UserItem | null>(null);
+const memberSetForm = ref({
+  level_id: undefined as number | undefined,
+  locked: true,
+  lock_until: undefined as string | undefined,
+  remark: '',
+});
+
+const handleMemberSet = (record: ClientUserApi.UserItem) => {
+  memberSetUser.value = record;
+  memberSetForm.value = {
+    level_id: record.member?.level_id || undefined,
+    locked: record.member?.level_source === 'manual',
+    lock_until: record.member?.level_lock_until || undefined,
+    remark: '',
+  };
+  memberSetVisible.value = true;
+};
+
+const formatMemberLevelDiscount = (value: string) => {
+  const percent = Number.parseFloat(value);
+  if (!Number.isFinite(percent)) return value;
+
+  return `${percent}%`;
+};
+
+const formatMemberLevelOptionLabel = (
+  level: ClientUserApi.MemberLevelOption,
+) =>
+  `${level.name}（${level.growth_min}成长值 / 按原价${formatMemberLevelDiscount(
+    level.discount_percent,
+  )}）`;
+
+const submitMemberSet = async () => {
+  if (!memberSetUser.value || !memberSetForm.value.level_id) {
+    message.warning('请选择会员等级');
+    return;
+  }
+  if (!memberSetForm.value.remark.trim()) {
+    message.warning('请填写调整原因');
+    return;
+  }
+
+  memberSetSubmitting.value = true;
+  try {
+    await setClientUserMemberApi(memberSetUser.value.id, {
+      level_id: memberSetForm.value.level_id,
+      locked: memberSetForm.value.locked,
+      lock_until: memberSetForm.value.locked
+        ? memberSetForm.value.lock_until
+        : undefined,
+      remark: memberSetForm.value.remark.trim(),
+    });
+    message.success('会员等级设置成功');
+    memberSetVisible.value = false;
+    await refreshData();
+  } finally {
+    memberSetSubmitting.value = false;
+  }
+};
+
 /* ---------------- 重置密码 ---------------- */
 const handleResetPassword = (record: ClientUserApi.UserItem) => {
   Modal.confirm({
@@ -308,6 +485,34 @@ const baseColumns = [
     width: 120,
     customRender: ({ record }: { record: ClientUserApi.UserItem }) =>
       `¥${record.wallet?.balance || '0.00'}`,
+  },
+  {
+    title: '积分',
+    dataIndex: 'points',
+    width: 110,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) =>
+      record.points?.balance_points ?? 0,
+  },
+  {
+    title: '会员等级',
+    dataIndex: 'member',
+    width: 150,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) => {
+      const levelName = record.member?.level_name || '-';
+      if (record.member?.level_source !== 'manual') return levelName;
+
+      return h('div', { class: 'flex flex-col gap-1' }, [
+        h('span', levelName),
+        h(Tag, { color: 'blue' }, () => '手动'),
+      ]);
+    },
+  },
+  {
+    title: '成长值',
+    dataIndex: 'member_growth',
+    width: 100,
+    customRender: ({ record }: { record: ClientUserApi.UserItem }) =>
+      record.member?.growth_value ?? 0,
   },
   { title: '邮箱', dataIndex: 'email', width: 180, ellipsis: true },
   {
@@ -398,10 +603,17 @@ const baseColumns = [
     ellipsis: true,
   },
   { title: '注册时间', dataIndex: 'create_time', width: 160 },
-  { title: '操作', fixed: 'right', key: 'action', width: 380 },
+  { title: '操作', fixed: 'right', key: 'action', width: 450 },
 ];
 
-const columns = computed(() => baseColumns);
+const columns = computed(() =>
+  baseColumns.filter((column) => {
+    const key = String((column as any).dataIndex || (column as any).key || '');
+    if (key === 'points') return pointsEnabled.value;
+    if (key === 'member' || key === 'member_growth') return memberEnabled.value;
+    return true;
+  }),
+);
 
 const tableScrollX = computed(() =>
   columns.value.reduce(
@@ -411,15 +623,68 @@ const tableScrollX = computed(() =>
   ),
 );
 
+function settingSwitchEnabled(value: unknown, fallback = true) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return ['1', 'on', 'true'].includes(String(value).toLowerCase());
+}
+
+function settingItems(config: any) {
+  return [
+    ...(Array.isArray(config?.settings) ? config.settings : []),
+    ...(config?.tabs || []).flatMap((tab: any) => tab.settings || []),
+  ];
+}
+
+async function loadMarketingConfig() {
+  const [pointsResult, memberResult] = await Promise.allSettled([
+    getSettingConfigApi('PointsConfig'),
+    getSettingConfigApi('MemberConfig'),
+  ]);
+
+  if (pointsResult.status === 'fulfilled') {
+    const pointsSwitch = settingItems(pointsResult.value).find(
+      (item) => item.code === 'points_enabled',
+    );
+    pointsEnabled.value = settingSwitchEnabled(pointsSwitch?.value, true);
+  } else {
+    pointsEnabled.value = true;
+  }
+
+  if (memberResult.status === 'fulfilled') {
+    const memberSwitch = settingItems(memberResult.value).find(
+      (item) => item.code === 'member_enabled',
+    );
+    memberEnabled.value = settingSwitchEnabled(memberSwitch?.value, false);
+  } else {
+    memberEnabled.value = false;
+  }
+}
+
+async function loadMemberLevelOptions() {
+  if (!memberEnabled.value) {
+    memberLevelOptions.value = [];
+    return;
+  }
+
+  try {
+    memberLevelOptions.value = await getClientUserMemberLevelOptionsApi();
+  } catch (error) {
+    console.error('加载会员等级选项失败:', error);
+    memberLevelOptions.value = [];
+  }
+}
+
 /* ---------------- 初始化 ---------------- */
 onMounted(async () => {
   try {
     const [groups, tags] = await Promise.all([
       getUserGroupListApi({ status: 1, limit: 100 }),
       getUserTagListApi({ status: 1, limit: 100 }),
+      loadMarketingConfig(),
     ]);
     groupOptions.value = groups.list;
     tagOptions.value = tags.list;
+    await loadMemberLevelOptions();
   } catch (error) {
     console.error('加载分组和标签失败:', error);
   }
@@ -572,6 +837,33 @@ onMounted(async () => {
                 调整余额
               </a-button>
               <a-button
+                v-if="pointsEnabled"
+                type="link"
+                size="small"
+                @click="handlePointsLogs(record)"
+                v-access:code="'SystemUserPointsLog'"
+              >
+                积分记录
+              </a-button>
+              <a-button
+                v-if="pointsEnabled"
+                type="link"
+                size="small"
+                @click="handlePointsAdjust(record)"
+                v-access:code="'SystemUserPointsAdjust'"
+              >
+                调整积分
+              </a-button>
+              <a-button
+                v-if="memberEnabled"
+                type="link"
+                size="small"
+                @click="handleMemberSet(record)"
+                v-access:code="'SystemUserSetMember'"
+              >
+                设置会员
+              </a-button>
+              <a-button
                 type="link"
                 size="small"
                 @click="handleResetPassword(record)"
@@ -666,6 +958,155 @@ onMounted(async () => {
             :maxlength="255"
             :rows="3"
             placeholder="请填写余额调整原因，便于后续审计"
+            show-count
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-drawer
+      v-model:open="pointsDrawerVisible"
+      :title="`积分记录 - ${pointsUser?.nickname || pointsUser?.mobile || pointsUser?.id || ''}`"
+      width="880"
+    >
+      <a-table
+        :columns="pointsLogColumns"
+        :data-source="pointsLogs"
+        :loading="pointsLogLoading"
+        :pagination="pointsLogPagination"
+        :scroll="{ x: 1220 }"
+        row-key="id"
+        size="small"
+        @change="
+          (newPagination: any) => {
+            pointsLogPagination.current = newPagination.current;
+            pointsLogPagination.pageSize = newPagination.pageSize;
+            loadPointsLogs();
+          }
+        "
+      />
+    </a-drawer>
+
+    <a-modal
+      v-model:open="pointsAdjustVisible"
+      title="调整积分"
+      :confirm-loading="pointsAdjustSubmitting"
+      @ok="submitPointsAdjust"
+    >
+      <a-form
+        :model="pointsAdjustForm"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
+      >
+        <a-form-item label="用户">
+          <span>{{
+            pointsUser?.nickname || pointsUser?.mobile || pointsUser?.id
+          }}</span>
+        </a-form-item>
+        <a-form-item label="调整方向" required>
+          <a-radio-group v-model:value="pointsAdjustForm.direction">
+            <a-radio value="income">增加积分</a-radio>
+            <a-radio value="expense">扣减积分</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="积分" required>
+          <a-input-number
+            v-model:value="pointsAdjustForm.points"
+            :max="pointsAdjustMax"
+            :min="1"
+            :precision="0"
+            class="w-full"
+            placeholder="单次最多 999999"
+          />
+          <div class="mt-1 text-xs text-gray-400">
+            扣减积分时不能超过用户当前可用积分
+          </div>
+        </a-form-item>
+        <a-form-item label="调整原因" required>
+          <a-textarea
+            v-model:value="pointsAdjustForm.remark"
+            :maxlength="255"
+            :rows="3"
+            placeholder="请填写积分调整原因，便于后续审计"
+            show-count
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="memberSetVisible"
+      title="设置会员"
+      :confirm-loading="memberSetSubmitting"
+      @ok="submitMemberSet"
+    >
+      <a-form
+        :model="memberSetForm"
+        :label-col="{ style: { width: '100px' } }"
+        class="pt-4"
+      >
+        <a-form-item label="用户">
+          <span>{{
+            memberSetUser?.nickname ||
+            memberSetUser?.mobile ||
+            memberSetUser?.id
+          }}</span>
+        </a-form-item>
+        <a-form-item label="当前成长值">
+          <span>{{ memberSetUser?.member?.growth_value ?? 0 }}</span>
+        </a-form-item>
+        <a-form-item label="当前等级">
+          <a-space>
+            <span>{{ memberSetUser?.member?.level_name || '-' }}</span>
+            <a-tag
+              v-if="memberSetUser?.member?.level_source === 'manual'"
+              color="blue"
+            >
+              手动
+            </a-tag>
+          </a-space>
+        </a-form-item>
+        <a-form-item label="会员等级" required>
+          <a-select
+            v-model:value="memberSetForm.level_id"
+            allow-clear
+            placeholder="请选择会员等级"
+          >
+            <a-select-option
+              v-for="level in memberLevelOptions"
+              :key="level.id"
+              :value="level.id"
+            >
+              {{ formatMemberLevelOptionLabel(level) }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="锁定等级">
+          <a-switch
+            v-model:checked="memberSetForm.locked"
+            checked-children="锁定"
+            un-checked-children="自动"
+          />
+          <div class="mt-1 text-xs text-gray-400">
+            锁定后订单完成只累计成长值，不自动覆盖当前等级
+          </div>
+        </a-form-item>
+        <a-form-item v-if="memberSetForm.locked" label="锁定到期">
+          <a-date-picker
+            v-model:value="memberSetForm.lock_until"
+            allow-clear
+            class="w-full"
+            show-time
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="不填表示永久锁定"
+          />
+        </a-form-item>
+        <a-form-item label="调整原因" required>
+          <a-textarea
+            v-model:value="memberSetForm.remark"
+            :maxlength="255"
+            :rows="3"
+            placeholder="请填写设置会员等级的原因"
             show-count
           />
         </a-form-item>
