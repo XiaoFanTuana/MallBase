@@ -3631,12 +3631,25 @@ const handleModuleMouseDown = (index: number, event: MouseEvent) => {
   );
 };
 
+const getPaletteClickInsertIndex = () => {
+  if (!['home', 'profile'].includes(activeType.value)) {
+    return schemeForm.schema.length;
+  }
+  if (!selectedModule.value) return schemeForm.schema.length;
+
+  const currentIndex = schemeForm.schema.findIndex(
+    (item) => item.id === selectedModule.value?.id,
+  );
+  if (currentIndex === -1) return schemeForm.schema.length;
+  return currentIndex + 1;
+};
+
 const handlePaletteClick = (type: string) => {
   if (suppressPaletteClick.value) {
     suppressPaletteClick.value = false;
     return;
   }
-  addModuleByType(type);
+  addModuleByType(type, getPaletteClickInsertIndex());
 };
 
 const addNavItem = (module: ModuleItem) => {
