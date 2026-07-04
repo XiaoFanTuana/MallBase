@@ -1505,7 +1505,9 @@ function handleLogout() {
 .order-card__label {
   display: block;
   width: 100%;
+  text-align: center;
   font-size: 24rpx;
+  line-height: 1.2;
   color: var(--color-text-secondary, #434654);
 }
 
