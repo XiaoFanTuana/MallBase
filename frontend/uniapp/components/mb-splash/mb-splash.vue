@@ -30,6 +30,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useAppStore } from '@/store/app'
+import { useDecorateStore } from '@/store/decorate'
 
 let shownThisRun = false
 
@@ -39,6 +40,7 @@ const DEFAULT_DURATION_MS = 3000
 const CONFIG_WAIT_MS = 600
 
 const appStore = useAppStore()
+const decorateStore = useDecorateStore()
 const visible = ref(false)
 const remainingSec = ref(0)
 const skipStyle = ref('')
@@ -110,7 +112,7 @@ function computeSkipPosition() {
 }
 
 // 小程序原生 tabBar 在 webview 之外，CSS 无法遮盖
-// 启动页显示期间需要主动隐藏，结束后恢复
+// 启动页显示期间需要主动隐藏，结束后按装修模式同步
 function setNativeTabBar(shown) {
   // #ifdef MP
   const fn = shown ? uni.showTabBar : uni.hideTabBar
@@ -121,6 +123,10 @@ function setNativeTabBar(shown) {
     // 非 tabBar 页调用会抛错，忽略
   }
   // #endif
+}
+
+function syncNativeTabBarAfterSplash() {
+  setNativeTabBar(decorateStore.tabbarMode !== 'custom')
 }
 
 function show() {
@@ -141,7 +147,7 @@ function show() {
 function skip() {
   clearAllTimers()
   visible.value = false
-  setNativeTabBar(true)
+  syncNativeTabBarAfterSplash()
 }
 
 onMounted(() => {
@@ -170,7 +176,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearConfigWait()
   clearAllTimers()
-  setNativeTabBar(true)
+  syncNativeTabBarAfterSplash()
 })
 </script>
 
