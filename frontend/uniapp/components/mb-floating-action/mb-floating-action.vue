@@ -99,6 +99,8 @@ const touchState = ref({
   startX: 0,
   startY: 0,
 })
+let dragFrame = 0
+let pendingDragPosition = null
 
 const config = computed(() => decorateStore.floatingConfig || {})
 
@@ -164,8 +166,9 @@ const rootStyle = computed(() => {
   if (positionReady.value) {
     return {
       ...style,
-      left: `${dragPosition.value.x}px`,
-      top: `${dragPosition.value.y}px`,
+      left: '0px',
+      top: '0px',
+      transform: `translate3d(${Math.round(dragPosition.value.x)}px, ${Math.round(dragPosition.value.y)}px, 0)`,
     }
   }
   const side = config.value.position === 'left-bottom' ? 'left' : 'right'
@@ -510,11 +513,12 @@ function moveDrag(clientX, clientY) {
     dragMoved.value = true
     opened.value = false
   }
-  applyPosition(touchState.value.startX + dx, touchState.value.startY + dy)
+  scheduleDragPosition(touchState.value.startX + dx, touchState.value.startY + dy)
 }
 
 function endDrag() {
   if (!dragging.value) return
+  flushDragPosition()
   dragging.value = false
   if (dragMoved.value) {
     snapToEdge()
@@ -524,7 +528,47 @@ function endDrag() {
 
 onBeforeUnmount(() => {
   removeMouseListeners()
+  cancelDragFrame()
 })
+
+function scheduleDragPosition(x, y) {
+  pendingDragPosition = clampPosition(x, y)
+  if (dragFrame) return
+
+  dragFrame = requestDragFrame(() => {
+    dragFrame = 0
+    if (!pendingDragPosition) return
+    dragPosition.value = pendingDragPosition
+    pendingDragPosition = null
+  })
+}
+
+function flushDragPosition() {
+  if (dragFrame) {
+    cancelDragFrame()
+  }
+  if (pendingDragPosition) {
+    dragPosition.value = pendingDragPosition
+    pendingDragPosition = null
+  }
+}
+
+function cancelDragFrame() {
+  if (!dragFrame) return
+  if (typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(dragFrame)
+  } else {
+    clearTimeout(dragFrame)
+  }
+  dragFrame = 0
+}
+
+function requestDragFrame(callback) {
+  if (typeof requestAnimationFrame === 'function') {
+    return requestAnimationFrame(callback)
+  }
+  return setTimeout(callback, 16)
+}
 
 function handleMainTap() {
   if (ignoreNextTap.value) {
@@ -558,9 +602,8 @@ async function handleItemTap(item) {
   width: var(--mb-floating-size);
   height: var(--mb-floating-size);
   color: var(--mb-floating-color);
-  transition:
-    left 0.2s ease,
-    top 0.2s ease;
+  transition: transform 0.2s ease;
+  will-change: transform;
 }
 
 .mb-floating-action--dragging {
