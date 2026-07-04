@@ -47,11 +47,15 @@ class DecorationService extends BaseService
         $floating = $this->getActiveOrSystemScheme(ClientDecorationScheme::TYPE_FLOATING);
         $profile = $this->getActiveOrSystemScheme(ClientDecorationScheme::TYPE_PROFILE);
         $tabbar = $this->getActiveOrSystemScheme(ClientDecorationScheme::TYPE_TABBAR);
+        $profileSchema = $this->normalizeClientSchema(ClientDecorationScheme::TYPE_PROFILE, $profile['schema']);
+        if (!$this->settingEnabled('points_enabled', true)) {
+            $profileSchema = $this->filterProfilePointsSchema($profileSchema);
+        }
 
         return [
             'home' => $this->normalizeClientSchema(ClientDecorationScheme::TYPE_HOME, $home['schema']),
             'floating' => $this->normalizeClientSchema(ClientDecorationScheme::TYPE_FLOATING, $floating['schema']),
-            'profile' => $this->normalizeClientSchema(ClientDecorationScheme::TYPE_PROFILE, $profile['schema']),
+            'profile' => $profileSchema,
             'tabbar' => [
                 'mode' => $tabbar['tabbar_mode'],
                 'schema' => $this->normalizeClientSchema(ClientDecorationScheme::TYPE_TABBAR, $tabbar['schema']),
@@ -288,6 +292,74 @@ class DecorationService extends BaseService
         }
 
         return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    protected function filterProfilePointsSchema(array $schema): array
+    {
+        foreach (['modules', 'components'] as $key) {
+            if (!isset($schema[$key]) || !is_array($schema[$key])) {
+                continue;
+            }
+
+            $modules = array_values(array_filter($schema[$key], static fn ($module): bool => is_array($module)));
+            $schema[$key] = array_values(array_filter(
+                array_map(fn (array $module): array => $this->filterProfilePointsModule($module), $modules),
+                fn (array $module): bool => !$this->isProfilePointsModule($module)
+            ));
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     * @return array<string, mixed>
+     */
+    protected function filterProfilePointsModule(array $module): array
+    {
+        $props = is_array($module['props'] ?? null) ? $module['props'] : [];
+        foreach (['items', 'list'] as $key) {
+            if (!isset($props[$key]) || !is_array($props[$key])) {
+                continue;
+            }
+            $props[$key] = array_values(array_filter(
+                $props[$key],
+                fn ($item): bool => is_array($item) && !$this->isProfilePointsEntryItem($item)
+            ));
+        }
+
+        if ($props !== []) {
+            $module['props'] = $props;
+        }
+
+        return $module;
+    }
+
+    /**
+     * @param array<string, mixed> $module
+     */
+    protected function isProfilePointsModule(array $module): bool
+    {
+        return in_array((string) ($module['type'] ?? ''), ['points', 'pointsCard', 'pointsEntry'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    protected function isProfilePointsEntryItem(array $item): bool
+    {
+        $haystack = mb_strtolower(implode(' ', array_filter(array_map(
+            static fn (string $field): string => (string) ($item[$field] ?? ''),
+            ['key', 'action', 'path', 'url', 'link', 'target_path', 'label', 'title', 'text']
+        ))));
+
+        return str_contains($haystack, 'points')
+            || str_contains($haystack, '积分')
+            || str_contains($haystack, '/pages-sub/points');
     }
 
     /**
@@ -827,7 +899,11 @@ class DecorationService extends BaseService
      */
     protected function applyDefaultClientProps(string $type, array $props): array
     {
-        $profileType = $type === 'customMenu' ? 'serviceMenu' : $type;
+        $profileType = match ($type) {
+            'customMenu' => 'serviceMenu',
+            'points', 'pointsCard' => 'pointsEntry',
+            default => $type,
+        };
         $props = array_merge($this->defaultProfileStyleProps($profileType), $props);
         $props = $this->normalizeProfileStyleAliases($props);
         unset($props['textVisibility']);
@@ -931,6 +1007,12 @@ class DecorationService extends BaseService
             $props['title'] = (string) ($props['title'] ?? '我的余额');
             $props['show_balance'] = ($props['show_balance'] ?? true) !== false;
             unset($props['show_points']);
+            $props['show_records'] = ($props['show_records'] ?? true) !== false;
+            $props['show_view_button'] = ($props['show_view_button'] ?? true) !== false;
+        }
+
+        if ($profileType === 'pointsEntry') {
+            $props['title'] = (string) ($props['title'] ?? '我的积分');
             $props['show_records'] = ($props['show_records'] ?? true) !== false;
             $props['show_view_button'] = ($props['show_view_button'] ?? true) !== false;
         }
@@ -1152,6 +1234,9 @@ class DecorationService extends BaseService
             'orderEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'orderShortcut' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'profileHeader' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
+            'points' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'pointsCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
+            'pointsEntry' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28]),
             'serviceMenu' => $base,
             'userCard' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
             'userInfo' => array_merge($base, ['paddingX' => 28, 'paddingY' => 28, 'radius' => 0]),
@@ -1414,6 +1499,7 @@ class DecorationService extends BaseService
                         'items' => $this->defaultProfileOrderItems(),
                     ])],
                     ['id' => 'profile-wallet', 'type' => 'walletEntry', 'props' => array_merge($this->defaultProfileStyleProps('walletEntry'), ['title' => '我的余额', 'show_balance' => true, 'show_records' => true, 'show_view_button' => true])],
+                    ['id' => 'profile-points', 'type' => 'pointsEntry', 'props' => array_merge($this->defaultProfileStyleProps('pointsEntry'), ['title' => '我的积分', 'show_records' => true, 'show_view_button' => true])],
                     ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => array_merge($this->defaultProfileStyleProps('serviceMenu'), [
                         'title' => '我的服务',
                         'columns' => 4,
@@ -1451,6 +1537,12 @@ class DecorationService extends BaseService
             'schema' => $schema,
             'tabbar_mode' => ClientDecorationScheme::TABBAR_MODE_NATIVE,
         ];
+    }
+
+    protected function settingEnabled(string $code, bool $default): bool
+    {
+        $value = (string) getSystemSetting($code, $default ? '1' : '0');
+        return in_array($value, ['1', 'true', 'on'], true);
     }
 
     /**

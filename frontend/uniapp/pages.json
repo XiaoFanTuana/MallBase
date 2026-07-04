@@ -155,12 +155,6 @@
           }
         },
         {
-          "path": "theme",
-          "style": {
-            "navigationStyle": "custom"
-          }
-        },
-        {
           "path": "about",
           "style": {
             "navigationStyle": "custom"
@@ -186,6 +180,56 @@
         },
         {
           "path": "recharge",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages-sub/points",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "records",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "mall",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "mall-detail",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "exchange-confirm",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "exchange-orders",
+          "style": {
+            "navigationStyle": "custom",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "exchange-detail",
           "style": {
             "navigationStyle": "custom"
           }

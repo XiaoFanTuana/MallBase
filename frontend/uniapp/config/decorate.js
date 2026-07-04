@@ -274,9 +274,20 @@ export const DEFAULT_PROFILE_MODULES = [
     },
   },
   {
+    id: "profile-points",
+    type: "points",
+    sort: 35,
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      title: "我的积分",
+      show_records: true,
+      show_view_button: true,
+    },
+  },
+  {
     id: "profile-service",
     type: "serviceMenu",
-    sort: 40,
+    sort: 50,
     props: {
       ...DEFAULT_PROFILE_MENU_STYLE,
       title: "我的服务",

@@ -355,6 +355,16 @@ const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
     type: 'wallet',
   },
   {
+    id: 'preview-points',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_records: true,
+      show_view_button: true,
+      title: '我的积分',
+    },
+    type: 'points',
+  },
+  {
     id: 'preview-service',
     props: {
       ...DEFAULT_PROFILE_MENU_STYLE,
@@ -426,6 +436,7 @@ const MODULE_LABELS: Record<string, string> = {
   title: '标题栏',
   userCard: '用户信息',
   wallet: '钱包卡片',
+  points: '积分卡片',
 };
 
 const GOODS_FALLBACK = {
@@ -684,6 +695,8 @@ function normalizeProfileType(type: string) {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
     orderEntry: 'orderShortcut',
+    pointsCard: 'points',
+    pointsEntry: 'points',
     profileHeader: 'userCard',
     userInfo: 'userCard',
     walletEntry: 'wallet',
@@ -1708,6 +1721,17 @@ function walletActions(module: ModuleItem): WalletPreviewAction[] {
   return actions;
 }
 
+function pointsActions(module: ModuleItem): WalletPreviewAction[] {
+  const actions: WalletPreviewAction[] = [];
+  if (module.props.show_records !== false) {
+    actions.push({ key: 'records', label: '积分明细', primary: false });
+  }
+  if (module.props.show_view_button !== false) {
+    actions.push({ key: 'view', label: '去查看', primary: true });
+  }
+  return actions;
+}
+
 function richTextHtml(module: ModuleItem) {
   return (
     module.props?.content ||
@@ -2457,6 +2481,58 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   >
                     <span
                       v-for="action in walletActions(module)"
+                      :key="action.key"
+                      :style="
+                        profileTextStyle(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                      "
+                    >
+                      {{
+                        profileTextVisible(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                          ? action.label
+                          : ''
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-else-if="module.type === 'points'"
+                  class="profile-points-card"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <small
+                    v-if="profileTextVisible(module, 'title')"
+                    :style="profileTextStyle(module, 'title')"
+                  >
+                    {{ module.props.title || '我的积分' }}
+                  </small>
+                  <strong
+                    v-if="profileTextVisible(module, 'amount')"
+                    :style="profileTextStyle(module, 'amount')"
+                  >
+                    0
+                  </strong>
+                  <p
+                    v-if="profileTextVisible(module, 'meta')"
+                    class="profile-points-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span>累计获得 0</span>
+                    <i>•</i>
+                    <span>累计扣减 0</span>
+                  </p>
+                  <div
+                    v-if="pointsActions(module).length > 0"
+                    class="profile-points-card__actions"
+                  >
+                    <span
+                      v-for="action in pointsActions(module)"
                       :key="action.key"
                       :style="
                         profileTextStyle(
@@ -3567,6 +3643,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .home-products,
 .home-rich,
 .profile-order-card,
+.profile-points-card,
 .profile-service-card,
 .profile-wallet-card {
   padding: 14px;
@@ -3576,6 +3653,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 }
 
 .profile-order-card,
+.profile-points-card,
 .profile-service-card,
 .profile-wallet-card {
   margin: 0;
@@ -3584,6 +3662,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .client-phone-preview--compact .home-products,
 .client-phone-preview--compact .home-rich,
 .client-phone-preview--compact .profile-order-card,
+.client-phone-preview--compact .profile-points-card,
 .client-phone-preview--compact .profile-service-card,
 .client-phone-preview--compact .profile-wallet-card {
   padding: 10px;
@@ -4166,6 +4245,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   color: var(--mb-preview-text-secondary);
 }
 
+.profile-points-card strong,
 .profile-wallet-card strong {
   display: block;
   margin-top: 5px;
@@ -4174,11 +4254,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1;
 }
 
+.profile-points-card small,
 .profile-wallet-card small {
   display: block;
   color: var(--mb-preview-text-secondary);
 }
 
+.profile-points-card__meta,
 .profile-wallet-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -4190,10 +4272,12 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1.4;
 }
 
+.profile-points-card__meta i,
 .profile-wallet-card__meta i {
   font-style: normal;
 }
 
+.profile-points-card__actions,
 .profile-wallet-card__actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
@@ -4201,6 +4285,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   margin-top: 12px;
 }
 
+.profile-points-card__actions span,
 .profile-wallet-card__actions span {
   padding: 7px;
   overflow: hidden;
@@ -4213,6 +4298,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   white-space: nowrap;
 }
 
+.profile-points-card__actions span:last-child,
 .profile-wallet-card__actions span:last-child {
   color: white;
   background: var(--mb-preview-primary);

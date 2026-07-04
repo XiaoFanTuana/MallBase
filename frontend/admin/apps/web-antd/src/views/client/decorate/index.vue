@@ -317,6 +317,12 @@ const PROFILE_MODULES = [
     type: 'walletEntry',
   },
   {
+    desc: '积分余额、明细和查看入口',
+    icon: 'lucide:badge-cent',
+    label: '积分卡片',
+    type: 'pointsEntry',
+  },
+  {
     desc: '默认四个常用服务入口',
     icon: 'lucide:layout-list',
     label: '服务菜单',
@@ -327,6 +333,8 @@ const PROFILE_MODULES = [
 const PROFILE_TYPE_ALIAS: Record<string, string> = {
   customMenu: 'serviceMenu',
   orderShortcut: 'orderEntry',
+  points: 'pointsEntry',
+  pointsCard: 'pointsEntry',
   profileHeader: 'userInfo',
   walletCard: 'walletEntry',
 };
@@ -941,7 +949,10 @@ const paletteGroups = computed(() => {
   }
   if (activeType.value === 'profile') {
     return [
-      { items: pick(['userInfo', 'walletEntry']), title: '基础组件' },
+      {
+        items: pick(['userInfo', 'walletEntry', 'pointsEntry']),
+        title: '基础组件',
+      },
       {
         items: pick(['orderEntry', 'serviceMenu']),
         title: '入口组件',
@@ -1436,6 +1447,7 @@ const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
   serviceMenu: ['itemLabel', 'title'],
   userInfo: ['meta', 'subtitle', 'title'],
   walletEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
+  pointsEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
   entryCard: ['subtitle', 'title'],
   imageCube: ['itemLabel'],
   navGrid: ['itemLabel'],
@@ -1790,6 +1802,7 @@ const normalizeProfileItems = (
 
 const getProfileDefaultTitle = (type: string) => {
   if (type === 'orderEntry') return '我的订单';
+  if (type === 'pointsEntry') return '我的积分';
   return '我的服务';
 };
 
@@ -1819,6 +1832,11 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
       radius: 0,
     },
     walletEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+    pointsEntry: {
       ...base,
       paddingX: 28,
       paddingY: 28,
@@ -1919,6 +1937,7 @@ const normalizeEditorConfig = (
     'serviceMenu',
     'userInfo',
     'walletEntry',
+    'pointsEntry',
   ]);
   const profileType = normalizeProfileModuleType(type);
   const isProfileModule =
@@ -2347,6 +2366,14 @@ const normalizeEditorConfig = (
       true,
     );
   }
+  if (type === 'pointsEntry') {
+    config.title = config.title || '我的积分';
+    config.show_records = normalizeBooleanValue(config.show_records, true);
+    config.show_view_button = normalizeBooleanValue(
+      config.show_view_button,
+      true,
+    );
+  }
   if (isHomeModule || isProfileModule) {
     syncProfilePaddingCompat(config);
     syncProfileMarginCompat(config);
@@ -2589,6 +2616,11 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
       show_records: true,
       show_view_button: true,
       title: '我的余额',
+    }),
+    pointsEntry: withStyle('pointsEntry', {
+      show_records: true,
+      show_view_button: true,
+      title: '我的积分',
     }),
   };
   const config = defaults[normalizeProfileModuleType(type)] ||
@@ -3135,6 +3167,14 @@ const normalizeSchemaForClient = (
             true,
           );
         }
+        if (activeType.value === 'profile' && moduleType === 'pointsEntry') {
+          props.title = props.title || '我的积分';
+          props.show_records = normalizeBooleanValue(props.show_records, true);
+          props.show_view_button = normalizeBooleanValue(
+            props.show_view_button,
+            true,
+          );
+        }
         if (activeType.value === 'home' && moduleType === 'entryCard') {
           props.icon_image = normalizeEditorUploadImage(
             props.icon_image || props.iconImage || '',
@@ -3306,8 +3346,10 @@ const handleSave = async () => {
 
 const handleCopy = async () => {
   if (!selectedSchemeId.value) return;
-  await copyClientDecorateSchemeApi(selectedSchemeId.value);
-  message.success('复制成功');
+  const result = await copyClientDecorateSchemeApi(selectedSchemeId.value);
+  selectedSchemeId.value = result.id;
+  selectedIndex.value = 0;
+  message.success('已复制，正在编辑副本');
   await loadSchemes();
 };
 

@@ -1,7 +1,8 @@
 <script setup>
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { getPayMethods } from "@/api/config";
+import { getBasicConfig, getPayMethods } from "@/api/config";
+import { getPointsInfo } from "@/api/points/points";
 import { getWalletInfo } from "@/api/user/wallet";
 import config from "@/config/index";
 import { useDecorateStore } from "@/store/decorate";
@@ -16,7 +17,13 @@ const wallet = ref({
   total_recharge: "0.00",
   total_consume: "0.00",
 });
+const points = ref({
+  balance_points: 0,
+  total_income_points: 0,
+  total_expense_points: 0,
+});
 const balancePaymentEnabled = ref(false);
+const pointsEnabled = ref(true);
 const profileIconPresets = [
   {
     type: "pay",
@@ -145,6 +152,13 @@ const walletRecharge = computed(() =>
   formatAmount(wallet.value.total_recharge),
 );
 const walletConsume = computed(() => formatAmount(wallet.value.total_consume));
+const pointsBalance = computed(() => Number(points.value.balance_points || 0));
+const pointsIncome = computed(() =>
+  Number(points.value.total_income_points || 0),
+);
+const pointsExpense = computed(() =>
+  Number(points.value.total_expense_points || 0),
+);
 
 const profileModules = computed(() => {
   const modules = Array.isArray(decorateStore.profileModules)
@@ -185,14 +199,34 @@ onShow(async () => {
   userStore.restoreToken();
   await decorateStore.fetchThemes({ force: true });
   await decorateStore.fetchMyThemePreference({ force: true });
+  await fetchFeatureState();
   fetchPayMethodState();
   if (userStore.isLoggedIn) {
     userStore.fetchUserInfo();
+    if (pointsEnabled.value) {
+      fetchPoints();
+    } else {
+      resetPoints();
+    }
     if (balancePaymentEnabled.value) {
       fetchWallet();
     }
   }
 });
+
+async function fetchFeatureState() {
+  try {
+    const data = await getBasicConfig();
+    pointsEnabled.value = settingSwitchEnabled(data?.points_enabled, true);
+  } catch {
+    pointsEnabled.value = true;
+  }
+}
+
+function settingSwitchEnabled(value, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return ["1", "true", "on"].includes(String(value).toLowerCase());
+}
 
 async function fetchPayMethodState() {
   try {
@@ -222,6 +256,35 @@ async function fetchWallet() {
       total_consume: "0.00",
     };
   }
+}
+
+async function fetchPoints() {
+  if (!pointsEnabled.value) {
+    resetPoints();
+    return;
+  }
+
+  try {
+    const data = await getPointsInfo();
+    points.value = {
+      ...points.value,
+      ...(data || {}),
+    };
+  } catch {
+    points.value = {
+      balance_points: 0,
+      total_income_points: 0,
+      total_expense_points: 0,
+    };
+  }
+}
+
+function resetPoints() {
+  points.value = {
+    balance_points: 0,
+    total_income_points: 0,
+    total_expense_points: 0,
+  };
 }
 
 function formatAmount(value) {
@@ -309,6 +372,27 @@ function tapWalletAction(action) {
     return;
   }
   goWallet();
+}
+
+function pointsActions(module) {
+  if (!pointsEnabled.value) return [];
+  const props = module.props || {};
+  return [
+    props.show_records !== false
+      ? { key: "records", label: "积分明细", primary: false }
+      : null,
+    props.show_view_button !== false
+      ? { key: "view", label: "去查看", primary: true }
+      : null,
+  ].filter(Boolean);
+}
+
+function tapPointsAction(action) {
+  if (action.key === "records") {
+    goPointsRecords();
+    return;
+  }
+  goPoints();
 }
 
 function serviceMenuIsGrid(module) {
@@ -679,10 +763,12 @@ function moduleBoxStyle(module) {
 
 function profileModuleVisible(module) {
   if (module.type === "wallet") return balancePaymentEnabled.value;
+  if (module.type === "points") return pointsEnabled.value;
   if (module.type === "logout") return logged.value;
   return [
     "divider",
     "orderShortcut",
+    "points",
     "richText",
     "serviceMenu",
     "spacing",
@@ -808,6 +894,30 @@ function goWalletRecords() {
     return;
   }
   uni.navigateTo({ url: "/pages-sub/wallet/records" });
+}
+
+function goPoints() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!pointsEnabled.value) {
+    uni.showToast({ title: "积分功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/points/index" });
+}
+
+function goPointsRecords() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!pointsEnabled.value) {
+    uni.showToast({ title: "积分功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/points/records" });
 }
 
 async function callCustomerService() {
@@ -1023,6 +1133,91 @@ function handleLogout() {
                   class="wallet-card__action-text"
                   :class="{
                     'wallet-card__action-text--primary': action.primary,
+                  }"
+                  :style="
+                    textStyle(
+                      module,
+                      action.primary ? 'primaryAction' : 'action',
+                    )
+                  "
+                >
+                  {{
+                    textVisible(
+                      module,
+                      action.primary ? "primaryAction" : "action",
+                    )
+                      ? action.label
+                      : ""
+                  }}
+                </text>
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-else-if="module.type === 'points'"
+            class="points-card"
+            :style="moduleBoxStyle(module)"
+            @tap="goPoints"
+          >
+            <view class="points-card__main">
+              <text
+                v-if="textVisible(module, 'title')"
+                class="points-card__label"
+                :style="textStyle(module, 'title')"
+                >{{ module.props.title || "我的积分" }}</text
+              >
+              <view
+                v-if="textVisible(module, 'amount')"
+                class="points-card__amount"
+              >
+                <text
+                  class="points-card__value"
+                  :style="textStyle(module, 'amount')"
+                  >{{ logged ? pointsBalance : 0 }}</text
+                >
+                <text
+                  class="points-card__unit"
+                  :style="textStyle(module, 'amount')"
+                  >积分</text
+                >
+              </view>
+              <view
+                v-if="textVisible(module, 'meta')"
+                class="points-card__meta"
+              >
+                <text
+                  class="points-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >累计获得 {{ logged ? pointsIncome : 0 }}</text
+                >
+                <text
+                  class="points-card__dot"
+                  :style="textStyle(module, 'meta')"
+                  >•</text
+                >
+                <text
+                  class="points-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >累计使用 {{ logged ? pointsExpense : 0 }}</text
+                >
+              </view>
+            </view>
+            <view
+              v-if="pointsActions(module).length > 0"
+              class="points-card__actions"
+            >
+              <view
+                v-for="action in pointsActions(module)"
+                :key="action.key"
+                class="points-card__action"
+                :class="{ 'points-card__action--primary': action.primary }"
+                @tap.stop="tapPointsAction(action)"
+              >
+                <text
+                  class="points-card__action-text"
+                  :class="{
+                    'points-card__action-text--primary': action.primary,
                   }"
                   :style="
                     textStyle(
@@ -1346,6 +1541,7 @@ function handleLogout() {
 }
 
 .wallet-card,
+.points-card,
 .order-card,
 .cell-group,
 .plain-rich {
@@ -1355,6 +1551,10 @@ function handleLogout() {
 }
 
 .wallet-card {
+  padding: 28rpx;
+}
+
+.points-card {
   padding: 28rpx;
 }
 
@@ -1431,6 +1631,82 @@ function handleLogout() {
 }
 
 .wallet-card__action-text--primary {
+  color: #ffffff;
+}
+
+.points-card__label {
+  display: block;
+  width: 100%;
+  font-size: 24rpx;
+  color: var(--color-text-secondary, #434654);
+}
+
+.points-card__amount {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+  margin-top: 10rpx;
+}
+
+.points-card__value {
+  font-size: 52rpx;
+  line-height: 1;
+  color: var(--color-text-title, #191b23);
+  font-weight: 800;
+}
+
+.points-card__unit {
+  font-size: 24rpx;
+  color: var(--color-text-secondary, #434654);
+  font-weight: 700;
+}
+
+.points-card__meta,
+.points-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.points-card__meta {
+  margin-top: 16rpx;
+}
+
+.points-card__meta-text,
+.points-card__dot {
+  font-size: 22rpx;
+  color: var(--color-text-tertiary, #737686);
+}
+
+.points-card__actions {
+  margin-top: 24rpx;
+}
+
+.points-card__action {
+  flex: 1;
+  min-height: 64rpx;
+  padding: 12rpx 24rpx;
+  box-sizing: border-box;
+  border-radius: 999rpx;
+  background: var(--color-bg-surface, #f3f3fe);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.points-card__action--primary {
+  background: var(--color-primary, #0d50d5);
+}
+
+.points-card__action-text {
+  font-size: 24rpx;
+  line-height: 1.2;
+  color: var(--color-text-secondary, #434654);
+  font-weight: 600;
+}
+
+.points-card__action-text--primary {
   color: #ffffff;
 }
 

@@ -776,6 +776,7 @@ final class ClientDecorationServiceContractTest extends TestCase
                 ['id' => 'profile-user', 'type' => 'userInfo', 'props' => []],
                 ['id' => 'profile-order', 'type' => 'orderEntry', 'props' => []],
                 ['id' => 'profile-wallet', 'type' => 'walletEntry', 'props' => []],
+                ['id' => 'profile-points', 'type' => 'pointsEntry', 'props' => []],
                 ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => ['items' => []]],
             ],
         ]);
@@ -794,6 +795,7 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertArrayHasKey('userInfo', $modules);
         $this->assertArrayHasKey('orderEntry', $modules);
         $this->assertArrayHasKey('walletEntry', $modules);
+        $this->assertArrayHasKey('pointsEntry', $modules);
         $this->assertArrayHasKey('serviceMenu', $modules);
         $this->assertCount(4, $modules['orderEntry']['props']['items']);
         $this->assertCount(3, $modules['serviceMenu']['props']['items']);
@@ -814,12 +816,14 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertArrayNotHasKey('icon', $modules['serviceMenu']['props']['items'][1]);
         $this->assertSame('我的订单', $modules['orderEntry']['props']['title']);
         $this->assertSame('我的余额', $modules['walletEntry']['props']['title']);
+        $this->assertSame('我的积分', $modules['pointsEntry']['props']['title']);
         $this->assertSame('我的服务', $modules['serviceMenu']['props']['title']);
         $this->assertSame('grid', $modules['orderEntry']['props']['display']);
         $this->assertSame('list', $modules['serviceMenu']['props']['display']);
         $this->assertSame(28, $modules['orderEntry']['props']['paddingX']);
         $this->assertSame(28, $modules['orderEntry']['props']['paddingY']);
         $this->assertSame(20, $modules['walletEntry']['props']['radius']);
+        $this->assertSame(20, $modules['pointsEntry']['props']['radius']);
         $this->assertSame(10, $modules['serviceMenu']['props']['paddingX']);
         $this->assertSame(0, $modules['serviceMenu']['props']['paddingY']);
         $this->assertSame(28, $modules['userInfo']['props']['paddingX']);
@@ -846,6 +850,8 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertArrayNotHasKey('show_points', $modules['walletEntry']['props']);
         $this->assertTrue($modules['walletEntry']['props']['show_records']);
         $this->assertTrue($modules['walletEntry']['props']['show_view_button']);
+        $this->assertTrue($modules['pointsEntry']['props']['show_records']);
+        $this->assertTrue($modules['pointsEntry']['props']['show_view_button']);
     }
 
     public function testDecorationProfileKeepsLegacyPageAndModuleStyleAliases(): void

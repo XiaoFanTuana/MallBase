@@ -604,6 +604,38 @@ const profileTextStyleDefaults: Record<
       textAlign: 'left',
     },
   },
+  pointsEntry: {
+    action: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    amount: {
+      color: '#191b23',
+      fontSize: 52,
+      fontWeight: '800',
+      textAlign: 'left',
+    },
+    meta: {
+      color: '#737686',
+      fontSize: 22,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    primaryAction: {
+      color: '#ffffff',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    title: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
   entryCard: {
     subtitle: {
       color: '#737686',
@@ -713,6 +745,13 @@ const profileTextStyleFieldsByType: Record<
   walletEntry: [
     { label: '卡片标题', role: 'title' },
     { label: '金额文字', role: 'amount' },
+    { label: '辅助说明', role: 'meta' },
+    { label: '普通按钮', role: 'action' },
+    { label: '主按钮', role: 'primaryAction' },
+  ],
+  pointsEntry: [
+    { label: '卡片标题', role: 'title' },
+    { label: '积分数字', role: 'amount' },
     { label: '辅助说明', role: 'meta' },
     { label: '普通按钮', role: 'action' },
     { label: '主按钮', role: 'primaryAction' },
@@ -2033,6 +2072,21 @@ const profileTextStyleTargetText = (
         config.show_view_button === false ? '当前未显示' : '去查看',
       subtitle: '当前未显示',
       title: String(config.title || '我的余额'),
+    };
+    return targets[role] || '当前未显示';
+  }
+  if (type === 'pointsEntry') {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+      action: config.show_records === false ? '当前未显示' : '积分明细',
+      amount: '0',
+      iconText: '当前未显示',
+      itemLabel: '当前未显示',
+      meta: '累计获得 0 / 累计扣减 0',
+      more: '当前未显示',
+      primaryAction:
+        config.show_view_button === false ? '当前未显示' : '去查看',
+      subtitle: '当前未显示',
+      title: String(config.title || '我的积分'),
     };
     return targets[role] || '当前未显示';
   }
@@ -4290,6 +4344,7 @@ const updateProfileItemVisible = updateConfigItemVisible;
                         '默认展示四个常用服务入口，可配置图片、名称和跳转。',
                       userInfo: '登录信息区域，控制手机号与签名展示。',
                       walletEntry: '钱包信息区域，控制余额、明细和查看入口。',
+                      pointsEntry: '积分信息区域，控制积分、明细和查看入口。',
                     }[editableProfileType] || '配置当前个人中心组件内容。'
                   }}
                 </div>
@@ -4328,6 +4383,27 @@ const updateProfileItemVisible = updateConfigItemVisible;
                   />
                 </a-form-item>
                 <a-form-item label="余额明细">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_records"
+                  />
+                </a-form-item>
+                <a-form-item label="查看按钮">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_view_button"
+                  />
+                </a-form-item>
+              </div>
+            </template>
+
+            <template v-else-if="editableProfileType === 'pointsEntry'">
+              <a-form-item label="卡片标题">
+                <a-input
+                  v-model:value="editableModule.config.title"
+                  placeholder="如：我的积分"
+                />
+              </a-form-item>
+              <div class="profile-config-grid">
+                <a-form-item label="积分明细">
                   <a-switch
                     v-model:checked="editableModule.config.show_records"
                   />
