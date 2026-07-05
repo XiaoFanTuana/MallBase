@@ -55,6 +55,8 @@ CREATE TABLE `mb_order` (
   `receiver_city` varchar(50) NOT NULL DEFAULT '' COMMENT '市',
   `receiver_district` varchar(50) NOT NULL DEFAULT '' COMMENT '区/县',
   `receiver_address` varchar(255) NOT NULL COMMENT '详细地址',
+  `delivery_type` varchar(16) NOT NULL DEFAULT 'physical' COMMENT '发货类型（physical实物快递 virtual虚拟发货）',
+  `delivery_note` varchar(255) DEFAULT NULL COMMENT '发货备注（虚拟发货说明等）',
   `logistics_platform` varchar(32) DEFAULT NULL COMMENT '物流平台',
   `logistics_company_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '物流公司ID',
   `logistics_company_code` varchar(64) DEFAULT NULL COMMENT '物流公司编码',

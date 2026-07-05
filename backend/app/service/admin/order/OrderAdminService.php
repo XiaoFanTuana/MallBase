@@ -7,8 +7,13 @@ namespace app\service\admin\order;
 use app\model\order\Order;
 use app\model\order\OrderItem;
 use app\model\order\OrderLog;
+use app\model\order\OrderMemberDiscount;
+use app\model\order\OrderPointsDeduction;
+use app\model\order\OrderPointsReward;
 use app\model\order\PaymentLog;
 use app\model\order\RefundOrder;
+use app\model\logistics\LogisticsTrack;
+use app\model\user\UserMemberGrowthLog;
 use app\service\order\OrderStatusMachine;
 use app\service\order\OrderSettingService;
 use app\service\order\StockService;
@@ -61,14 +66,21 @@ class OrderAdminService extends BaseService
         string $logisticsCompanyCode,
         string $logisticsCompany,
         string $logisticsSn,
-        int $adminId
+        int $adminId,
+        string $deliveryType = Order::DELIVERY_TYPE_PHYSICAL,
+        string $deliveryNote = ''
     ): string {
+        $deliveryType = $this->normalizeDeliveryType($deliveryType);
+        $deliveryNote = mb_substr(trim($deliveryNote), 0, 255);
         $platform    = trim($logisticsPlatform);
         $companyCode = trim($logisticsCompanyCode);
         $companyName = trim($logisticsCompany);
         $sn          = trim($logisticsSn);
-        if (($logisticsCompanyId <= 0 && $companyCode === '' && $companyName === '') || $sn === '') {
+        if ($deliveryType === Order::DELIVERY_TYPE_PHYSICAL && (($logisticsCompanyId <= 0 && $companyCode === '' && $companyName === '') || $sn === '')) {
             throw new BusinessException('物流公司和运单号必填');
+        }
+        if ($deliveryType === Order::DELIVERY_TYPE_VIRTUAL && $deliveryNote === '') {
+            throw new BusinessException('请填写虚拟发货说明');
         }
 
         $order = $this->findOrder($orderId);
@@ -79,47 +91,71 @@ class OrderAdminService extends BaseService
 
         /** @var LogisticsService $logisticsService */
         $logisticsService = app()->make(LogisticsService::class);
-        $company = $logisticsService->resolveCompany($platform, $logisticsCompanyId, $companyCode, $companyName);
+        $company = $deliveryType === Order::DELIVERY_TYPE_PHYSICAL
+            ? $logisticsService->resolveCompany($platform, $logisticsCompanyId, $companyCode, $companyName)
+            : null;
         $oldLogistics = trim(sprintf('%s %s', (string) ($order->logistics_company ?? ''), (string) ($order->logistics_sn ?? '')));
         $ip = $this->requestIp();
 
         /** @var OrderStatusMachine $machine */
         $machine = app()->make(OrderStatusMachine::class);
 
-        $this->transaction(function () use ($order, $status, $company, $sn, $machine, $adminId, $logisticsService, $oldLogistics, $ip): void {
-            $order->logistics_platform     = mb_substr($company['platform'], 0, 32);
-            $order->logistics_company_id   = (int) $company['company_id'];
-            $order->logistics_company_code = mb_substr($company['code'], 0, 64);
-            $order->logistics_company      = mb_substr($company['name'], 0, 100);
-            $order->logistics_sn           = mb_substr($sn, 0, 64);
-            $order->save();
+        $this->transaction(function () use ($order, $status, $deliveryType, $deliveryNote, $company, $sn, $machine, $adminId, $logisticsService, $oldLogistics, $ip): void {
+            if ($deliveryType === Order::DELIVERY_TYPE_VIRTUAL) {
+                $order->delivery_type = Order::DELIVERY_TYPE_VIRTUAL;
+                $order->delivery_note = $deliveryNote;
+                $order->logistics_platform = null;
+                $order->logistics_company_id = 0;
+                $order->logistics_company_code = null;
+                $order->logistics_company = null;
+                $order->logistics_sn = null;
+                $order->save();
+                $this->model(LogisticsTrack::class)
+                    ->where('business_type', LogisticsTrack::BUSINESS_ORDER)
+                    ->where('business_id', (int) $order->id)
+                    ->delete();
+            } else {
+                $order->delivery_type = Order::DELIVERY_TYPE_PHYSICAL;
+                $order->delivery_note = null;
+                $order->logistics_platform     = mb_substr((string) $company['platform'], 0, 32);
+                $order->logistics_company_id   = (int) $company['company_id'];
+                $order->logistics_company_code = mb_substr((string) $company['code'], 0, 64);
+                $order->logistics_company      = mb_substr((string) $company['name'], 0, 100);
+                $order->logistics_sn           = mb_substr($sn, 0, 64);
+                $order->save();
 
-            $logisticsService->syncOrderShipment($order);
+                $logisticsService->syncOrderShipment($order);
+            }
 
             if ($status === OrderStatus::SHIPPED) {
-                $newLogistics = trim(sprintf('%s %s', $company['name'], $sn));
+                $newLogistics = $deliveryType === Order::DELIVERY_TYPE_VIRTUAL
+                    ? '虚拟发货：' . $deliveryNote
+                    : trim(sprintf('%s %s', $company['name'], $sn));
                 $this->model(OrderLog::class)->save([
                     'order_id'      => (int) $order->id,
                     'from_status'   => OrderStatus::SHIPPED,
                     'to_status'     => OrderStatus::SHIPPED,
                     'operator_type' => OperatorType::ADMIN,
                     'operator_id'   => $adminId,
-                    'remark'        => mb_substr(sprintf('修改物流：%s -> %s', $oldLogistics !== '' ? $oldLogistics : '空', $newLogistics), 0, 255),
+                    'remark'        => mb_substr(sprintf('修改发货信息：%s -> %s', $oldLogistics !== '' ? $oldLogistics : '空', $newLogistics), 0, 255),
                     'ip'            => $ip !== '' ? $ip : null,
                 ]);
                 return;
             }
 
+            $remark = $deliveryType === Order::DELIVERY_TYPE_VIRTUAL
+                ? sprintf('虚拟发货：%s', $deliveryNote)
+                : sprintf('发货：%s %s', $company['name'], $sn);
             $machine->transit(
                 order: $order,
                 toStatus: OrderStatus::SHIPPED,
                 operatorType: OperatorType::ADMIN,
                 operatorId: $adminId,
-                remark: sprintf('发货：%s %s', $company['name'], $sn),
+                remark: $remark,
             );
         });
 
-        return $status === OrderStatus::SHIPPED ? '物流信息已更新' : '发货成功';
+        return $status === OrderStatus::SHIPPED ? '发货信息已更新' : '发货成功';
     }
 
     /**
@@ -451,6 +487,103 @@ class OrderAdminService extends BaseService
             return '';
         }
         return (string) request()->ip();
+    }
+
+    private function normalizeDeliveryType(string $deliveryType): string
+    {
+        return $deliveryType === Order::DELIVERY_TYPE_VIRTUAL
+            ? Order::DELIVERY_TYPE_VIRTUAL
+            : Order::DELIVERY_TYPE_PHYSICAL;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function orderPointsDeductionSnapshot(int $orderId): ?array
+    {
+        $row = $this->model(OrderPointsDeduction::class)
+            ->where('order_id', $orderId)
+            ->find();
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'used_points' => (int) $row->used_points,
+            'discount_amount' => (string) $row->discount_amount,
+            'returned_points' => (int) $row->returned_points,
+            'status' => (string) $row->status,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function orderPointsRewardSnapshot(int $orderId): ?array
+    {
+        $row = $this->model(OrderPointsReward::class)
+            ->where('order_id', $orderId)
+            ->find();
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'reward_points' => (int) $row->reward_points,
+            'frozen_points' => (int) $row->frozen_points,
+            'released_points' => (int) $row->released_points,
+            'recovered_points' => (int) $row->recovered_points,
+            'debt_points' => (int) $row->debt_points,
+            'release_time' => (string) $row->release_time,
+            'released_at' => $row->released_at !== null ? (string) $row->released_at : null,
+            'status' => (string) $row->status,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function orderMemberDiscountSnapshot(int $orderId): ?array
+    {
+        $row = $this->model(OrderMemberDiscount::class)
+            ->where('order_id', $orderId)
+            ->find();
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'level_id' => (int) $row->level_id,
+            'level_name' => (string) $row->level_name,
+            'discount_amount' => (string) $row->discount_amount,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function orderMemberGrowthSnapshot(string $orderSn): ?array
+    {
+        if ($orderSn === '') {
+            return null;
+        }
+        $row = $this->model(UserMemberGrowthLog::class)
+            ->where('biz_type', UserMemberGrowthLog::BIZ_ORDER_COMPLETE)
+            ->where('biz_id', $orderSn)
+            ->find();
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'change_growth' => (int) $row->change_growth,
+            'before_growth' => (int) $row->before_growth,
+            'after_growth' => (int) $row->after_growth,
+            'before_level_id' => (int) $row->before_level_id,
+            'after_level_id' => (int) $row->after_level_id,
+            'remark' => (string) ($row->remark ?? ''),
+            'create_time' => (string) $row->create_time,
+        ];
     }
 
     /**
@@ -799,6 +932,11 @@ class OrderAdminService extends BaseService
         $data = $this->hydrateOrderRelationAssets([$data])[0];
         $data['after_sale_tag_text'] = (string) ($data['active_refunds'][0]['status_text'] ?? '');
         unset($data['active_refunds']);
+        $data['delivery_type_text'] = Order::deliveryTypeLabel((string) ($data['delivery_type'] ?? Order::DELIVERY_TYPE_PHYSICAL));
+        $data['points_deduction'] = $this->orderPointsDeductionSnapshot($orderId);
+        $data['points_reward'] = $this->orderPointsRewardSnapshot($orderId);
+        $data['member_discount'] = $this->orderMemberDiscountSnapshot($orderId);
+        $data['member_growth'] = $this->orderMemberGrowthSnapshot((string) ($data['sn'] ?? ''));
 
         return $data;
     }

@@ -164,6 +164,9 @@ class LogisticsService extends BaseService
         if ($order === null) {
             throw new BusinessException('订单不存在');
         }
+        if ((string) ($order->delivery_type ?? Order::DELIVERY_TYPE_PHYSICAL) === Order::DELIVERY_TYPE_VIRTUAL) {
+            return $this->virtualOrderResponse($order);
+        }
 
         $shipment = $this->shipmentSnapshot($order);
         if ($shipment['tracking_no'] === '' || ($shipment['company_code'] === '' && $shipment['company_name'] === '')) {
@@ -245,6 +248,30 @@ class LogisticsService extends BaseService
             'tracks'        => [],
             'latest_desc'   => '',
             'latest_time'   => null,
+            'cached'        => false,
+            'last_query_at' => null,
+            'next_query_at' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function virtualOrderResponse(Order $order): array
+    {
+        $note = trim((string) ($order->delivery_note ?? ''));
+        return [
+            'available'     => false,
+            'status'        => $note !== '' ? $note : '该订单为虚拟发货，无物流轨迹',
+            'state'         => 'virtual',
+            'platform'      => '',
+            'company'       => '虚拟发货',
+            'company_code'  => '',
+            'tracking_no'   => '',
+            'receiver'      => $this->receiverOf($order),
+            'tracks'        => [],
+            'latest_desc'   => $note !== '' ? $note : '虚拟商品已发货',
+            'latest_time'   => (string) ($order->shipped_at ?? null),
             'cached'        => false,
             'last_query_at' => null,
             'next_query_at' => null,

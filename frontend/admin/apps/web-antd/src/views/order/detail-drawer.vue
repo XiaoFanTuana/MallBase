@@ -166,7 +166,15 @@ const itemColumns = [
             {{ detail.trade_no || '—' }}
           </a-descriptions-item>
           <a-descriptions-item label="物流" :span="2">
-            <template v-if="detail.logistics_company || detail.logistics_sn">
+            <template v-if="detail.delivery_type === 'virtual'">
+              虚拟发货
+              <span v-if="detail.delivery_note">
+                / {{ detail.delivery_note }}
+              </span>
+            </template>
+            <template
+              v-else-if="detail.logistics_company || detail.logistics_sn"
+            >
               {{ detail.logistics_company || '—' }} /
               {{ detail.logistics_sn || '—' }}
             </template>
@@ -210,6 +218,55 @@ const itemColumns = [
             {{ detail.expire_at || '—' }}
           </a-descriptions-item>
         </a-descriptions>
+
+        <template
+          v-if="
+            detail.points_deduction ||
+            detail.points_reward ||
+            detail.member_discount ||
+            detail.member_growth
+          "
+        >
+          <a-divider orientation="left" plain>积分 / 会员</a-divider>
+          <a-descriptions
+            :column="2"
+            size="small"
+            bordered
+            class="mb-4"
+            :label-style="{ width: '130px' }"
+          >
+            <a-descriptions-item
+              v-if="detail.points_deduction"
+              label="积分抵扣"
+            >
+              使用 {{ detail.points_deduction.used_points }} 积分，抵扣 ¥{{
+                detail.points_deduction.discount_amount
+              }}
+              <span v-if="detail.points_deduction.returned_points > 0">
+                ，已返还 {{ detail.points_deduction.returned_points }}
+              </span>
+            </a-descriptions-item>
+            <a-descriptions-item v-if="detail.points_reward" label="积分赠送">
+              应赠 {{ detail.points_reward.reward_points }}，冻结
+              {{ detail.points_reward.frozen_points }}，已释放
+              {{ detail.points_reward.released_points }}
+            </a-descriptions-item>
+            <a-descriptions-item v-if="detail.points_reward" label="解冻时间">
+              {{ detail.points_reward.release_time || '—' }}
+            </a-descriptions-item>
+            <a-descriptions-item v-if="detail.member_discount" label="会员优惠">
+              {{ detail.member_discount.level_name || '会员' }}，优惠 ¥{{
+                detail.member_discount.discount_amount
+              }}
+            </a-descriptions-item>
+            <a-descriptions-item v-if="detail.member_growth" label="成长值">
+              +{{ detail.member_growth.change_growth }}，{{
+                detail.member_growth.before_growth
+              }}
+              -> {{ detail.member_growth.after_growth }}
+            </a-descriptions-item>
+          </a-descriptions>
+        </template>
 
         <a-divider orientation="left" plain>订单商品</a-divider>
         <a-table
