@@ -7,8 +7,9 @@ namespace app\service\order;
 use app\model\order\RefundOrder;
 use app\common\enum\OperatorType;
 use app\common\enum\RefundOrderStatus;
-use app\service\distribution\DistributionOrderEventService;
-use app\service\user\UserPointsAccountService;
+use app\extension\order\OrderEvent;
+use app\extension\order\OrderEventContext;
+use app\extension\pipeline\OrderEventDispatcher;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -101,7 +102,10 @@ class RefundOrderStatusMachine extends BaseService
             throw new BusinessException('管理员审核流转必须传入操作者ID');
         }
 
-        $this->transaction(function () use ($refund, $toStatus, $isAdminReview, $operatorId, $remark): void {
+        /** @var OrderEventDispatcher $dispatcher */
+        $dispatcher = app()->make(OrderEventDispatcher::class);
+
+        $this->transaction(function () use ($refund, $fromStatus, $toStatus, $isAdminReview, $operatorId, $remark, $dispatcher): void {
             $refund->status = $toStatus;
 
             // 1. 对应终态时间戳（与 datetime 格式对齐主订单表）
@@ -124,8 +128,12 @@ class RefundOrderStatusMachine extends BaseService
             $refund->save();
 
             if ($toStatus === RefundOrderStatus::COMPLETED) {
-                app()->make(UserPointsAccountService::class)->rollbackRefundCompleted($refund);
-                app()->make(DistributionOrderEventService::class)->handleRefundCompleted($refund);
+                $dispatcher->dispatch(OrderEventContext::forRefund(
+                    OrderEvent::REFUND_COMPLETED,
+                    $refund,
+                    $fromStatus,
+                    $toStatus,
+                ));
             }
         });
     }

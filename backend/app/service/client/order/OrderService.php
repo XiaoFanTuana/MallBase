@@ -14,6 +14,8 @@ use app\model\order\OrderMemberDiscount;
 use app\model\order\PaymentLog;
 use app\model\order\RefundOrder;
 use app\model\setting\FreightTemplate;
+use app\extension\order\OrderPriceContext;
+use app\extension\pipeline\OrderPricePipeline;
 use app\service\FreightCalculatorService;
 use app\service\dto\RegionPathDto;
 use app\service\order\OrderSnGenerator;
@@ -21,7 +23,6 @@ use app\service\order\OrderSettingService;
 use app\service\order\OrderStatusMachine;
 use app\service\order\StockService;
 use app\service\order\WechatPrepayCloseService;
-use app\service\user\UserMemberService;
 use app\service\user\UserPointsAccountService;
 use app\service\upload\AssetHydrator;
 use app\model\user\UserAddress;
@@ -767,105 +768,23 @@ class OrderService extends BaseService
             $total = bcadd($total, $sub, 2);
         }
         $freight  = $this->calcFreight($items, $regionPath);
-        $memberDiscount = null;
-        $memberItemDiscounts = array_fill(0, count($items), '0.00');
-        if ($userId > 0) {
-            /** @var UserMemberService $memberService */
-            $memberService = app()->make(UserMemberService::class);
-            $memberDiscount = $memberService->pricingQuote($userId, $items);
-            $memberItemDiscounts = $memberDiscount['item_discounts'] ?? $memberItemDiscounts;
-        }
-        $memberDiscountAmount = (string) ($memberDiscount['discount_amount'] ?? '0.00');
-        $memberDiscountCents = $this->decimalToCents($memberDiscountAmount);
-        $pointsEligibleAmount = $this->centsToDecimal(max(0, $this->decimalToCents($total) - $memberDiscountCents));
 
-        $pointsDeduction = null;
-        if ($userId > 0) {
-            /** @var UserPointsAccountService $pointsService */
-            $pointsService = app()->make(UserPointsAccountService::class);
-            $pointsRequested = $usePoints || $pointsUsed > 0;
-            if (!$pointsService->isDeductionEnabled()) {
-                if ($pointsRequested) {
-                    throw new BusinessException('积分抵扣未开启');
-                }
-            } else {
-                $pointsDeduction = $pointsService->deductionQuote($userId, $pointsEligibleAmount, $usePoints, max(0, $pointsUsed));
-            }
-        }
-        $pointsDiscount = (string) ($pointsDeduction['discount_amount'] ?? '0.00');
-        $discount = $this->centsToDecimal($memberDiscountCents + $this->decimalToCents($pointsDiscount));
-        $pay      = bcsub(bcadd($total, $freight, 2), $discount, 2);
-        if ($this->decimalToCents($pay) < 0) {
-            $pay = '0.00';
-        }
-
-        $itemDiscounts = $this->mergeItemDiscounts(
-            $items,
-            $memberItemDiscounts,
-            $this->decimalToCents($pointsDiscount)
+        $context = new OrderPriceContext(
+            userId: $userId,
+            items: $items,
+            totalAmount: $total,
+            freightAmount: $freight,
+            usePoints: $usePoints,
+            pointsUsed: $pointsUsed,
         );
 
-        $pointsReward = null;
         if ($userId > 0) {
-            /** @var UserPointsAccountService $pointsService */
-            $pointsService = app()->make(UserPointsAccountService::class);
-            $pointsReward = $pointsService->rewardQuote(
-                $this->buildPointsRewardQuoteItems($items, $itemDiscounts)
-            );
+            /** @var OrderPricePipeline $pipeline */
+            $pipeline = app()->make(OrderPricePipeline::class);
+            $context = $pipeline->apply($context);
         }
 
-        $result = [
-            'total_amount'    => $total,
-            'freight_amount'  => $freight,
-            'discount_amount' => $discount,
-            'pay_amount'      => $pay,
-            'item_discounts'   => $itemDiscounts,
-        ];
-        if ($memberDiscount !== null) {
-            $result['member_discount'] = $memberDiscount;
-            $result['member_item_discounts'] = $memberItemDiscounts;
-        }
-        if ($pointsReward !== null) {
-            $result['points_reward'] = $pointsReward;
-        }
-        if ($pointsDeduction !== null) {
-            $result['points_deduction'] = $pointsDeduction;
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param array<int, array{sku_id?:int, goods_id?:int, unit_price:string, quantity:int}> $items
-     * @param array<int, string> $itemDiscounts
-     * @return array<int, array{source_index:int, goods_id:int, sku_id:int, pay_amount:string, quantity:int}>
-     */
-    private function buildPointsRewardQuoteItems(array $items, array $itemDiscounts): array
-    {
-        $rows = [];
-        foreach ($items as $index => $item) {
-            $goodsId = (int) ($item['goods_id'] ?? 0);
-            $skuId = (int) ($item['sku_id'] ?? 0);
-            if ($goodsId <= 0 || $skuId <= 0) {
-                continue;
-            }
-
-            $quantity = max(0, (int) ($item['quantity'] ?? 0));
-            $subtotalCents = $this->decimalToCents(bcmul((string) $item['unit_price'], (string) $quantity, 2));
-            $discountCents = min(
-                $subtotalCents,
-                $this->decimalToCents((string) ($itemDiscounts[$index] ?? '0.00'))
-            );
-            $rows[] = [
-                'source_index' => $index,
-                'goods_id' => $goodsId,
-                'sku_id' => $skuId,
-                'pay_amount' => $this->centsToDecimal(max(0, $subtotalCents - $discountCents)),
-                'quantity' => $quantity,
-            ];
-        }
-
-        return $rows;
+        return $context->toArray();
     }
 
     /**
@@ -933,66 +852,6 @@ class OrderService extends BaseService
         unset($item);
 
         return $previewItems;
-    }
-
-    /**
-     * @param array<int, array{unit_price:string, quantity:int}> $items
-     * @param array<int, string> $memberItemDiscounts
-     * @return array<int,string>
-     */
-    private function mergeItemDiscounts(array $items, array $memberItemDiscounts, int $pointsDiscountCents): array
-    {
-        $memberDiscountCents = [];
-        $pointBases = [];
-        foreach ($items as $index => $item) {
-            $subtotalCents = $this->decimalToCents(bcmul($item['unit_price'], (string) $item['quantity'], 2));
-            $memberCents = min($subtotalCents, $this->decimalToCents((string) ($memberItemDiscounts[$index] ?? '0.00')));
-            $memberDiscountCents[$index] = $memberCents;
-            $pointBases[$index] = max(0, $subtotalCents - $memberCents);
-        }
-
-        $pointDiscounts = $this->allocateCentsByBases($pointBases, $pointsDiscountCents);
-        $result = [];
-        foreach ($items as $index => $item) {
-            $subtotalCents = $this->decimalToCents(bcmul($item['unit_price'], (string) $item['quantity'], 2));
-            $discountCents = min(
-                $subtotalCents,
-                ($memberDiscountCents[$index] ?? 0) + ($pointDiscounts[$index] ?? 0)
-            );
-            $result[$index] = $this->centsToDecimal($discountCents);
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param array<int,int> $bases
-     * @return array<int,int>
-     */
-    private function allocateCentsByBases(array $bases, int $discountCents): array
-    {
-        $discountCents = max(0, $discountCents);
-        $totalBase = array_sum(array_map(static fn(int $basis): int => max(0, $basis), $bases));
-        if ($discountCents <= 0 || $totalBase <= 0) {
-            return array_fill(0, count($bases), 0);
-        }
-
-        $discountCents = min($discountCents, $totalBase);
-        $allocated = 0;
-        $lastIndex = array_key_last($bases);
-        $result = [];
-        foreach ($bases as $index => $basis) {
-            $basis = max(0, $basis);
-            if ($index === $lastIndex) {
-                $itemDiscount = max(0, $discountCents - $allocated);
-            } else {
-                $itemDiscount = intdiv($discountCents * $basis, $totalBase);
-                $allocated += $itemDiscount;
-            }
-            $result[$index] = min($itemDiscount, $basis);
-        }
-
-        return $result;
     }
 
     /**

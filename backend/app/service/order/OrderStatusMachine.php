@@ -8,9 +8,9 @@ use app\model\order\Order;
 use app\model\order\OrderLog;
 use app\common\enum\OperatorType;
 use app\common\enum\OrderStatus;
-use app\service\distribution\DistributionOrderEventService;
-use app\service\user\UserMemberService;
-use app\service\user\UserPointsAccountService;
+use app\extension\order\OrderEvent;
+use app\extension\order\OrderEventContext;
+use app\extension\pipeline\OrderEventDispatcher;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 use think\facade\Request;
@@ -82,7 +82,10 @@ class OrderStatusMachine extends BaseService
             ));
         }
 
-        $this->transaction(function () use ($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark): void {
+        /** @var OrderEventDispatcher $dispatcher */
+        $dispatcher = app()->make(OrderEventDispatcher::class);
+
+        $this->transaction(function () use ($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark, $dispatcher): void {
             // 1. 更新 status + 对应时间戳
             $order->status = $toStatus;
             $timestampColumn = self::STATUS_TIMESTAMP[$toStatus] ?? null;
@@ -104,18 +107,28 @@ class OrderStatusMachine extends BaseService
             ]);
 
             if ($toStatus === OrderStatus::PAID) {
-                app()->make(DistributionOrderEventService::class)->handleOrderPaid($order);
+                $dispatcher->dispatch(OrderEventContext::forOrder(
+                    OrderEvent::ORDER_PAID,
+                    $order,
+                    $fromStatus,
+                    $toStatus,
+                ));
             }
             if ($toStatus === OrderStatus::COMPLETED) {
-                app()->make(UserPointsAccountService::class)->rewardOrderCompleted($order);
-                app()->make(UserMemberService::class)->rewardOrderCompleted($order);
-                app()->make(DistributionOrderEventService::class)->handleOrderCompleted($order);
+                $dispatcher->dispatch(OrderEventContext::forOrder(
+                    OrderEvent::ORDER_COMPLETED,
+                    $order,
+                    $fromStatus,
+                    $toStatus,
+                ));
             }
             if ($toStatus === OrderStatus::CLOSED) {
-                app()->make(DistributionOrderEventService::class)->handleOrderClosed($order);
-            }
-            if ($fromStatus === OrderStatus::PENDING_PAY && $toStatus === OrderStatus::CLOSED) {
-                app()->make(UserPointsAccountService::class)->returnOrderDeduction($order);
+                $dispatcher->dispatch(OrderEventContext::forOrder(
+                    OrderEvent::ORDER_CLOSED,
+                    $order,
+                    $fromStatus,
+                    $toStatus,
+                ));
             }
         });
     }
