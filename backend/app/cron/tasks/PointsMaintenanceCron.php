@@ -5,19 +5,18 @@ declare(strict_types=1);
 namespace app\cron\tasks;
 
 use app\cron\CronTaskInterface;
-use app\job\AutoReceiveOrdersJob;
-use app\job\CloseExpiredOrdersJob;
+use app\job\ReleaseFrozenPointsJob;
 use mall_base\queue\JobQueue;
 use Swoole\Timer;
 use think\facade\Cache;
 use Throwable;
 
 /**
- * 订单域周期维护：处理订单超时关闭与自动确认收货。
+ * 积分域周期维护：释放到期冻结积分。
  */
-class OrderMaintenanceCron implements CronTaskInterface
+class PointsMaintenanceCron implements CronTaskInterface
 {
-    private const LOCK_KEY = 'cron:order-maintenance:dispatch';
+    private const LOCK_KEY = 'cron:points-maintenance:dispatch';
     private const LOCK_TTL = 55;
 
     public function register(callable $runInSandbox): void
@@ -35,8 +34,7 @@ class OrderMaintenanceCron implements CronTaskInterface
             return;
         }
 
-        JobQueue::push(CloseExpiredOrdersJob::class, ['limit' => 500]);
-        JobQueue::push(AutoReceiveOrdersJob::class, ['limit' => 500]);
+        JobQueue::push(ReleaseFrozenPointsJob::class, ['limit' => 500]);
     }
 
     private function acquireLock(): bool
