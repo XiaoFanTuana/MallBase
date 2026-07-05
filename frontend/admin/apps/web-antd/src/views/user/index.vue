@@ -125,6 +125,88 @@ const handleExport = async () => {
 /* ---------------- 弹窗 ---------------- */
 const userModalVisible = ref(false);
 const editingItem = ref<ClientUserApi.UserItem | null>(null);
+const detailDrawerVisible = ref(false);
+const detailLoading = ref(false);
+const detailUser = ref<ClientUserApi.UserItem | null>(null);
+const detailActiveTab = ref('overview');
+
+const formatEmpty = (value?: null | number | string) =>
+  value === undefined || value === null || value === '' ? '-' : value;
+
+const formatUserLabel = (record?: ClientUserApi.UserItem | null) => {
+  if (!record) return '';
+  return (
+    record.nickname || record.mobile || record.email || `用户 ${record.id}`
+  );
+};
+
+const formatGender = (value?: number) => {
+  const config = GENDER_MAP[value || 0] || GENDER_MAP[0]!;
+  return config.label;
+};
+
+const formatRegisterType = (value?: string) => {
+  const config =
+    REGISTER_TYPE_MAP[value || 'mobile'] || REGISTER_TYPE_MAP.mobile!;
+  return config.label;
+};
+
+const formatUserRegion = (record?: ClientUserApi.UserItem | null) => {
+  if (!record) return '-';
+  return (
+    [record.province, record.city, record.district]
+      .filter(Boolean)
+      .join(' / ') || '-'
+  );
+};
+
+const detailTitle = computed(() =>
+  detailUser.value
+    ? `用户详情 - ${formatUserLabel(detailUser.value)}`
+    : '用户详情',
+);
+
+const detailAvatarText = computed(() =>
+  formatUserLabel(detailUser.value).slice(0, 1).toUpperCase(),
+);
+
+const canShowWalletLogTab = computed(() =>
+  hasAccessByCodes(['SystemUserWalletLog']),
+);
+
+const canShowPointsLogTab = computed(
+  () => pointsEnabled.value && hasAccessByCodes(['SystemUserPointsLog']),
+);
+
+const resetDetailLogs = () => {
+  walletLogs.value = [];
+  walletLogPagination.current = 1;
+  walletLogPagination.total = 0;
+  pointsLogs.value = [];
+  pointsLogPagination.current = 1;
+  pointsLogPagination.total = 0;
+};
+
+const reloadDetailUser = async () => {
+  if (!detailUser.value) return;
+  detailUser.value = await getClientUserInfoApi(detailUser.value.id);
+};
+
+const handleDetail = async (record: ClientUserApi.UserItem) => {
+  detailUser.value = record;
+  detailActiveTab.value = 'overview';
+  resetDetailLogs();
+  detailDrawerVisible.value = true;
+  detailLoading.value = true;
+  try {
+    await reloadDetailUser();
+  } catch (error) {
+    console.error('获取用户详情失败:', error);
+    message.error('获取用户详情失败');
+  } finally {
+    detailLoading.value = false;
+  }
+};
 
 const handleCreate = () => {
   editingItem.value = null;
@@ -142,12 +224,14 @@ const handleEdit = async (record: ClientUserApi.UserItem) => {
   }
 };
 
-const onModalSuccess = () => {
-  refreshData();
+const onModalSuccess = async () => {
+  await refreshData();
+  if (detailDrawerVisible.value && detailUser.value) {
+    await reloadDetailUser();
+  }
 };
 
 /* ---------------- 余额记录 / 调整 ---------------- */
-const walletDrawerVisible = ref(false);
 const walletLogLoading = ref(false);
 const walletLogs = ref<ClientUserApi.WalletLogItem[]>([]);
 const walletUser = ref<ClientUserApi.UserItem | null>(null);
@@ -214,11 +298,12 @@ const loadWalletLogs = async (record = walletUser.value) => {
   }
 };
 
-const handleWalletLogs = async (record: ClientUserApi.UserItem) => {
-  walletUser.value = record;
+const showWalletLogs = async () => {
+  if (!detailUser.value) return;
+  walletUser.value = detailUser.value;
   walletLogPagination.current = 1;
-  walletDrawerVisible.value = true;
-  await loadWalletLogs(record);
+  detailActiveTab.value = 'wallet';
+  await loadWalletLogs(detailUser.value);
 };
 
 const handleWalletAdjust = (record: ClientUserApi.UserItem) => {
@@ -243,8 +328,12 @@ const submitWalletAdjust = async () => {
     message.success('余额调整成功');
     walletAdjustVisible.value = false;
     await refreshData();
-    if (walletDrawerVisible.value) {
-      await loadWalletLogs();
+    if (detailDrawerVisible.value && detailUser.value) {
+      await reloadDetailUser();
+      if (detailActiveTab.value === 'wallet') {
+        walletUser.value = detailUser.value;
+        await loadWalletLogs(detailUser.value);
+      }
     }
   } finally {
     walletAdjustSubmitting.value = false;
@@ -252,7 +341,6 @@ const submitWalletAdjust = async () => {
 };
 
 /* ---------------- 积分记录 / 调整 ---------------- */
-const pointsDrawerVisible = ref(false);
 const pointsLogLoading = ref(false);
 const pointsLogs = ref<ClientUserApi.PointsLogItem[]>([]);
 const pointsUser = ref<ClientUserApi.UserItem | null>(null);
@@ -319,11 +407,22 @@ const loadPointsLogs = async (record = pointsUser.value) => {
   }
 };
 
-const handlePointsLogs = async (record: ClientUserApi.UserItem) => {
-  pointsUser.value = record;
+const showPointsLogs = async () => {
+  if (!detailUser.value) return;
+  pointsUser.value = detailUser.value;
   pointsLogPagination.current = 1;
-  pointsDrawerVisible.value = true;
-  await loadPointsLogs(record);
+  detailActiveTab.value = 'points';
+  await loadPointsLogs(detailUser.value);
+};
+
+const handleDetailTabChange = async (key: string) => {
+  detailActiveTab.value = key;
+  if (key === 'wallet') {
+    await showWalletLogs();
+  }
+  if (key === 'points') {
+    await showPointsLogs();
+  }
 };
 
 const handlePointsAdjust = (record: ClientUserApi.UserItem) => {
@@ -348,8 +447,12 @@ const submitPointsAdjust = async () => {
     message.success('积分调整成功');
     pointsAdjustVisible.value = false;
     await refreshData();
-    if (pointsDrawerVisible.value) {
-      await loadPointsLogs();
+    if (detailDrawerVisible.value && detailUser.value) {
+      await reloadDetailUser();
+      if (detailActiveTab.value === 'points') {
+        pointsUser.value = detailUser.value;
+        await loadPointsLogs(detailUser.value);
+      }
     }
   } finally {
     pointsAdjustSubmitting.value = false;
@@ -385,9 +488,7 @@ const formatMemberLevelDiscount = (value: string) => {
   return `${percent}%`;
 };
 
-const formatMemberLevelOptionLabel = (
-  level: ClientUserApi.MemberLevelOption,
-) =>
+const formatMemberLevelOptionLabel = (level: ClientUserApi.MemberLevelOption) =>
   `${level.name}（${level.growth_min}成长值 / 按原价${formatMemberLevelDiscount(
     level.discount_percent,
   )}）`;
@@ -415,6 +516,9 @@ const submitMemberSet = async () => {
     message.success('会员等级设置成功');
     memberSetVisible.value = false;
     await refreshData();
+    if (detailDrawerVisible.value && detailUser.value) {
+      await reloadDetailUser();
+    }
   } finally {
     memberSetSubmitting.value = false;
   }
@@ -603,7 +707,7 @@ const baseColumns = [
     ellipsis: true,
   },
   { title: '注册时间', dataIndex: 'create_time', width: 160 },
-  { title: '操作', fixed: 'right', key: 'action', width: 450 },
+  { title: '操作', fixed: 'right', key: 'action', width: 200 },
 ];
 
 const columns = computed(() =>
@@ -815,61 +919,18 @@ onMounted(async () => {
               <a-button
                 type="link"
                 size="small"
+                @click="handleDetail(record)"
+                v-access:code="'SystemUserInfo'"
+              >
+                详情
+              </a-button>
+              <a-button
+                type="link"
+                size="small"
                 @click="handleEdit(record)"
                 v-access:code="'SystemUserUpdate'"
               >
                 编辑
-              </a-button>
-              <a-button
-                type="link"
-                size="small"
-                @click="handleWalletLogs(record)"
-                v-access:code="'SystemUserWalletLog'"
-              >
-                余额记录
-              </a-button>
-              <a-button
-                type="link"
-                size="small"
-                @click="handleWalletAdjust(record)"
-                v-access:code="'SystemUserWalletAdjust'"
-              >
-                调整余额
-              </a-button>
-              <a-button
-                v-if="pointsEnabled"
-                type="link"
-                size="small"
-                @click="handlePointsLogs(record)"
-                v-access:code="'SystemUserPointsLog'"
-              >
-                积分记录
-              </a-button>
-              <a-button
-                v-if="pointsEnabled"
-                type="link"
-                size="small"
-                @click="handlePointsAdjust(record)"
-                v-access:code="'SystemUserPointsAdjust'"
-              >
-                调整积分
-              </a-button>
-              <a-button
-                v-if="memberEnabled"
-                type="link"
-                size="small"
-                @click="handleMemberSet(record)"
-                v-access:code="'SystemUserSetMember'"
-              >
-                设置会员
-              </a-button>
-              <a-button
-                type="link"
-                size="small"
-                @click="handleResetPassword(record)"
-                v-access:code="'SystemUserResetPassword'"
-              >
-                重置密码
               </a-button>
               <a-button
                 type="link"
@@ -894,26 +955,302 @@ onMounted(async () => {
     />
 
     <a-drawer
-      v-model:open="walletDrawerVisible"
-      :title="`余额记录 - ${walletUser?.nickname || walletUser?.mobile || walletUser?.id || ''}`"
+      v-model:open="detailDrawerVisible"
+      :title="detailTitle"
       width="880"
+      destroy-on-close
     >
-      <a-table
-        :columns="walletLogColumns"
-        :data-source="walletLogs"
-        :loading="walletLogLoading"
-        :pagination="walletLogPagination"
-        :scroll="{ x: 1230 }"
-        row-key="id"
-        size="small"
-        @change="
-          (newPagination: any) => {
-            walletLogPagination.current = newPagination.current;
-            walletLogPagination.pageSize = newPagination.pageSize;
-            loadWalletLogs();
-          }
-        "
-      />
+      <a-spin :spinning="detailLoading">
+        <template v-if="detailUser">
+          <div class="user-detail">
+            <div class="user-detail__profile">
+              <a-avatar
+                :size="48"
+                :src="detailUser.avatar_full_url || detailUser.avatar"
+              >
+                {{ detailAvatarText }}
+              </a-avatar>
+              <div class="user-detail__profile-main">
+                <div class="user-detail__name">
+                  {{ formatUserLabel(detailUser) }}
+                </div>
+                <div class="user-detail__meta">ID: {{ detailUser.id }}</div>
+              </div>
+              <a-tag :color="detailUser.status === 1 ? 'green' : 'red'">
+                {{ detailUser.status === 1 ? '启用' : '禁用' }}
+              </a-tag>
+            </div>
+
+            <div class="user-detail__section">
+              <div class="user-detail__section-title">操作</div>
+              <a-space wrap>
+                <a-button
+                  @click="handleWalletAdjust(detailUser)"
+                  v-access:code="'SystemUserWalletAdjust'"
+                >
+                  调整余额
+                </a-button>
+                <a-button
+                  v-if="pointsEnabled"
+                  @click="handlePointsAdjust(detailUser)"
+                  v-access:code="'SystemUserPointsAdjust'"
+                >
+                  调整积分
+                </a-button>
+                <a-button
+                  v-if="memberEnabled"
+                  @click="handleMemberSet(detailUser)"
+                  v-access:code="'SystemUserSetMember'"
+                >
+                  设置会员
+                </a-button>
+                <a-button
+                  danger
+                  @click="handleResetPassword(detailUser)"
+                  v-access:code="'SystemUserResetPassword'"
+                >
+                  重置密码
+                </a-button>
+              </a-space>
+            </div>
+
+            <a-tabs
+              :active-key="detailActiveTab"
+              @change="handleDetailTabChange"
+            >
+              <a-tab-pane key="overview" tab="概览">
+                <div class="user-detail__section">
+                  <div class="user-detail__section-title">基础信息</div>
+                  <a-descriptions bordered size="small" :column="2">
+                    <a-descriptions-item label="用户ID">
+                      {{ detailUser.id }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="状态">
+                      <a-tag :color="detailUser.status === 1 ? 'green' : 'red'">
+                        {{ detailUser.status === 1 ? '启用' : '禁用' }}
+                      </a-tag>
+                    </a-descriptions-item>
+                    <a-descriptions-item label="昵称">
+                      {{ formatEmpty(detailUser.nickname) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="真实姓名">
+                      {{ formatEmpty(detailUser.real_name) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="手机号">
+                      {{ formatEmpty(detailUser.mobile) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="邮箱">
+                      {{ formatEmpty(detailUser.email) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="性别">
+                      {{ formatGender(detailUser.gender) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="注册方式">
+                      {{ formatRegisterType(detailUser.register_type) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="手机认证">
+                      <a-tag
+                        :color="
+                          detailUser.mobile_verified === 1 ? 'green' : 'default'
+                        "
+                      >
+                        {{
+                          detailUser.mobile_verified === 1 ? '已认证' : '未认证'
+                        }}
+                      </a-tag>
+                    </a-descriptions-item>
+                    <a-descriptions-item label="生日">
+                      {{ formatEmpty(detailUser.birthday) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="所在地区" :span="2">
+                      {{ formatUserRegion(detailUser) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="注册IP">
+                      {{ formatEmpty(detailUser.register_ip) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="最后登录IP">
+                      {{ formatEmpty(detailUser.last_login_ip) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="注册时间">
+                      {{ formatEmpty(detailUser.create_time) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="最后登录">
+                      {{ formatEmpty(detailUser.last_login_time) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="更新时间" :span="2">
+                      {{ formatEmpty(detailUser.update_time) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="个人简介" :span="2">
+                      {{ formatEmpty(detailUser.bio) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="备注" :span="2">
+                      {{ formatEmpty(detailUser.remark) }}
+                    </a-descriptions-item>
+                  </a-descriptions>
+                </div>
+
+                <div class="user-detail__section">
+                  <div class="user-detail__section-title">资产与会员</div>
+                  <a-descriptions bordered size="small" :column="2">
+                    <a-descriptions-item label="余额">
+                      ¥{{ detailUser.wallet?.balance || '0.00' }}
+                    </a-descriptions-item>
+                    <a-descriptions-item label="冻结余额">
+                      ¥{{ detailUser.wallet?.frozen_amount || '0.00' }}
+                    </a-descriptions-item>
+                    <a-descriptions-item v-if="pointsEnabled" label="可用积分">
+                      {{ detailUser.points?.balance_points ?? 0 }}
+                    </a-descriptions-item>
+                    <a-descriptions-item v-if="pointsEnabled" label="累计获取">
+                      {{ detailUser.points?.total_income_points ?? 0 }}
+                    </a-descriptions-item>
+                    <a-descriptions-item
+                      v-if="pointsEnabled"
+                      label="累计消耗"
+                      :span="2"
+                    >
+                      {{ detailUser.points?.total_expense_points ?? 0 }}
+                    </a-descriptions-item>
+                    <a-descriptions-item v-if="memberEnabled" label="会员等级">
+                      {{ detailUser.member?.level_name || '-' }}
+                    </a-descriptions-item>
+                    <a-descriptions-item v-if="memberEnabled" label="成长值">
+                      {{ detailUser.member?.growth_value ?? 0 }}
+                    </a-descriptions-item>
+                    <a-descriptions-item
+                      v-if="memberEnabled"
+                      label="累计成长值"
+                    >
+                      {{ detailUser.member?.total_growth_value ?? 0 }}
+                    </a-descriptions-item>
+                    <a-descriptions-item v-if="memberEnabled" label="等级来源">
+                      <a-tag
+                        :color="
+                          detailUser.member?.level_source === 'manual'
+                            ? 'blue'
+                            : 'default'
+                        "
+                      >
+                        {{
+                          detailUser.member?.level_source === 'manual'
+                            ? '手动'
+                            : '自动'
+                        }}
+                      </a-tag>
+                    </a-descriptions-item>
+                    <a-descriptions-item
+                      v-if="memberEnabled"
+                      label="锁定到期"
+                      :span="2"
+                    >
+                      {{ formatEmpty(detailUser.member?.level_lock_until) }}
+                    </a-descriptions-item>
+                    <a-descriptions-item
+                      v-if="memberEnabled"
+                      label="等级备注"
+                      :span="2"
+                    >
+                      {{ formatEmpty(detailUser.member?.level_remark) }}
+                    </a-descriptions-item>
+                  </a-descriptions>
+                </div>
+
+                <div class="user-detail__section">
+                  <div class="user-detail__section-title">分组与标签</div>
+                  <a-descriptions bordered size="small" :column="1">
+                    <a-descriptions-item label="分组">
+                      <a-space v-if="detailUser.groups?.length" wrap>
+                        <a-tag
+                          v-for="group in detailUser.groups"
+                          :key="group.id"
+                          :color="group.color || 'default'"
+                        >
+                          {{ group.name }}
+                        </a-tag>
+                      </a-space>
+                      <span v-else>-</span>
+                    </a-descriptions-item>
+                    <a-descriptions-item label="标签">
+                      <a-space v-if="detailUser.tags?.length" wrap>
+                        <a-tag
+                          v-for="tag in detailUser.tags"
+                          :key="tag.id"
+                          :color="tag.color || 'default'"
+                        >
+                          {{ tag.name }}
+                        </a-tag>
+                      </a-space>
+                      <span v-else>-</span>
+                    </a-descriptions-item>
+                  </a-descriptions>
+                </div>
+              </a-tab-pane>
+
+              <a-tab-pane
+                v-if="canShowWalletLogTab"
+                key="wallet"
+                tab="余额记录"
+              >
+                <div class="user-detail__tab-toolbar">
+                  <a-button
+                    @click="handleWalletAdjust(detailUser)"
+                    v-access:code="'SystemUserWalletAdjust'"
+                  >
+                    调整余额
+                  </a-button>
+                </div>
+                <a-table
+                  :columns="walletLogColumns"
+                  :data-source="walletLogs"
+                  :loading="walletLogLoading"
+                  :pagination="walletLogPagination"
+                  :scroll="{ x: 1230 }"
+                  row-key="id"
+                  size="small"
+                  @change="
+                    (newPagination: any) => {
+                      walletLogPagination.current = newPagination.current;
+                      walletLogPagination.pageSize = newPagination.pageSize;
+                      loadWalletLogs();
+                    }
+                  "
+                />
+              </a-tab-pane>
+
+              <a-tab-pane
+                v-if="canShowPointsLogTab"
+                key="points"
+                tab="积分记录"
+              >
+                <div class="user-detail__tab-toolbar">
+                  <a-button
+                    @click="handlePointsAdjust(detailUser)"
+                    v-access:code="'SystemUserPointsAdjust'"
+                  >
+                    调整积分
+                  </a-button>
+                </div>
+                <a-table
+                  :columns="pointsLogColumns"
+                  :data-source="pointsLogs"
+                  :loading="pointsLogLoading"
+                  :pagination="pointsLogPagination"
+                  :scroll="{ x: 1220 }"
+                  row-key="id"
+                  size="small"
+                  @change="
+                    (newPagination: any) => {
+                      pointsLogPagination.current = newPagination.current;
+                      pointsLogPagination.pageSize = newPagination.pageSize;
+                      loadPointsLogs();
+                    }
+                  "
+                />
+              </a-tab-pane>
+            </a-tabs>
+          </div>
+        </template>
+      </a-spin>
     </a-drawer>
 
     <a-modal
@@ -963,29 +1300,6 @@ onMounted(async () => {
         </a-form-item>
       </a-form>
     </a-modal>
-
-    <a-drawer
-      v-model:open="pointsDrawerVisible"
-      :title="`积分记录 - ${pointsUser?.nickname || pointsUser?.mobile || pointsUser?.id || ''}`"
-      width="880"
-    >
-      <a-table
-        :columns="pointsLogColumns"
-        :data-source="pointsLogs"
-        :loading="pointsLogLoading"
-        :pagination="pointsLogPagination"
-        :scroll="{ x: 1220 }"
-        row-key="id"
-        size="small"
-        @change="
-          (newPagination: any) => {
-            pointsLogPagination.current = newPagination.current;
-            pointsLogPagination.pageSize = newPagination.pageSize;
-            loadPointsLogs();
-          }
-        "
-      />
-    </a-drawer>
 
     <a-modal
       v-model:open="pointsAdjustVisible"
@@ -1173,5 +1487,55 @@ onMounted(async () => {
 
 .user-table-panel :deep(.ant-table-wrapper) {
   border-top: 1px solid hsl(var(--border));
+}
+
+.user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.user-detail__profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.user-detail__profile-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.user-detail__name {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-detail__meta {
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+.user-detail__section {
+  margin-top: 16px;
+}
+
+.user-detail__section-title {
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.user-detail__tab-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 </style>
