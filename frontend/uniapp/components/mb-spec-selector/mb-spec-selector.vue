@@ -13,11 +13,12 @@
           <mb-price :value="currentPrice" size="lg" color="var(--color-primary, #0d50d5)" />
           <text class="mb-spec__stock">库存 {{ currentStock }}</text>
           <text v-if="selectedSpecText" class="mb-spec__selected">已选：{{ selectedSpecText }}</text>
-          <view v-if="hasSkuBenefit" class="mb-spec__benefits">
-            <text v-if="hasSelectedMemberPrice" class="mb-spec__benefit">会员价 ¥{{ selectedMemberPriceText }}</text>
-            <text v-if="pointsRewardText" class="mb-spec__benefit">{{ pointsRewardText }}</text>
-            <text v-if="memberGrowthText" class="mb-spec__benefit">{{ memberGrowthText }}</text>
-          </view>
+          <mb-benefit-strip
+            v-if="hasSkuBenefit"
+            class="mb-spec__benefits"
+            :items="benefitItems"
+            size="compact"
+          />
         </view>
         <view class="mb-spec__close" @tap.stop="close">
           <text class="mb-spec__close-icon">✕</text>
@@ -137,6 +138,12 @@ const selectedMemberPrice = computed(() => {
 })
 const hasSelectedMemberPrice = computed(() => selectedMemberPrice.value !== '')
 const selectedMemberPriceText = computed(() => formatAmount(selectedMemberPrice.value))
+const memberDiscountText = computed(() => {
+  if (!props.memberEnabled || hasSelectedMemberPrice.value) return ''
+  const mode = props.goods.member_benefit_mode || 'global'
+  if (!['global', 'level_discount'].includes(mode)) return ''
+  return '下单按会员等级优惠'
+})
 const pointsRewardText = computed(() => {
   const previewText = selectedSku.value?.points_reward_preview_text || props.goods.points_reward_preview_text
   if (previewText) return previewText
@@ -162,7 +169,42 @@ const legacyPointsRewardText = computed(() => {
 
   return '按全局规则赠送积分'
 })
-const hasSkuBenefit = computed(() => hasSelectedMemberPrice.value || !!pointsRewardText.value || !!memberGrowthText.value)
+const benefitItems = computed(() => {
+  const items = []
+  if (hasSelectedMemberPrice.value) {
+    items.push({
+      key: 'member_price',
+      label: '会员价',
+      value: `¥${selectedMemberPriceText.value}`,
+      tone: 'member',
+    })
+  } else if (memberDiscountText.value) {
+    items.push({
+      key: 'member_discount',
+      label: '会员优惠',
+      value: memberDiscountText.value,
+      tone: 'member',
+    })
+  }
+  if (pointsRewardText.value) {
+    items.push({
+      key: 'points_reward',
+      label: '积分',
+      value: pointsRewardText.value,
+      tone: 'points',
+    })
+  }
+  if (memberGrowthText.value) {
+    items.push({
+      key: 'member_growth',
+      label: '成长值',
+      value: memberGrowthText.value,
+      tone: 'growth',
+    })
+  }
+  return items
+})
+const hasSkuBenefit = computed(() => benefitItems.value.length > 0)
 
 const selectedSpecText = computed(() =>
   specGroups.value
@@ -334,20 +376,7 @@ watch(currentStock, (stock) => {
 }
 
 .mb-spec__benefits {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8rpx;
-}
-
-.mb-spec__benefit {
-  max-width: 100%;
-  padding: 4rpx 10rpx;
-  border-radius: 999rpx;
-  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
-  color: var(--color-primary, #0d50d5);
-  font-size: 22rpx;
-  font-weight: 600;
+  margin-top: 2rpx;
 }
 
 .mb-spec__close {

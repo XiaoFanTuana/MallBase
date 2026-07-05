@@ -138,12 +138,20 @@ function confirmCancel() {
         </view>
       </view>
 
-      <view v-if="detail.logistics_company || detail.logistics_no" class="card info-card">
+      <view v-if="detail.delivery_type === 'virtual' || detail.logistics_company || detail.logistics_no" class="card info-card">
         <view class="info-row">
+          <text class="info-row__label">发货方式</text>
+          <text class="info-row__value">{{ detail.delivery_type_text || '实物快递' }}</text>
+        </view>
+        <view v-if="detail.delivery_type === 'virtual'" class="info-row">
+          <text class="info-row__label">发货说明</text>
+          <text class="info-row__value info-row__value--wrap">{{ detail.delivery_note || '虚拟商品已发货' }}</text>
+        </view>
+        <view v-if="detail.delivery_type !== 'virtual'" class="info-row">
           <text class="info-row__label">物流公司</text>
           <text class="info-row__value">{{ detail.logistics_company || '-' }}</text>
         </view>
-        <view class="info-row">
+        <view v-if="detail.delivery_type !== 'virtual'" class="info-row">
           <text class="info-row__label">物流单号</text>
           <text class="info-row__value">{{ detail.logistics_no || '-' }}</text>
         </view>

@@ -147,13 +147,13 @@
           <text class="submit-bar__sup">TOTAL AMOUNT</text>
           <mb-price :value="displayPayTotal" size="lg" color="var(--color-primary, #0d50d5)" />
         </view>
-        <view
+        <button
           class="submit-bar__btn"
           :class="{ 'submit-bar__btn--disabled': submitting || !address || !isAddressValid }"
-          @tap="handleSubmit"
+          @click="handleSubmit"
         >
           <text class="submit-bar__btn-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
-        </view>
+        </button>
       </view>
     </view>
 
@@ -913,6 +913,7 @@ async function handleSubmit() {
 }
 
 .submit-bar__btn {
+  border: 0;
   height: 88rpx;
   min-width: 260rpx;
   border-radius: $mb-radius-full;
@@ -922,7 +923,13 @@ async function handleSubmit() {
   justify-content: center;
   padding: 0 $mb-spacing-xl;
   box-shadow: none;
+  line-height: 1;
+  margin: 0;
   transition: opacity 0.15s, transform 0.15s;
+
+  &::after {
+    border: 0;
+  }
 
   &:active {
     opacity: 0.85;

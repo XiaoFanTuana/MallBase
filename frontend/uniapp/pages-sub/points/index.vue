@@ -10,21 +10,37 @@ const decorateStore = useDecorateStore();
 const loading = ref(false);
 const points = ref({
   balance_points: 0,
+  frozen_points: 0,
+  debt_points: 0,
   total_income_points: 0,
   total_expense_points: 0,
   month_income_points: 0,
   month_expense_points: 0,
+  frozen_rewards: [],
+  next_release_time: "",
 });
 const recentLogs = ref([]);
 const pointsEnabled = ref(true);
 
 const balanceText = computed(() => Number(points.value.balance_points || 0));
+const frozenText = computed(() => Number(points.value.frozen_points || 0));
+const debtText = computed(() => Number(points.value.debt_points || 0));
+const totalIncomeText = computed(() =>
+  Number(points.value.total_income_points || 0),
+);
+const totalExpenseText = computed(() =>
+  Number(points.value.total_expense_points || 0),
+);
 const monthIncomeText = computed(() =>
   Number(points.value.month_income_points || 0),
 );
 const monthExpenseText = computed(() =>
   Number(points.value.month_expense_points || 0),
 );
+const frozenRewards = computed(() =>
+  Array.isArray(points.value.frozen_rewards) ? points.value.frozen_rewards : [],
+);
+const nextReleaseTime = computed(() => points.value.next_release_time || "");
 
 onShow(async () => {
   if (await ensurePointsEnabled()) {
@@ -52,10 +68,14 @@ async function fetchPoints() {
   } catch {
     points.value = {
       balance_points: 0,
+      frozen_points: 0,
+      debt_points: 0,
       total_income_points: 0,
       total_expense_points: 0,
       month_income_points: 0,
       month_expense_points: 0,
+      frozen_rewards: [],
+      next_release_time: "",
     };
   }
 
@@ -82,6 +102,16 @@ function logTitle(item) {
 
 function logTime(item) {
   return item.create_time || item.time || "";
+}
+
+function accountTypeText(item) {
+  return item.account_type_text || "";
+}
+
+function releaseDesc(item) {
+  const pointsValue = Number(item.frozen_points || item.reward_points || 0);
+  const releaseTime = item.release_time || "";
+  return `${pointsValue} 积分${releaseTime ? ` · ${releaseTime} 解冻` : ""}`;
 }
 
 function goRecords(params = {}) {
@@ -122,6 +152,24 @@ function goExchangeOrders() {
         <text class="points-card__value">{{ balanceText }}</text>
         <text class="points-card__unit">积分</text>
       </view>
+      <view class="points-card__summary">
+        <view class="points-summary">
+          <text class="points-summary__label">冻结积分</text>
+          <text class="points-summary__value">{{ frozenText }}</text>
+        </view>
+        <view class="points-summary">
+          <text class="points-summary__label">欠账积分</text>
+          <text class="points-summary__value">{{ debtText }}</text>
+        </view>
+        <view class="points-summary">
+          <text class="points-summary__label">累计获得</text>
+          <text class="points-summary__value">{{ totalIncomeText }}</text>
+        </view>
+        <view class="points-summary">
+          <text class="points-summary__label">累计使用</text>
+          <text class="points-summary__value">{{ totalExpenseText }}</text>
+        </view>
+      </view>
       <view class="points-card__stats">
         <view class="points-stat">
           <text class="points-stat__label">本月获得</text>
@@ -131,6 +179,34 @@ function goExchangeOrders() {
           <text class="points-stat__label">本月使用</text>
           <text class="points-stat__value">-{{ monthExpenseText }}</text>
         </view>
+      </view>
+      <text v-if="nextReleaseTime" class="points-card__hint">
+        最近解冻：{{ nextReleaseTime }}
+      </text>
+    </view>
+
+    <view class="section">
+      <view class="section__header">
+        <text class="section__title">待解冻积分</text>
+        <text class="section__more" @tap="goRecords({ biz_type: 'order_complete' })">冻结明细</text>
+      </view>
+      <view v-if="frozenRewards.length" class="release-list">
+        <view
+          v-for="item in frozenRewards"
+          :key="item.order_sn || item.order_id"
+          class="release-row"
+        >
+          <view class="release-row__main">
+            <text class="release-row__title">订单奖励冻结</text>
+            <text class="release-row__desc">{{ item.order_sn }}</text>
+          </view>
+          <view class="release-row__right">
+            <text class="release-row__points">{{ releaseDesc(item) }}</text>
+          </view>
+        </view>
+      </view>
+      <view v-else class="release-empty">
+        <text class="release-empty__text">暂无待解冻积分</text>
       </view>
     </view>
 
@@ -178,7 +254,9 @@ function goExchangeOrders() {
           </view>
           <view class="log-row__main">
             <text class="log-row__title">{{ logTitle(item) }}</text>
-            <text class="log-row__time">{{ logTime(item) }}</text>
+            <text class="log-row__time">
+              {{ accountTypeText(item) ? `${accountTypeText(item)} · ` : "" }}{{ logTime(item) }}
+            </text>
           </view>
           <view class="log-row__right">
             <text
@@ -278,6 +356,42 @@ function goExchangeOrders() {
   margin-top: 28rpx;
 }
 
+.points-card__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+  margin-top: 28rpx;
+}
+
+.points-summary {
+  min-width: 0;
+  padding: 18rpx 20rpx;
+  background: var(--color-bg-surface, #f8fafc);
+  border: 1rpx solid var(--color-divider, #f0f2f5);
+  border-radius: $mb-radius-md;
+}
+
+.points-summary__label {
+  display: block;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 23rpx;
+}
+
+.points-summary__value {
+  display: block;
+  margin-top: 8rpx;
+  color: var(--color-text, #111827);
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.points-card__hint {
+  display: block;
+  margin-top: 18rpx;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 24rpx;
+}
+
 .points-stat {
   flex: 1;
   padding: 20rpx;
@@ -331,6 +445,62 @@ function goExchangeOrders() {
   background: var(--color-bg, #ffffff);
   border: 1rpx solid var(--color-divider, #f0f2f5);
   border-radius: $mb-radius-lg;
+}
+
+.release-list {
+  margin-top: 18rpx;
+}
+
+.release-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
+}
+
+.release-row:last-child {
+  border-bottom: none;
+}
+
+.release-row__main {
+  min-width: 0;
+}
+
+.release-row__title {
+  display: block;
+  color: var(--color-text, #111827);
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.release-row__desc {
+  display: block;
+  margin-top: 6rpx;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 23rpx;
+}
+
+.release-row__right {
+  flex-shrink: 0;
+  max-width: 360rpx;
+  text-align: right;
+}
+
+.release-row__points {
+  color: #047857;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.release-empty {
+  padding: 24rpx 0 4rpx;
+}
+
+.release-empty__text {
+  color: var(--color-text-muted, #6b7280);
+  font-size: 24rpx;
 }
 
 .log-list {

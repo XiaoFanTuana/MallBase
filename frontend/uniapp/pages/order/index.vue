@@ -392,6 +392,10 @@ function hasActiveAfterSale(order) {
   return isActiveAfterSaleStatus(order?.after_sale?.status)
 }
 
+function isVirtualDelivery(order) {
+  return String(order?.delivery_type || '') === 'virtual'
+}
+
 function afterSaleTip(order) {
   if (isRefundCompletedOrder(order)) {
     return '退款已完成，订单因全额退款结束'
@@ -414,7 +418,9 @@ function getActions(order) {
     if (canApplyRefund(order)) {
       actions.push({ key: 'refund', label: '申请售后', primary: false })
     }
-    actions.push({ key: 'logistics', label: '查看物流', primary: false })
+    if (!isVirtualDelivery(order)) {
+      actions.push({ key: 'logistics', label: '查看物流', primary: false })
+    }
     if (!hasActiveAfterSale(order)) {
       actions.push({ key: 'confirm', label: '确认收货', primary: true })
     }

@@ -152,20 +152,12 @@
             </view>
           </view>
         </view>
-        <view v-if="hasSkuBenefit" class="goods-detail__benefits">
-          <view v-if="hasSelectedMemberPrice" class="goods-detail__benefit">
-            <text class="goods-detail__benefit-label">会员价</text>
-            <text class="goods-detail__benefit-value">¥{{ selectedMemberPriceText }}</text>
-          </view>
-          <view v-if="pointsRewardText" class="goods-detail__benefit">
-            <text class="goods-detail__benefit-label">积分</text>
-            <text class="goods-detail__benefit-value">{{ pointsRewardText }}</text>
-          </view>
-          <view v-if="memberGrowthText" class="goods-detail__benefit">
-            <text class="goods-detail__benefit-label">成长值</text>
-            <text class="goods-detail__benefit-value">{{ memberGrowthText }}</text>
-          </view>
-        </view>
+        <mb-benefit-strip
+          v-if="hasSkuBenefit"
+          class="goods-detail__benefits"
+          :items="benefitItems"
+          variant="card"
+        />
       </view>
 
       <!-- Title section -->
@@ -458,9 +450,10 @@ let mediaTouchStartX = 0
 const preloadedMediaImages = new Set()
 
 onLoad((query) => {
-  if (query?.id) {
-    goodsId.value = String(query.id)
-    fetchDetail(query.id)
+  const id = resolveGoodsId(query)
+  if (id) {
+    goodsId.value = id
+    fetchDetail(id)
   } else {
     loading.value = false
   }
@@ -487,6 +480,21 @@ async function fetchDetail(id) {
   } finally {
     loading.value = false
   }
+}
+
+function resolveGoodsId(query) {
+  const queryId = query?.id
+  if (queryId) return String(queryId)
+
+  // #ifdef H5
+  if (typeof window !== 'undefined') {
+    const hashQuery = String(window.location.hash || '').split('?')[1] || ''
+    const id = new URLSearchParams(hashQuery).get('id')
+    if (id) return id
+  }
+  // #endif
+
+  return ''
 }
 
 const skuList = computed(() => (Array.isArray(goods.value?.skus) ? goods.value.skus : []))
@@ -682,6 +690,12 @@ const selectedMemberPrice = computed(() => {
 })
 const hasSelectedMemberPrice = computed(() => selectedMemberPrice.value !== '')
 const selectedMemberPriceText = computed(() => formatAmount(selectedMemberPrice.value))
+const memberDiscountText = computed(() => {
+  if (!memberEnabled.value || hasSelectedMemberPrice.value) return ''
+  const mode = goods.value?.member_benefit_mode || 'global'
+  if (!['global', 'level_discount'].includes(mode)) return ''
+  return '下单按会员等级优惠'
+})
 const pointsRewardText = computed(() => {
   const previewText = selectedSku.value?.points_reward_preview_text || goods.value?.points_reward_preview_text
   if (previewText) return previewText
@@ -708,7 +722,42 @@ const legacyPointsRewardText = computed(() => {
 
   return '按全局规则赠送'
 })
-const hasSkuBenefit = computed(() => hasSelectedMemberPrice.value || !!pointsRewardText.value || !!memberGrowthText.value)
+const benefitItems = computed(() => {
+  const items = []
+  if (hasSelectedMemberPrice.value) {
+    items.push({
+      key: 'member_price',
+      label: '会员价',
+      value: `¥${selectedMemberPriceText.value}`,
+      tone: 'member',
+    })
+  } else if (memberDiscountText.value) {
+    items.push({
+      key: 'member_discount',
+      label: '会员优惠',
+      value: memberDiscountText.value,
+      tone: 'member',
+    })
+  }
+  if (pointsRewardText.value) {
+    items.push({
+      key: 'points_reward',
+      label: '积分',
+      value: pointsRewardText.value,
+      tone: 'points',
+    })
+  }
+  if (memberGrowthText.value) {
+    items.push({
+      key: 'member_growth',
+      label: '成长值',
+      value: memberGrowthText.value,
+      tone: 'growth',
+    })
+  }
+  return items
+})
+const hasSkuBenefit = computed(() => benefitItems.value.length > 0)
 
 const formattedPrice = computed(() => {
   return formatAmount(displayPrice.value)
@@ -1579,34 +1628,7 @@ function onBuyNow({ sku, quantity }) {
 }
 
 .goods-detail__benefits {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12rpx;
   margin-top: 14rpx;
-}
-
-.goods-detail__benefit {
-  display: inline-flex;
-  align-items: center;
-  gap: 8rpx;
-  max-width: 100%;
-  padding: 6rpx 14rpx;
-  border-radius: $mb-radius-full;
-  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
-}
-
-.goods-detail__benefit-label {
-  flex-shrink: 0;
-  font-size: $mb-font-xs;
-  color: var(--color-text-secondary, #434654);
-}
-
-.goods-detail__benefit-value {
-  min-width: 0;
-  font-size: $mb-font-xs;
-  font-weight: 700;
-  color: var(--color-primary, #0d50d5);
 }
 
 // ---------- Title section ----------
