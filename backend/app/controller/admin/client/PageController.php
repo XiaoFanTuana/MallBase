@@ -18,7 +18,7 @@ class PageController extends BaseController
 
     public function list()
     {
-        $where = $this->request->param(['keyword', 'page_type', 'category', 'source', 'status']);
+        $where = $this->request->param(['keyword', 'page_type', 'category_id', 'source', 'status']);
         [$page, $limit] = $this->getPagination(1, 15);
 
         $result = $this->service()->getList($where, $page, $limit);
@@ -46,11 +46,11 @@ class PageController extends BaseController
     public function create()
     {
         $data = $this->request->param([
-            'name', 'path', 'page_type', 'category', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status',
+            'name', 'path', 'page_type', 'category_id', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status',
         ]);
         $data['source'] = $data['source'] ?? ClientPage::SOURCE_MANUAL;
-        if (($data['category'] ?? '') === '') {
-            unset($data['category']);
+        if (($data['category_id'] ?? '') === '') {
+            unset($data['category_id']);
         }
 
         $this->validate($data, ClientPageValidate::class . '.create');
@@ -67,11 +67,11 @@ class PageController extends BaseController
         }
 
         $data = $this->request->param([
-            'name', 'path', 'page_type', 'category', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status',
+            'name', 'path', 'page_type', 'category_id', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status',
         ]);
         $data['source'] = $data['source'] ?? ClientPage::SOURCE_MANUAL;
-        if (($data['category'] ?? '') === '') {
-            unset($data['category']);
+        if (($data['category_id'] ?? '') === '') {
+            unset($data['category_id']);
         }
 
         $this->validate($data, ClientPageValidate::class . '.update');

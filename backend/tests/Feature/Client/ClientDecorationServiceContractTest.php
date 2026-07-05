@@ -38,6 +38,8 @@ final class ClientDecorationServiceContractTest extends TestCase
         $result = $service->importFromUniappPages($this->makePagesJson('Codex 首页'));
         $this->assertSame(0, $result['skipped']);
         $this->assertGreaterThanOrEqual(3, $result['created']);
+        $basicCategoryId = $this->clientPageCategoryId('基础页面');
+        $goodsCategoryId = $this->clientPageCategoryId('商品页面');
 
         $home = Db::name('client_page')->where('path', '/codex-test/home/index')->find();
         $profile = Db::name('client_page')->where('path', '/codex-test/profile/index')->find();
@@ -45,7 +47,7 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $this->assertIsArray($home);
         $this->assertSame('tab', $home['page_type']);
-        $this->assertSame('basic', $home['category']);
+        $this->assertSame($basicCategoryId, (int) $home['category_id']);
         $this->assertSame('system', $home['source']);
         $this->assertSame(0, (int) $home['need_login']);
 
@@ -54,7 +56,7 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $this->assertIsArray($detail);
         $this->assertSame('subpackage', $detail['page_type']);
-        $this->assertSame('goods', $detail['category']);
+        $this->assertSame($goodsCategoryId, (int) $detail['category_id']);
         $this->assertSame('codex-sub-test', $detail['package_root']);
 
         $updated = $service->importFromUniappPages($this->makePagesJson('Codex 首页改名'));
@@ -67,12 +69,12 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $picker = $service->getPickerGroups([]);
         $groups = array_column($picker['groups'], null, 'key');
-        $this->assertArrayHasKey('basic', $groups);
-        $this->assertArrayHasKey('goods', $groups);
-        $this->assertSame('基础页面', $groups['basic']['label']);
-        $this->assertSame('商品页面', $groups['goods']['label']);
+        $this->assertArrayHasKey((string) $basicCategoryId, $groups);
+        $this->assertArrayHasKey((string) $goodsCategoryId, $groups);
+        $this->assertSame('基础页面', $groups[(string) $basicCategoryId]['label']);
+        $this->assertSame('商品页面', $groups[(string) $goodsCategoryId]['label']);
 
-        $goodsPaths = array_column($groups['goods']['items'], 'path');
+        $goodsPaths = array_column($groups[(string) $goodsCategoryId]['items'], 'path');
         $this->assertContains('/codex-sub-test/goods/detail', $goodsPaths);
     }
 
@@ -82,12 +84,13 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientPageService');
         $this->cleanupClientTestRows();
+        $otherCategoryId = $this->clientPageCategoryId('其他页面');
 
         $systemId = (int) Db::name('client_page')->insertGetId([
             'name' => 'CodexTest 系统页面',
             'path' => '/codex-test/system-page',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
             'package_root' => null,
             'need_login' => 0,
             'source' => 'system',
@@ -104,7 +107,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 手动页面',
             'path' => '/codex-test/manual-page',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
         ]);
         $this->assertGreaterThan(0, $manualId);
 
@@ -112,7 +115,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 重复页面',
             'path' => 'codex-test/manual-page',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
         ]));
         $this->assertNotNull($duplicateError);
         $this->assertStringContainsString('页面路径已存在', $duplicateError->getMessage());
@@ -121,7 +124,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 根路径',
             'path' => '/',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
         ]));
         $this->assertNotNull($rootPathError);
         $this->assertStringContainsString('页面路径必须以 / 开头', $rootPathError->getMessage());
@@ -136,7 +139,6 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->cleanupClientTestRows();
 
         $categoryId = $categoryService->create([
-            'code' => 'codex_test',
             'name' => 'CodexTest 分类',
             'description' => 'CodexTest 页面分类',
             'sort' => 88,
@@ -148,22 +150,22 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 自定义分类页面',
             'path' => '/codex-test/custom-category',
             'page_type' => 'page',
-            'category' => 'codex_test',
+            'category_id' => $categoryId,
         ]);
         $this->assertGreaterThan(0, $pageId);
 
         $page = $pageService->getInfo($pageId);
-        $this->assertSame('codex_test', $page['category']);
+        $this->assertSame($categoryId, (int) $page['category_id']);
         $this->assertSame('CodexTest 分类', $page['category_label']);
 
-        $list = $pageService->getList(['category' => 'codex_test'], 1, 15);
+        $list = $pageService->getList(['category_id' => $categoryId], 1, 15);
         $this->assertSame(1, (int) $list['total']);
         $this->assertSame('CodexTest 分类', $list['list'][0]['category_label']);
 
         $picker = $pageService->getPickerGroups([]);
         $groups = array_column($picker['groups'], null, 'key');
-        $this->assertArrayHasKey('codex_test', $groups);
-        $this->assertSame('CodexTest 分类', $groups['codex_test']['label']);
+        $this->assertArrayHasKey((string) $categoryId, $groups);
+        $this->assertSame('CodexTest 分类', $groups[(string) $categoryId]['label']);
 
         $deleteError = $this->captureBusinessException(fn() => $categoryService->delete($categoryId));
         $this->assertNotNull($deleteError);
@@ -174,7 +176,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 禁用分类页面',
             'path' => '/codex-test/disabled-category',
             'page_type' => 'page',
-            'category' => 'codex_test',
+            'category_id' => $categoryId,
         ]));
         $this->assertNotNull($disabledError);
         $this->assertStringContainsString('页面分类不存在或已禁用', $disabledError->getMessage());
@@ -308,7 +310,7 @@ final class ClientDecorationServiceContractTest extends TestCase
                 'name' => 'CodexTest 主题设置页',
                 'path' => '/pages-sub/user/theme',
                 'page_type' => 'subpackage',
-                'category' => 'user',
+                'category_id' => $this->clientPageCategoryId('会员页面'),
                 'package_root' => 'pages-sub',
                 'need_login' => 1,
                 'source' => 'system',
@@ -1563,7 +1565,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             }
             if ($this->safeTableExists('client_page_category')) {
                 Db::name('client_page_category')
-                    ->whereLike('code', 'codex_test%')
+                    ->whereLike('name', 'CodexTest%')
                     ->delete();
             }
         } catch (Throwable) {
@@ -1583,6 +1585,16 @@ final class ClientDecorationServiceContractTest extends TestCase
         } catch (Throwable) {
             // 清理失败不覆盖测试主体结果。
         }
+    }
+
+    private function clientPageCategoryId(string $name): int
+    {
+        $id = (int) Db::name('client_page_category')->where('name', $name)->value('id');
+        if ($id <= 0) {
+            $this->fail("缺少页面分类：{$name}");
+        }
+
+        return $id;
     }
 
     private function makePagesJson(string $homeTitle): string
@@ -1624,19 +1636,19 @@ final class ClientDecorationServiceContractTest extends TestCase
     private function ensureClientPageDefaultCategories(): void
     {
         $rows = [
-            ['code' => 'basic', 'name' => '基础页面', 'description' => '客户端主包、底部导航等基础页面', 'sort' => 10],
-            ['code' => 'goods', 'name' => '商品页面', 'description' => '商品列表、详情、搜索等页面', 'sort' => 20],
-            ['code' => 'content', 'name' => '内容页面', 'description' => '文章、内容等页面', 'sort' => 30],
-            ['code' => 'order', 'name' => '订单页面', 'description' => '订单、物流、评价等页面', 'sort' => 40],
-            ['code' => 'aftersale', 'name' => '售后页面', 'description' => '退款、售后等页面', 'sort' => 50],
-            ['code' => 'user', 'name' => '会员页面', 'description' => '登录、资料、地址等会员页面', 'sort' => 60],
-            ['code' => 'points', 'name' => '积分页面', 'description' => '积分、积分商城、兑换记录等页面', 'sort' => 70],
-            ['code' => 'wallet', 'name' => '余额页面', 'description' => '余额、充值、余额记录等页面', 'sort' => 80],
-            ['code' => 'other', 'name' => '其他页面', 'description' => '未归入固定业务模块的页面', 'sort' => 900],
+            ['id' => 1, 'name' => '基础页面', 'description' => '客户端主包、底部导航等基础页面', 'sort' => 10],
+            ['id' => 2, 'name' => '商品页面', 'description' => '商品列表、详情、搜索等页面', 'sort' => 20],
+            ['id' => 3, 'name' => '内容页面', 'description' => '文章、内容等页面', 'sort' => 30],
+            ['id' => 4, 'name' => '订单页面', 'description' => '订单、物流、评价等页面', 'sort' => 40],
+            ['id' => 5, 'name' => '售后页面', 'description' => '退款、售后等页面', 'sort' => 50],
+            ['id' => 6, 'name' => '会员页面', 'description' => '登录、资料、地址等会员页面', 'sort' => 60],
+            ['id' => 7, 'name' => '积分页面', 'description' => '积分、积分商城、兑换记录等页面', 'sort' => 70],
+            ['id' => 8, 'name' => '余额页面', 'description' => '余额、充值、余额记录等页面', 'sort' => 80],
+            ['id' => 9, 'name' => '其他页面', 'description' => '未归入固定业务模块的页面', 'sort' => 900],
         ];
 
         foreach ($rows as $row) {
-            $exists = Db::name('client_page_category')->where('code', $row['code'])->find();
+            $exists = Db::name('client_page_category')->where('id', $row['id'])->find();
             $payload = array_merge($row, [
                 'is_system' => 1,
                 'status' => 1,

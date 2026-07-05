@@ -21,9 +21,13 @@ final class MarketingSchemaContractTest extends TestCase
         $schema = (string) file_get_contents(dirname(__DIR__, 3) . '/install/data/schema/13_mb_client_diy.sql');
 
         $this->assertStringContainsString('CREATE TABLE `mb_client_page_category`', $schema);
-        $this->assertStringContainsString("UNIQUE KEY `uk_code` (`code`)", $schema);
-        $this->assertStringContainsString("(1, 'basic', '基础页面'", $schema);
-        $this->assertStringContainsString("(9, 'other', '其他页面'", $schema);
+        $this->assertStringNotContainsString('`code` varchar(30) NOT NULL COMMENT \'分类编码\'', $schema);
+        $this->assertStringNotContainsString('UNIQUE KEY `uk_code` (`code`)', $schema);
+        $this->assertStringContainsString('`category_id` int(11) unsigned NOT NULL DEFAULT 9 COMMENT \'页面分类ID\'', $schema);
+        $this->assertStringContainsString('KEY `idx_category_id` (`category_id`)', $schema);
+        $this->assertStringNotContainsString('`category` varchar(30) NOT NULL DEFAULT \'other\' COMMENT \'页面分类编码\'', $schema);
+        $this->assertStringContainsString("(1, '基础页面'", $schema);
+        $this->assertStringContainsString("(9, '其他页面'", $schema);
     }
 
     public function testPointsExchangeUpgradeContainsOrderLogTable(): void

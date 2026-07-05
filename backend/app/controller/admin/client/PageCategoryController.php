@@ -40,7 +40,7 @@ class PageCategoryController extends BaseController
 
     public function create()
     {
-        $data = $this->request->param(['code', 'name', 'description', 'sort', 'status']);
+        $data = $this->request->param(['name', 'description', 'sort', 'status']);
         $this->validate($data, ClientPageCategoryValidate::class . '.create');
 
         $id = $this->service()->create($data);
@@ -54,7 +54,7 @@ class PageCategoryController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['code', 'name', 'description', 'sort', 'status']);
+        $data = $this->request->param(['name', 'description', 'sort', 'status']);
         $this->validate($data, ClientPageCategoryValidate::class . '.update');
 
         $this->service()->update($id, $data);

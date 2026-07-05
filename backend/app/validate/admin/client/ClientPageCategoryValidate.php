@@ -11,7 +11,6 @@ use think\Validate;
 class ClientPageCategoryValidate extends Validate
 {
     protected $rule = [
-        'code' => 'require|max:30|regex:/^[a-z][a-z0-9_]{0,29}$/',
         'name' => 'require|max:80',
         'description' => 'max:255',
         'sort' => 'integer|egt:0',
@@ -19,9 +18,6 @@ class ClientPageCategoryValidate extends Validate
     ];
 
     protected $message = [
-        'code.require' => '分类编码不能为空',
-        'code.max' => '分类编码最多30个字符',
-        'code.regex' => '分类编码只能使用小写字母、数字和下划线，且必须以字母开头',
         'name.require' => '分类名称不能为空',
         'name.max' => '分类名称最多80个字符',
         'description.max' => '分类描述最多255个字符',
@@ -31,7 +27,7 @@ class ClientPageCategoryValidate extends Validate
     ];
 
     protected $scene = [
-        'create' => ['code', 'name', 'description', 'sort', 'status'],
-        'update' => ['code', 'name', 'description', 'sort', 'status'],
+        'create' => ['name', 'description', 'sort', 'status'],
+        'update' => ['name', 'description', 'sort', 'status'],
     ];
 }

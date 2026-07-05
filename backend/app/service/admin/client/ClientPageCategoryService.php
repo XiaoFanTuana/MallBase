@@ -22,7 +22,7 @@ class ClientPageCategoryService extends BaseService
             ->whereNull('delete_time')
             ->when(($where['keyword'] ?? null) !== null && $where['keyword'] !== '', function ($q) use ($where) {
                 $keyword = trim((string) $where['keyword']);
-                $q->whereLike('name|code|description', '%' . $keyword . '%');
+                $q->whereLike('name|description', '%' . $keyword . '%');
             })
             ->when(($where['status'] ?? null) !== null && $where['status'] !== '', function ($q) use ($where) {
                 $q->where('status', (int) $where['status']);
@@ -54,16 +54,30 @@ class ClientPageCategoryService extends BaseService
     }
 
     /**
-     * @return array<string, string>
+     * @return array<int, string>
      */
     public function getLabelMap(): array
     {
         $labels = [];
         foreach ($this->getAllCategories() as $category) {
-            $labels[(string) $category['code']] = (string) $category['name'];
+            $labels[(int) $category['id']] = (string) $category['name'];
         }
 
         return $labels;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function getIdMap(): array
+    {
+        $map = [];
+        foreach ($this->getAllCategories() as $category) {
+            $id = (int) $category['id'];
+            $map[$id] = $id;
+        }
+
+        return $map;
     }
 
     public function getInfo(int $id): array
@@ -74,7 +88,6 @@ class ClientPageCategoryService extends BaseService
     public function create(array $data): int
     {
         $payload = $this->normalizePayload($data);
-        $this->validateUniqueCode($payload['code']);
         $this->validateUniqueName($payload['name']);
 
         $category = $this->model()->create($payload);
@@ -88,12 +101,7 @@ class ClientPageCategoryService extends BaseService
         $base = $category->toArray();
         $payload = $this->normalizePayload($data, $base);
 
-        if ($payload['code'] !== (string) $base['code']) {
-            throw new BusinessException('分类编码创建后不能修改');
-        }
-
         $this->validateUniqueName($payload['name'], $id);
-        unset($payload['code']);
 
         $category->save($payload);
 
@@ -108,7 +116,7 @@ class ClientPageCategoryService extends BaseService
         }
 
         $pageCount = $this->model(ClientPage::class)
-            ->where('category', (string) $category->code)
+            ->where('category_id', $id)
             ->whereNull('delete_time')
             ->count();
         if ((int) $pageCount > 0) {
@@ -132,10 +140,10 @@ class ClientPageCategoryService extends BaseService
         return true;
     }
 
-    public function assertSelectableCategory(string $code): void
+    public function assertSelectableCategoryId(int $id): void
     {
         $category = $this->model()
-            ->where('code', $code)
+            ->where('id', $id)
             ->where('status', 1)
             ->whereNull('delete_time')
             ->find();
@@ -145,28 +153,29 @@ class ClientPageCategoryService extends BaseService
         }
     }
 
+    public function getDefaultCategoryId(): int
+    {
+        $category = $this->model()
+            ->where('id', ClientPage::CATEGORY_ID_OTHER)
+            ->whereNull('delete_time')
+            ->find();
+
+        if (!$category) {
+            throw new BusinessException('默认页面分类不存在');
+        }
+
+        return (int) $category->id;
+    }
+
     protected function normalizePayload(array $data, array $base = []): array
     {
         return [
-            'code' => mb_substr(trim((string) ($data['code'] ?? $base['code'] ?? '')), 0, 30),
             'name' => mb_substr(trim((string) ($data['name'] ?? $base['name'] ?? '')), 0, 80),
             'description' => mb_substr(trim((string) ($data['description'] ?? $base['description'] ?? '')), 0, 255) ?: null,
             'sort' => (int) ($data['sort'] ?? $base['sort'] ?? 0),
             'is_system' => (int) ($base['is_system'] ?? 0),
             'status' => (int) ($data['status'] ?? $base['status'] ?? 1),
         ];
-    }
-
-    protected function validateUniqueCode(string $code, int $excludeId = 0): void
-    {
-        $query = $this->model()->where('code', $code);
-        if ($excludeId > 0) {
-            $query->where('id', '<>', $excludeId);
-        }
-
-        if ($query->find()) {
-            throw new BusinessException('分类编码已存在');
-        }
     }
 
     protected function validateUniqueName(string $name, int $excludeId = 0): void

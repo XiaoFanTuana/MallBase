@@ -14,15 +14,15 @@ class ClientPage extends BaseModel
     public const TYPE_PAGE = 'page';
     public const TYPE_SUBPACKAGE = 'subpackage';
 
-    public const CATEGORY_BASIC = 'basic';
-    public const CATEGORY_GOODS = 'goods';
-    public const CATEGORY_CONTENT = 'content';
-    public const CATEGORY_ORDER = 'order';
-    public const CATEGORY_AFTERSALE = 'aftersale';
-    public const CATEGORY_USER = 'user';
-    public const CATEGORY_POINTS = 'points';
-    public const CATEGORY_WALLET = 'wallet';
-    public const CATEGORY_OTHER = 'other';
+    public const CATEGORY_ID_BASIC = 1;
+    public const CATEGORY_ID_GOODS = 2;
+    public const CATEGORY_ID_CONTENT = 3;
+    public const CATEGORY_ID_ORDER = 4;
+    public const CATEGORY_ID_AFTERSALE = 5;
+    public const CATEGORY_ID_USER = 6;
+    public const CATEGORY_ID_POINTS = 7;
+    public const CATEGORY_ID_WALLET = 8;
+    public const CATEGORY_ID_OTHER = 9;
 
     public const SOURCE_AUTO = 'auto';
     public const SOURCE_MANUAL = 'manual';
@@ -41,18 +41,4 @@ class ClientPage extends BaseModel
         ];
     }
 
-    public static function validCategories(): array
-    {
-        return [
-            self::CATEGORY_BASIC,
-            self::CATEGORY_GOODS,
-            self::CATEGORY_CONTENT,
-            self::CATEGORY_ORDER,
-            self::CATEGORY_AFTERSALE,
-            self::CATEGORY_USER,
-            self::CATEGORY_POINTS,
-            self::CATEGORY_WALLET,
-            self::CATEGORY_OTHER,
-        ];
-    }
 }

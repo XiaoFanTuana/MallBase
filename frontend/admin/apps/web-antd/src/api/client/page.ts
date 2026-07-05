@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 export namespace ClientPageApi {
-  export type PageCategory = string;
+  export type PageCategoryId = number;
   export type PageSource = 'auto' | 'manual' | 'system';
   export type PageType = 'page' | 'subpackage' | 'tab';
 
@@ -10,7 +10,7 @@ export namespace ClientPageApi {
     name: string;
     path: string;
     page_type: PageType;
-    category: PageCategory;
+    category_id: PageCategoryId;
     category_label?: string;
     package_root?: null | string;
     need_login: number;
@@ -28,7 +28,7 @@ export namespace ClientPageApi {
     path: string;
     page_type: PageType;
     page_type_label: string;
-    category: PageCategory;
+    category_id: PageCategoryId;
     category_label: string;
     package_root?: null | string;
     need_login: number;
@@ -39,12 +39,11 @@ export namespace ClientPageApi {
   export interface PagePickerGroup {
     count: number;
     items: PagePickerItem[];
-    key: PageCategory;
+    key: string;
     label: string;
   }
 
   export interface PageCategoryItem {
-    code: PageCategory;
     create_time?: string;
     delete_time?: null | number;
     description?: null | string;
@@ -59,7 +58,7 @@ export namespace ClientPageApi {
   export interface ListParams {
     keyword?: string;
     page?: number;
-    category?: PageCategory;
+    category_id?: PageCategoryId;
     page_type?: PageType;
     limit?: number;
     source?: PageSource;
@@ -81,7 +80,7 @@ export namespace ClientPageApi {
     name: string;
     path: string;
     page_type: PageType;
-    category?: PageCategory;
+    category_id?: PageCategoryId;
     package_root?: null | string;
     need_login?: number;
     source?: PageSource;
@@ -91,7 +90,6 @@ export namespace ClientPageApi {
   }
 
   export interface CategorySaveParams {
-    code: PageCategory;
     description?: null | string;
     name: string;
     sort?: number;
