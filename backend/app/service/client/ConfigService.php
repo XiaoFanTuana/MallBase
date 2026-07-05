@@ -145,13 +145,6 @@ class ConfigService extends BaseService
                 'icon' => 'wechat',
             ];
         }
-        if ((string) getSystemSetting('payment_alipay_enabled', '0') === '1') {
-            $list[] = [
-                'code' => PayMethod::ALIPAY,
-                'name' => '支付宝',
-                'icon' => 'alipay',
-            ];
-        }
         return $list;
     }
 

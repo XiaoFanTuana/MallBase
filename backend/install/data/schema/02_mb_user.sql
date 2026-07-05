@@ -18,10 +18,9 @@ CREATE TABLE `mb_user` (
   `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
   `avatar` bigint(20) unsigned DEFAULT NULL COMMENT '头像素材ID',
 
-  -- 微信相关字段（多端独立 openid，unionid 跨主体共享）
+  -- 微信相关字段（多端独立 openid）
   `wx_miniapp_openid` varchar(100) DEFAULT NULL COMMENT '微信小程序 openid',
   `wx_official_openid` varchar(100) DEFAULT NULL COMMENT '微信公众号 openid',
-  `wx_unionid` varchar(100) DEFAULT NULL COMMENT '微信 unionid（开放平台主体下跨 AppID 共享）',
   `session_key` varchar(100) DEFAULT NULL COMMENT '微信小程序会话密钥',
 
   -- 个人资料
@@ -54,7 +53,6 @@ CREATE TABLE `mb_user` (
   UNIQUE KEY `uk_wx_miniapp_openid` (`wx_miniapp_openid`),
   UNIQUE KEY `uk_wx_official_openid` (`wx_official_openid`),
   KEY `idx_email` (`email`),
-  KEY `idx_wx_unionid` (`wx_unionid`),
   KEY `idx_status` (`status`),
   KEY `idx_delete_time` (`delete_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='前台用户表';

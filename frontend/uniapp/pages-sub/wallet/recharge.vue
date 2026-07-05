@@ -5,7 +5,6 @@ import { onShow } from '@dcloudio/uni-app'
 import { getRechargeMethods } from '@/api/config'
 import { getRechargePackages } from '@/api/recharge/package'
 import { getWalletInfo } from '@/api/user/wallet'
-import { getPlatform } from '@/utils/platform'
 const decorateStore = useDecorateStore()
 
 const loading = ref(false)
@@ -86,11 +85,9 @@ async function submitRecharge() {
   submitLoading.value = true
   try {
     const methods = await getRechargeMethods()
-    const platform = getPlatform()
     const channels = (Array.isArray(methods) ? methods : []).filter((item) => {
       const code = Number(item?.code)
       if (code === 1) return true
-      if (code === 2) return platform === 'h5'
       return false
     })
 

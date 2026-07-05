@@ -28,7 +28,7 @@ class OrderValidate extends Validate
         'idempotency_key' => 'max:64',
         'use_points'      => 'in:0,1,true,false',
         'points_used'     => 'integer|egt:0',
-        'pay_method'      => 'require|integer|in:1,2,3',
+        'pay_method'      => 'require|integer|in:1,3',
         'scene'           => 'in:mini,offi,h5',
         'reason'          => 'max:255',
     ];

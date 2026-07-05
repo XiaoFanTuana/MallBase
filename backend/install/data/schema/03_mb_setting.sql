@@ -80,17 +80,15 @@ INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `cod
 
 -- 二级分组：微信配置（选项卡）及其子页面
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
-(103, 100, 0, '微信配置', 'WechatConfig', 'lucide:message-circle', '微信小程序、公众号与开放平台接入参数', 30, 'tab', 1),
+(103, 100, 0, '微信配置', 'WechatConfig', 'lucide:message-circle', '微信小程序与公众号接入参数', 30, 'tab', 1),
 (1031, 103, 0, '微信小程序', 'WechatMiniProgram', NULL, '小程序 AppID、AppSecret 与授权品牌资源', 10, 'page', 1),
-(1032, 103, 0, '微信公众号', 'WechatOffiAccount', NULL, '公众号 AppID、AppSecret 与消息加解密参数', 20, 'page', 1),
-(1033, 103, 0, '微信开放平台', 'WechatOpenPlatform', NULL, '开放平台主体绑定标记，用于跨小程序/公众号 unionid 互通', 30, 'page', 1);
+(1032, 103, 0, '微信公众号', 'WechatOffiAccount', NULL, '公众号 AppID、AppSecret 与消息加解密参数', 20, 'page', 1);
 
 -- 二级分组：支付配置（选项卡）及其子页面
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`) VALUES
-(104, 100, 0, '支付配置', 'PaymentConfig', 'lucide:credit-card', '微信支付与支付宝等支付渠道参数', 40, 'tab', 1),
+(104, 100, 0, '支付配置', 'PaymentConfig', 'lucide:credit-card', '微信支付与余额支付渠道参数', 40, 'tab', 1),
 (1041, 104, 0, '基础', 'PaymentBasic', NULL, '各支付渠道的启用状态总开关', 10, 'page', 1),
-(1042, 104, 0, '微信支付V3', 'PaymentWechat', NULL, '微信支付 V3 商户号、APIv3 密钥与证书参数', 20, 'page', 1),
-(1043, 104, 0, '支付宝', 'PaymentAlipay', NULL, '支付宝 RSA2 证书模式接入参数', 30, 'page', 1);
+(1042, 104, 0, '微信支付V3', 'PaymentWechat', NULL, '微信支付 V3 商户号、APIv3 密钥与证书参数', 20, 'page', 1);
 
 -- 二级分组：客户端配置（数据源保留，后台入口使用「客户端装修 -> 客户端配置」专属页面）
 INSERT INTO `mb_setting_group` (`id`, `parent_id`, `permission_id`, `name`, `code`, `icon`, `description`, `sort`, `display_type`, `status`, `permission_status`) VALUES
@@ -194,17 +192,10 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1032, '必须绑定手机号', 'wechat_offi_force_mobile_bind', '0', 'switch', NULL, NULL, NULL, '开启后公众号 OAuth 注册的用户必须走短信验证码绑定手机号（公众号 OAuth 本身无法直接获取手机号）', 50),
 (1032, '强制获取头像昵称', 'wechat_offi_force_userinfo', '0', 'switch', NULL, NULL, NULL, '开启后 OAuth scope 使用 snsapi_userinfo 强制获取头像/昵称；关闭后使用 snsapi_base 仅取 openid', 60);
 
--- 设置项：1033 WechatOpenPlatform 微信开放平台
-INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
-(1033, '开放平台 AppID', 'wechat_open_appid', '', 'input', NULL, NULL, NULL, '占位字段，本期不调用开放平台 API；接入 PC 扫码或移动 APP 时使用', 10),
-(1033, '开放平台 AppSecret', 'wechat_open_secret', '', 'password', NULL, NULL, NULL, '占位字段，配合 AppID 同时填写', 20),
-(1033, '已绑定开放平台主体', 'wechat_open_bound', '0', 'switch', NULL, NULL, NULL, '若小程序与公众号已绑定到同一开放平台主体，开启此项以信任 unionid 进行跨端账号合并；未绑定时关闭，避免 unionid 误用', 30);
-
 -- 设置项：1041 PaymentBasic 支付基础（总开关）
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
 (1041, '微信支付状态', 'payment_wechat_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 10),
-(1041, '支付宝状态', 'payment_alipay_enabled', '0', 'switch', NULL, NULL, NULL, NULL, 20),
-(1041, '余额支付状态', 'payment_balance_enabled', '0', 'switch', NULL, NULL, NULL, '开启后客户端可选择余额支付，订单支付时会扣减用户余额。', 30);
+(1041, '余额支付状态', 'payment_balance_enabled', '0', 'switch', NULL, NULL, NULL, '开启后客户端可选择余额支付，订单支付时会扣减用户余额。', 20);
 
 -- 设置项：1042 PaymentWechat 微信支付V3
 -- 证书/密钥统一走 secure_upload：文件落到 backend/storage/cert/，不进 public/uploads/
@@ -216,17 +207,6 @@ INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`
 (1042, '商户 API 证书', 'pay_wechat_merchant_cert', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".pem",".crt",".cer"]},{"type":"max_size","value":1}]', NULL, '上传 apiclient_cert.pem（与 apiclient_key.pem 同时下载，来源：商户平台 → 账户中心 → API 安全 → API 证书）。内容以 -----BEGIN CERTIFICATE----- 开头。EasyWeChat V3 签名需从该证书解析序列号，缺失会触发 Read the $certificate failed。文件仅落到 backend/storage/cert/。', 45),
 (1042, 'V3 平台公钥', 'pay_wechat_platform_public_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".pem"]},{"type":"max_size","value":1}]', NULL, '上传 pub_key.pem。下载位置：商户平台 → 账户中心 → API 安全 → 微信支付公钥 → 下载公钥。仅当微信支付公钥已启用时存在；若显示"切换中"请等切换完成后再下载。文件以 -----BEGIN PUBLIC KEY----- 开头。', 50),
 (1042, '平台公钥 ID', 'pay_wechat_platform_public_key_id', '', 'input', NULL, NULL, NULL, '形如 PUB_KEY_ID_xxxxxxxx。来源：商户平台 → 账户中心 → API 安全 → 微信支付公钥 → 公钥 ID', 60);
-
--- 设置项：1043 PaymentAlipay 支付宝（RSA2 证书模式）
--- 应用私钥与三份公钥/根证书统一走 secure_upload，落到 backend/storage/cert/
-INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
-(1043, '应用 AppID', 'pay_alipay_app_id', '', 'input', NULL, NULL, NULL, NULL, 10),
-(1043, '签名算法', 'pay_alipay_sign_type', 'RSA2', 'select', '[{"label":"RSA2","value":"RSA2"}]', NULL, NULL, NULL, 20),
-(1043, '应用私钥', 'pay_alipay_app_private_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".pem",".key"]},{"type":"max_size","value":1}]', NULL, '上传支付宝开放平台生成的应用私钥文件（如 appPrivateKey.pem / 应用私钥RSA2.pem）。内容以 -----BEGIN RSA PRIVATE KEY----- 或 -----BEGIN PRIVATE KEY----- 开头。文件仅保存在服务器内部目录 backend/storage/cert/，不会公开。', 30),
-(1043, '应用公钥证书', 'pay_alipay_app_cert_public_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 appCertPublicKey_xxx.crt（支付宝控制台 → 应用 → 接口加签方式（公钥证书）→ 生成并下载）。文件保存于服务器内部，不会公开。', 40),
-(1043, '支付宝公钥证书', 'pay_alipay_alipay_cert_public_key', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 alipayCertPublicKey_RSA2.crt（支付宝控制台同一位置同时下载）。文件保存于服务器内部，不会公开。', 50),
-(1043, '支付宝根证书', 'pay_alipay_alipay_root_cert', '', 'file', NULL, '[{"type":"secure_upload","value":true},{"type":"accept_types","value":[".crt",".cer",".pem"]},{"type":"max_size","value":1}]', NULL, '上传 alipayRootCert.crt（支付宝控制台同一位置一同提供）。文件保存于服务器内部，不会公开。', 60),
-(1043, '网关地址', 'pay_alipay_gateway', 'https://openapi.alipay.com/gateway.do', 'input', NULL, NULL, NULL, NULL, 70);
 
 -- 设置项：108 SmsRateLimit 短信频控（由短信配置菜单专属页面使用）
 INSERT INTO `mb_setting` (`group_id`, `name`, `code`, `value`, `type`, `options`, `rules`, `placeholder`, `remark`, `sort`) VALUES
