@@ -39,7 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
       return '';
     }
 
-    if (decodedRedirect.split('?')[0] === LOGIN_PATH) {
+    if (decodedRedirect.split(/[?#]/)[0] === LOGIN_PATH) {
       return '';
     }
 
@@ -87,7 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
             loginRedirectPath() ||
             userStore.userInfo?.homePath ||
             preferences.app.defaultHomePath;
-          await (onSuccess ? onSuccess?.() : router.push(targetPath));
+          await (onSuccess ? onSuccess?.() : router.replace(targetPath));
         }
 
         if (adminInfo?.nickname) {
