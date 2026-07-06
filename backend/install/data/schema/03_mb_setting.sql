@@ -43,6 +43,7 @@ CREATE TABLE `mb_setting` (
   `type` varchar(20) NOT NULL DEFAULT 'input' COMMENT '表单类型：input/textarea/number/password/switch/radio/checkbox/select/image/images/file/files/editor/json/option_list',
   `options` json DEFAULT NULL COMMENT '选项（type=select时的可选值，如 [{"label":"启用","value":"1"}]）',
   `rules` json DEFAULT NULL COMMENT '验证规则（如 [{"type":"required","message":"不能为空"},{"type":"minLength","value":6,"message":"最少6个字符"}]）',
+  `ui` json DEFAULT NULL COMMENT '后台动态表单交互元数据（显示条件、交互组件、远程选项源等）',
   `placeholder` varchar(255) DEFAULT NULL COMMENT '输入提示',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注说明',
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',

@@ -50,7 +50,7 @@ class SettingItemController extends BaseController
      */
     public function create()
     {
-        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
+        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'ui', 'placeholder', 'remark', 'sort']);
 
         $this->validate($data, 'admin/setting/SettingItem.create');
 
@@ -67,7 +67,7 @@ class SettingItemController extends BaseController
             return $this->error('ID不能为空');
         }
 
-        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'placeholder', 'remark', 'sort']);
+        $data = $this->request->param(['group_id', 'name', 'code', 'value', 'type', 'options', 'rules', 'ui', 'placeholder', 'remark', 'sort']);
 
         $this->validate($data, 'admin/setting/SettingItem.update');
 

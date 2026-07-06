@@ -29,6 +29,192 @@ class SettingService extends BaseService
         'client_theme_user_select_enabled',
     ];
 
+    private const UI_COMPONENTS = [
+        'money_yuan' => [
+            'label' => '金额输入',
+            'description' => '元输入，分保存',
+        ],
+        'remote_select' => [
+            'label' => '远程下拉',
+            'description' => '从系统数据源选择',
+        ],
+    ];
+
+    private const UI_OPTION_SOURCES = [
+        'distribution_level' => [
+            'label' => '分销等级',
+            'description' => '分销模块等级列表',
+        ],
+    ];
+
+    private const SETTING_UI_META = [
+        'SystemCopyright' => [
+            'copyright_company' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_company_url' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_date' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_icp' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_icp_url' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_psb' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'copyright_psb_url' => [
+                'visible_when' => [
+                    ['field' => 'copyright_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+        'PointsConfig' => [
+            'points_reward_enabled' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_reward_freeze_days' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                    ['field' => 'points_reward_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_deduction_enabled' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_deduction_points_per_yuan' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                    ['field' => 'points_deduction_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'points_deduction_max_percent' => [
+                'visible_when' => [
+                    ['field' => 'points_enabled', 'operator' => 'truthy'],
+                    ['field' => 'points_deduction_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+        'MemberConfig' => [
+            'member_growth_points_per_yuan' => [
+                'visible_when' => [
+                    ['field' => 'member_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+        'DistributionConfig' => [
+            'distributor_open_mode' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'auto_open_level_id' => [
+                'component' => 'remote_select',
+                'option_source' => 'distribution_level',
+                'label' => '默认分销等级',
+                'placeholder' => '请选择默认分销等级',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    [
+                        'field' => 'distributor_open_mode',
+                        'operator' => 'in',
+                        'value' => ['apply', 'everyone', 'amount'],
+                    ],
+                ],
+            ],
+            'second_level_enabled' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'self_purchase_enabled' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'relation_valid_days' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'settlement_days' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'min_withdraw_cents' => [
+                'component' => 'money_yuan',
+                'label' => '最低提现金额(元)',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'global_first_rate' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'global_second_rate' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'second_level_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'amount_open_threshold_cents' => [
+                'component' => 'money_yuan',
+                'label' => '满额开通门槛(元)',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'distributor_open_mode', 'operator' => 'equals', 'value' => 'amount'],
+                ],
+            ],
+            'invite_reward_enabled' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'invite_reward_trigger' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'invite_reward_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'invite_reward_amount_cents' => [
+                'component' => 'money_yuan',
+                'label' => '固定邀请奖励金额(元)',
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                    ['field' => 'invite_reward_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+            'attribution_enabled' => [
+                'visible_when' => [
+                    ['field' => 'distribution_enabled', 'operator' => 'truthy'],
+                ],
+            ],
+        ],
+    ];
+
     /**
      * 权限 code 前缀
      */
@@ -989,7 +1175,7 @@ class SettingService extends BaseService
      * 获取表单配置（表单类型选项 + 按 type 索引的验证规则类型）
      * 合并了表单类型和验证规则，前端一次获取全部配置
      *
-     * @return array{type_options: array, rule_types: array}
+     * @return array{type_options: array, rule_types: array, ui_components: array, option_sources: array, warnings: array}
      */
     public function getFormConfig(): array
     {
@@ -1068,8 +1254,52 @@ class SettingService extends BaseService
         return [
             'type_options' => $typeOptions,
             'rule_types' => $ruleTypes,
+            'ui_components' => $this->getUiComponentOptions(),
+            'option_sources' => $this->getUiOptionSourceOptions(),
             'warnings' => array_values(array_unique($formWarnings)),
         ];
+    }
+
+    /**
+     * @return array<int, array{label: string, value: string, description?: string}>
+     */
+    private function getUiComponentOptions(): array
+    {
+        $options = [
+            [
+                'label' => '默认组件',
+                'value' => '',
+                'description' => '按表单类型自动渲染',
+            ],
+        ];
+
+        foreach (self::UI_COMPONENTS as $value => $item) {
+            $options[] = [
+                'label' => $item['label'],
+                'value' => $value,
+                'description' => $item['description'],
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<int, array{label: string, value: string, description?: string}>
+     */
+    private function getUiOptionSourceOptions(): array
+    {
+        $options = [];
+
+        foreach (self::UI_OPTION_SOURCES as $value => $item) {
+            $options[] = [
+                'label' => $item['label'],
+                'value' => $value,
+                'description' => $item['description'],
+            ];
+        }
+
+        return $options;
     }
 
     // ==================== 设置项管理 ====================
@@ -1100,6 +1330,7 @@ class SettingService extends BaseService
             ->toArray();
         $list = app()->make(AssetHydrator::class)->hydrateSettings($list);
         $list = $this->filterVisibleSettings($list);
+        $list = $this->applyUiMetaToSettingList($list);
 
         return compact('total', 'list');
     }
@@ -1138,6 +1369,11 @@ class SettingService extends BaseService
         }
 
         $rulesProcessResult = $this->normalizeAndClampRules($data['rules'] ?? null);
+        $ui = $this->normalizeSettingUi(
+            $data['ui'] ?? null,
+            (int)$data['group_id'],
+            (string)$data['code']
+        );
 
         $setting = $this->model(Setting::class);
         $setting->save([
@@ -1148,6 +1384,7 @@ class SettingService extends BaseService
             'type' => $data['type'] ?? Setting::TYPE_INPUT,
             'options' => $data['options'] ?? null,
             'rules' => $rulesProcessResult['rules'],
+            'ui' => $ui,
             'placeholder' => $data['placeholder'] ?? '',
             'remark' => $data['remark'] ?? '',
             'sort' => $data['sort'] ?? 0,
@@ -1204,6 +1441,13 @@ class SettingService extends BaseService
 
         $rulesProcessResult = $this->normalizeAndClampRules($data['rules'] ?? null);
         $data['rules'] = $rulesProcessResult['rules'];
+        if (array_key_exists('ui', $data)) {
+            $data['ui'] = $this->normalizeSettingUi(
+                $data['ui'],
+                (int)$targetGroupId,
+                (string)($data['code'] ?? $setting->code)
+            );
+        }
 
         $setting->save($data);
 
@@ -1260,6 +1504,194 @@ class SettingService extends BaseService
             'updated' => true,
             'warnings' => $rulesProcessResult['warnings'],
         ];
+    }
+
+    /**
+     * 归一化设置项后台交互元数据。
+     *
+     * @param mixed $ui
+     * @return array<string, mixed>|null
+     */
+    protected function normalizeSettingUi(mixed $ui, int $groupId, string $currentCode): ?array
+    {
+        if ($ui === null || $ui === '' || $ui === []) {
+            return null;
+        }
+
+        if (is_string($ui)) {
+            $decoded = json_decode($ui, true);
+            $ui = json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+        }
+
+        if (!is_array($ui)) {
+            return null;
+        }
+
+        $result = [];
+        $component = trim((string)($ui['component'] ?? ''));
+        if ($component !== '') {
+            if (!array_key_exists($component, self::UI_COMPONENTS)) {
+                throw new BusinessException('输入组件不合法');
+            }
+            $result['component'] = $component;
+        }
+
+        if ($component === 'remote_select') {
+            $optionSource = trim((string)($ui['option_source'] ?? ''));
+            if ($optionSource === '') {
+                throw new BusinessException('远程下拉必须选择选项来源');
+            }
+            if (!array_key_exists($optionSource, self::UI_OPTION_SOURCES)) {
+                throw new BusinessException('远程选项来源不合法');
+            }
+            $result['option_source'] = $optionSource;
+        }
+
+        $conditions = $ui['visible_when'] ?? [];
+        if (is_array($conditions) && !empty($conditions)) {
+            $result['visible_when'] = $this->normalizeUiConditions(
+                $conditions,
+                $groupId,
+                $currentCode
+            );
+        }
+
+        return empty($result) ? null : $result;
+    }
+
+    /**
+     * @param array<int, mixed> $conditions
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeUiConditions(
+        array $conditions,
+        int $groupId,
+        string $currentCode
+    ): array
+    {
+        $result = [];
+
+        foreach ($conditions as $index => $condition) {
+            if (!is_array($condition)) {
+                throw new BusinessException(
+                    '第' . ($index + 1) . '条显示条件格式不正确'
+                );
+            }
+
+            $field = trim((string)($condition['field'] ?? ''));
+            if ($field === '') {
+                throw new BusinessException(
+                    '第' . ($index + 1) . '条显示条件缺少依赖字段'
+                );
+            }
+            if ($field === $currentCode) {
+                throw new BusinessException('显示条件不能依赖当前设置项自身');
+            }
+
+            /** @var Setting|null $dependency */
+            $dependency = $this->model(Setting::class)
+                ->where('group_id', $groupId)
+                ->where('code', $field)
+                ->find();
+            if ($dependency === null) {
+                throw new BusinessException('显示条件依赖字段不存在或不在同一分组');
+            }
+
+            $operator = trim((string)($condition['operator'] ?? 'equals'));
+            $dependencyType = (string)$dependency->type;
+
+            if ($dependencyType === Setting::TYPE_SWITCH) {
+                if (!in_array($operator, ['truthy', 'falsy'], true)) {
+                    throw new BusinessException('开关字段只能配置开启/关闭显示条件');
+                }
+                $result[] = [
+                    'field' => $field,
+                    'operator' => $operator,
+                ];
+                continue;
+            }
+
+            if (!in_array($dependencyType, [Setting::TYPE_SELECT, Setting::TYPE_RADIO], true)) {
+                throw new BusinessException('显示条件只能依赖同组的开关、单选或下拉字段');
+            }
+
+            if (!in_array($operator, ['equals', 'not_equals', 'in'], true)) {
+                throw new BusinessException('选择类字段的显示条件判断方式不合法');
+            }
+
+            $allowedValues = $this->getSettingOptionValues($dependency);
+            if (empty($allowedValues)) {
+                throw new BusinessException('依赖字段没有可用选项');
+            }
+
+            $value = $condition['value'] ?? null;
+            if ($operator === 'in') {
+                $values = is_array($value) ? $value : [];
+                $values = array_values(array_unique(array_map(
+                    fn ($item) => trim((string)$item),
+                    $values
+                )));
+                $values = array_values(array_filter(
+                    $values,
+                    fn (string $item): bool => $item !== ''
+                ));
+                if (empty($values)) {
+                    throw new BusinessException('显示条件匹配值不能为空');
+                }
+                foreach ($values as $item) {
+                    if (!in_array($item, $allowedValues, true)) {
+                        throw new BusinessException('显示条件匹配值不在依赖字段选项中');
+                    }
+                }
+                $result[] = [
+                    'field' => $field,
+                    'operator' => 'in',
+                    'value' => $values,
+                ];
+                continue;
+            }
+
+            $value = trim((string)$value);
+            if ($value === '' || !in_array($value, $allowedValues, true)) {
+                throw new BusinessException('显示条件匹配值不在依赖字段选项中');
+            }
+
+            $result[] = [
+                'field' => $field,
+                'operator' => $operator,
+                'value' => $value,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getSettingOptionValues(Setting $setting): array
+    {
+        $options = $setting->options;
+        if (is_string($options)) {
+            $decoded = json_decode($options, true);
+            $options = json_last_error() === JSON_ERROR_NONE ? $decoded : [];
+        }
+        if (!is_array($options)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($options as $option) {
+            if (!is_array($option) || !array_key_exists('value', $option)) {
+                continue;
+            }
+            $value = trim((string)$option['value']);
+            if ($value !== '') {
+                $values[] = $value;
+            }
+        }
+
+        return array_values(array_unique($values));
     }
 
     /**
@@ -1442,6 +1874,7 @@ class SettingService extends BaseService
                 });
                 $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
                 $settings = $this->filterVisibleSettings($settings);
+                $settings = $this->applyUiMetaToSettings($settings, (string) $child['code']);
                 // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
                 $tabs[] = [
                     'code' => $child['code'],
@@ -1478,6 +1911,7 @@ class SettingService extends BaseService
         });
         $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
         $settings = $this->filterVisibleSettings($settings);
+        $settings = $this->applyUiMetaToSettings($settings, $groupCode);
 
         // 检查是否有 tab 类型的子分组
         $tabChildren = $this->model()
@@ -1501,6 +1935,7 @@ class SettingService extends BaseService
                 });
                 $childSettings = app()->make(AssetHydrator::class)->hydrateSettings($childSettings);
                 $childSettings = $this->filterVisibleSettings($childSettings);
+                $childSettings = $this->applyUiMetaToSettings($childSettings, (string) $child['code']);
                 $tabs[] = [
                     'code' => $child['code'],
                     'icon' => $child['icon'] ?? null,
@@ -1536,6 +1971,90 @@ class SettingService extends BaseService
             $settings,
             fn (array $setting): bool => !in_array((string) ($setting['code'] ?? ''), self::HIDDEN_SETTING_CODES, true),
         ));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function applyUiMetaToSettings(array $settings, string $groupCode): array
+    {
+        foreach ($settings as &$setting) {
+            $setting = $this->applyUiMetaToSetting($setting, $groupCode);
+        }
+        unset($setting);
+
+        return $settings;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function applyUiMetaToSettingList(array $settings): array
+    {
+        $groupIds = array_values(array_unique(array_filter(array_map(
+            fn (array $setting): int => (int)($setting['group_id'] ?? 0),
+            $settings
+        ))));
+        if (empty($groupIds)) {
+            return $settings;
+        }
+
+        $groups = $this->model()
+            ->whereIn('id', $groupIds)
+            ->select()
+            ->toArray();
+        $groupCodeMap = [];
+        foreach ($groups as $group) {
+            $groupCodeMap[(int)$group['id']] = (string)$group['code'];
+        }
+
+        foreach ($settings as &$setting) {
+            $groupCode = $groupCodeMap[(int)($setting['group_id'] ?? 0)] ?? '';
+            if ($groupCode !== '') {
+                $setting = $this->applyUiMetaToSetting($setting, $groupCode);
+            }
+        }
+        unset($setting);
+
+        return $settings;
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @return array<string, mixed>
+     */
+    private function applyUiMetaToSetting(array $setting, string $groupCode): array
+    {
+        $code = (string)($setting['code'] ?? '');
+        $uiMeta = self::SETTING_UI_META[$groupCode][$code] ?? null;
+        $settingUi = $setting['ui'] ?? null;
+        if ($this->hasSettingUiMeta($settingUi)) {
+            if ($uiMeta !== null && is_array($settingUi)) {
+                $setting['ui'] = array_replace_recursive($uiMeta, $settingUi);
+            }
+            return $setting;
+        }
+
+        if ($uiMeta !== null) {
+            $setting['ui'] = $uiMeta;
+        }
+
+        return $setting;
+    }
+
+    private function hasSettingUiMeta(mixed $ui): bool
+    {
+        if (is_array($ui)) {
+            return !empty($ui);
+        }
+
+        if (is_string($ui)) {
+            return trim($ui) !== '';
+        }
+
+        return false;
     }
 
     /**
@@ -1679,10 +2198,11 @@ class SettingService extends BaseService
     public function saveGroupValuesWithValidation(string $groupCode, array $values): bool
     {
         $config = $this->getGroupConfig($groupCode);
-        $allSettings = $this->collectSettingsForValidation($config);
+        $effectiveValues = array_replace($this->collectValuesFromConfig($config), $values);
+        $allSettings = $this->collectSettingsForValidation($config, $effectiveValues);
 
         $validate = new SettingValueValidate();
-        $errors = $validate->validateGroupValues($allSettings, $values);
+        $errors = $validate->validateGroupValues($allSettings, $effectiveValues);
         if (!empty($errors)) {
             $firstError = is_array($errors) ? (string)reset($errors) : '';
             throw new BusinessException($firstError !== '' ? $firstError : '配置验证失败');
@@ -1693,20 +2213,129 @@ class SettingService extends BaseService
 
     /**
      * 从分组配置中提取需要校验的设置项
+     *
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $values
+     * @return array<int, array<string, mixed>>
      */
-    protected function collectSettingsForValidation(array $config): array
+    protected function collectSettingsForValidation(array $config, array $values = []): array
     {
         if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
             $allSettings = [];
             foreach ($config['tabs'] ?? [] as $tab) {
                 foreach (($tab['settings'] ?? []) as $setting) {
-                    $allSettings[] = $setting;
+                    if ($this->isSettingVisibleForValues($setting, $values)) {
+                        $allSettings[] = $setting;
+                    }
                 }
             }
             return $allSettings;
         }
 
-        return $config['settings'] ?? [];
+        return array_values(array_filter(
+            $config['settings'] ?? [],
+            fn (array $setting): bool => $this->isSettingVisibleForValues($setting, $values),
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    protected function collectValuesFromConfig(array $config): array
+    {
+        $values = [];
+
+        if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
+            foreach ($config['tabs'] ?? [] as $tab) {
+                foreach (($tab['settings'] ?? []) as $setting) {
+                    if (is_array($setting) && isset($setting['code'])) {
+                        $values[(string) $setting['code']] = $setting['value'] ?? null;
+                    }
+                }
+            }
+
+            return $values;
+        }
+
+        foreach ($config['settings'] ?? [] as $setting) {
+            if (is_array($setting) && isset($setting['code'])) {
+                $values[(string) $setting['code']] = $setting['value'] ?? null;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @param array<string, mixed> $values
+     */
+    protected function isSettingVisibleForValues(array $setting, array $values): bool
+    {
+        $conditions = $setting['ui']['visible_when'] ?? [];
+        if (!is_array($conditions) || empty($conditions)) {
+            return true;
+        }
+
+        foreach ($conditions as $condition) {
+            if (!is_array($condition) || !$this->matchesUiCondition($condition, $values)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $condition
+     * @param array<string, mixed> $values
+     */
+    protected function matchesUiCondition(array $condition, array $values): bool
+    {
+        $field = (string) ($condition['field'] ?? '');
+        if ($field === '') {
+            return true;
+        }
+
+        $operator = (string) ($condition['operator'] ?? 'equals');
+        $actual = $values[$field] ?? null;
+        $expected = $condition['value'] ?? null;
+
+        return match ($operator) {
+            'truthy' => $this->uiTruthy($actual),
+            'falsy' => !$this->uiTruthy($actual),
+            'not_equals' => $this->normalizeUiCompareValue($actual) !== $this->normalizeUiCompareValue($expected),
+            'in' => is_array($expected)
+                && in_array($this->normalizeUiCompareValue($actual), array_map(fn ($item) => $this->normalizeUiCompareValue($item), $expected), true),
+            default => $this->normalizeUiCompareValue($actual) === $this->normalizeUiCompareValue($expected),
+        };
+    }
+
+    private function uiTruthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return $value > 0;
+        }
+
+        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'on', 'yes'], true);
+    }
+
+    private function normalizeUiCompareValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if ($value === null) {
+            return '';
+        }
+
+        return trim((string) $value);
     }
 
 }

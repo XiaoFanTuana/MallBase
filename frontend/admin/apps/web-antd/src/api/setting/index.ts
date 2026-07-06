@@ -80,12 +80,32 @@ export namespace SettingApi {
   /** 验证规则类型映射（按表单类型分组，key 为表单类型如 input/number 等） */
   export type RuleTypesMap = Record<string, RuleTypeItem[]>;
 
+  export type UiComponentValue = 'money_yuan' | 'remote_select';
+
+  export type UiOptionSourceValue = 'distribution_level';
+
+  export interface UiComponentOption {
+    description?: string;
+    label: string;
+    value: '' | UiComponentValue;
+  }
+
+  export interface UiOptionSourceOption {
+    description?: string;
+    label: string;
+    value: UiOptionSourceValue;
+  }
+
   /** 表单配置响应（/setting/form/config） */
   export interface FormConfigResponse {
     /** 表单类型下拉选项 */
     type_options: TypeOption[];
     /** 验证规则类型（按表单类型分组） */
     rule_types: RuleTypesMap;
+    /** 动态表单输入组件选项 */
+    ui_components?: UiComponentOption[];
+    /** 远程下拉可用数据源 */
+    option_sources?: UiOptionSourceOption[];
     /** 表单配置级告警 */
     warnings?: string[];
   }
@@ -103,6 +123,20 @@ export namespace SettingApi {
     message: string;
     /** 正则标志（仅 pattern 类型使用），例如 'i'、'g' 等 */
     flags?: string;
+  }
+
+  export interface UiCondition {
+    field: string;
+    operator?: 'equals' | 'falsy' | 'in' | 'not_equals' | 'truthy';
+    value?: boolean | number | string | Array<boolean | number | string>;
+  }
+
+  export interface SettingItemUi {
+    component?: UiComponentValue;
+    label?: string;
+    option_source?: UiOptionSourceValue;
+    placeholder?: string;
+    visible_when?: UiCondition[];
   }
 
   /** 设置项 */
@@ -123,6 +157,8 @@ export namespace SettingApi {
     is_required: number;
     /** 后端返回的验证规则列表 */
     rules?: ValidationRule[];
+    /** 仅用于后台动态表单的交互元数据，不参与配置值保存 */
+    ui?: SettingItemUi;
   }
 
   /** 选项项 */
@@ -180,6 +216,8 @@ export namespace SettingApi {
     is_required?: number;
     /** 验证规则列表 */
     rules?: null | ValidationRule[];
+    /** 后台动态表单交互元数据 */
+    ui?: null | SettingItemUi;
   }
 
   /** 更新设置项参数 */

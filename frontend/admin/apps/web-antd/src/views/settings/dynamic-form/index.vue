@@ -19,8 +19,13 @@ import { sanitizeEditorHtml } from './editor-html-sanitize';
 
 defineOptions({ name: 'SettingDynamicForm' });
 
+type FieldOptionLoader = (
+  item: SettingApi.SettingItem,
+) => Promise<SettingApi.OptionItem[]> | SettingApi.OptionItem[];
+
 const props = withDefaults(
   defineProps<{
+    fieldOptionLoaders?: Record<string, FieldOptionLoader>;
     groupCode?: string;
     loadConfigApi?: (groupCode: string) => Promise<SettingApi.ConfigResponse>;
     saveAccessCode?: string;
@@ -30,6 +35,7 @@ const props = withDefaults(
     ) => Promise<unknown>;
   }>(),
   {
+    fieldOptionLoaders: undefined,
     groupCode: undefined,
     loadConfigApi: undefined,
     saveAccessCode: undefined,
@@ -45,6 +51,7 @@ const groupInfo = ref<SettingApi.ConfigResponse['group']>();
 const settings = ref<SettingApi.SettingItem[]>([]);
 const formValues = ref<Record<string, any>>({});
 const formErrors = reactive<Record<string, string>>({});
+const fieldOptions = ref<Record<string, SettingApi.OptionItem[]>>({});
 
 type OptionListRow = {
   label: string;
@@ -145,13 +152,98 @@ const currentTabSettings = computed(() => {
   return activeTabConfig.value?.settings || [];
 });
 
+const visiblePageSettings = computed(() =>
+  pageSettings.value.filter((item) => isFieldVisible(item)),
+);
+
+const visibleCurrentTabSettings = computed(() =>
+  currentTabSettings.value.filter((item) => isFieldVisible(item)),
+);
+
+const visibleSettings = computed(() =>
+  settings.value.filter((item) => isFieldVisible(item)),
+);
+
 /** 获取当前保存范围内的设置项 */
 const currentSaveSettings = computed(() => {
-  if (isTabMode.value) return currentTabSettings.value;
+  if (isTabMode.value) return visibleCurrentTabSettings.value;
   if (hasTabs.value)
-    return [...pageSettings.value, ...currentTabSettings.value];
-  return settings.value;
+    return [...visiblePageSettings.value, ...visibleCurrentTabSettings.value];
+  return visibleSettings.value;
 });
+
+function getUiComponent(item: SettingApi.SettingItem): string {
+  return item.ui?.component || '';
+}
+
+function getFieldLabel(item: SettingApi.SettingItem): string {
+  return item.ui?.label || item.name;
+}
+
+function getFieldPlaceholder(
+  item: SettingApi.SettingItem,
+  action: 'input' | 'select' = 'input',
+): string {
+  if (item.ui?.placeholder) return item.ui.placeholder;
+  if (item.placeholder) return item.placeholder;
+  return `${action === 'select' ? '请选择' : '请输入'}${getFieldLabel(item)}`;
+}
+
+function normalizeConditionValue(value: unknown): string {
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
+function isTruthyConditionValue(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  return ['1', 'true', 'on', 'yes'].includes(
+    String(value ?? '')
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function isConditionMatched(condition: SettingApi.UiCondition): boolean {
+  const actual = formValues.value[condition.field];
+  const operator = condition.operator || 'equals';
+
+  switch (operator) {
+    case 'falsy': {
+      return !isTruthyConditionValue(actual);
+    }
+    case 'in': {
+      const expectedValues = Array.isArray(condition.value)
+        ? condition.value
+        : [];
+      return expectedValues
+        .map((value) => normalizeConditionValue(value))
+        .includes(normalizeConditionValue(actual));
+    }
+    case 'not_equals': {
+      return (
+        normalizeConditionValue(actual) !==
+        normalizeConditionValue(condition.value)
+      );
+    }
+    case 'truthy': {
+      return isTruthyConditionValue(actual);
+    }
+    default: {
+      return (
+        normalizeConditionValue(actual) ===
+        normalizeConditionValue(condition.value)
+      );
+    }
+  }
+}
+
+function isFieldVisible(item: SettingApi.SettingItem): boolean {
+  const conditions = item.ui?.visible_when || [];
+  if (!conditions.length) return true;
+  return conditions.every((condition) => isConditionMatched(condition));
+}
 
 /** 解析 JSON 字符串为对象（给 JsonViewer 用） */
 const getJsonObject = (code: string) => {
@@ -207,7 +299,7 @@ const validateFieldValue = (
       value === '' ||
       (Array.isArray(value) && value.length === 0))
   ) {
-    return `请填写「${item.name}」`;
+    return `请填写「${getFieldLabel(item)}」`;
   }
 
   if (isOptionListLikeField(item)) {
@@ -217,7 +309,7 @@ const validateFieldValue = (
       const label = row.label.trim();
       if (!label) continue;
       if (labels.has(label)) {
-        return `「${item.name}」不能包含重复选项：${label}`;
+        return `「${getFieldLabel(item)}」不能包含重复选项：${label}`;
       }
       labels.add(label);
     }
@@ -228,7 +320,7 @@ const validateFieldValue = (
     try {
       JSON.parse(value);
     } catch {
-      return `「${item.name}」JSON 格式不正确`;
+      return `「${getFieldLabel(item)}」JSON 格式不正确`;
     }
   }
 
@@ -254,32 +346,32 @@ const applyRule = (
         try {
           JSON.parse(strVal);
         } catch {
-          return rule.message || `「${item.name}」JSON 格式不正确`;
+          return rule.message || `「${getFieldLabel(item)}」JSON 格式不正确`;
         }
       }
       break;
     }
     case 'max': {
       if (!isEmpty && Number(value) > Number(rule.value)) {
-        return rule.message || `「${item.name}」最大值为 ${rule.value}`;
+        return rule.message || `「${getFieldLabel(item)}」最大值为 ${rule.value}`;
       }
       break;
     }
     case 'max_length': {
       if (!isEmpty && strVal.length > Number(rule.value)) {
-        return rule.message || `「${item.name}」最多输入 ${rule.value} 个字符`;
+        return rule.message || `「${getFieldLabel(item)}」最多输入 ${rule.value} 个字符`;
       }
       break;
     }
     case 'min': {
       if (!isEmpty && Number(value) < Number(rule.value)) {
-        return rule.message || `「${item.name}」最小值为 ${rule.value}`;
+        return rule.message || `「${getFieldLabel(item)}」最小值为 ${rule.value}`;
       }
       break;
     }
     case 'min_length': {
       if (!isEmpty && strVal.length < Number(rule.value)) {
-        return rule.message || `「${item.name}」最少输入 ${rule.value} 个字符`;
+        return rule.message || `「${getFieldLabel(item)}」最少输入 ${rule.value} 个字符`;
       }
       break;
     }
@@ -288,14 +380,14 @@ const applyRule = (
         const flags = rule.flags || '';
         const reg = new RegExp(String(rule.value), flags);
         if (!reg.test(strVal)) {
-          return rule.message || `「${item.name}」格式不正确`;
+          return rule.message || `「${getFieldLabel(item)}」格式不正确`;
         }
       }
       break;
     }
     case 'required': {
       if (isEmpty) {
-        return rule.message || `请填写「${item.name}」`;
+        return rule.message || `请填写「${getFieldLabel(item)}」`;
       }
       break;
     }
@@ -303,7 +395,7 @@ const applyRule = (
       // 正则类规则：email / url / phone / idCard / integer / float / digits / chinese / english / alphaNum / ip
       const regex = REGEX_MAP[rule.type];
       if (regex && !isEmpty && !regex.test(strVal)) {
-        return rule.message || `「${item.name}」格式不正确`;
+        return rule.message || `「${getFieldLabel(item)}」格式不正确`;
       }
       break;
     }
@@ -422,6 +514,7 @@ const loadConfig = async () => {
       values[item.code] = convertValue(item.value, item, item.full_url);
     }
     formValues.value = values;
+    await loadFieldOptions(settings.value);
 
     // 清除验证错误
     for (const key of Object.keys(formErrors)) {
@@ -453,6 +546,15 @@ const convertValue = (
 
   if (isCommaListOptionField(item)) {
     return normalizeOptionListValue(value);
+  }
+
+  if (getUiComponent(item) === 'remote_select') {
+    return String(value);
+  }
+
+  if (getUiComponent(item) === 'money_yuan') {
+    const cents = Number(value);
+    return Number.isNaN(cents) ? undefined : Number((cents / 100).toFixed(2));
   }
 
   switch (item.type) {
@@ -522,6 +624,15 @@ const serializeValue = (value: any, item: SettingApi.SettingItem): any => {
       .map((row) => row.label.trim())
       .filter(Boolean)
       .join(',');
+  }
+
+  if (getUiComponent(item) === 'money_yuan') {
+    const yuan = Number(value);
+    return Number.isNaN(yuan) ? '' : String(Math.round(yuan * 100));
+  }
+
+  if (getUiComponent(item) === 'remote_select') {
+    return String(value);
   }
 
   switch (item.type) {
@@ -632,6 +743,34 @@ const parseOptions = (options: any) => {
     }
   }
   return options;
+};
+
+const getFieldOptions = (item: SettingApi.SettingItem) => {
+  const remoteOptions = fieldOptions.value[item.code];
+  if (remoteOptions) return remoteOptions;
+  return parseOptions(item.options);
+};
+
+const loadFieldOptions = async (items: SettingApi.SettingItem[]) => {
+  const loaders = props.fieldOptionLoaders || {};
+  const nextOptions: Record<string, SettingApi.OptionItem[]> = {};
+
+  await Promise.all(
+    items.map(async (item) => {
+      const loader =
+        loaders[item.code] ||
+        (item.ui?.option_source ? loaders[item.ui.option_source] : undefined);
+      if (!loader) return;
+      try {
+        nextOptions[item.code] = await loader(item);
+      } catch (error) {
+        console.error(`加载「${getFieldLabel(item)}」选项失败:`, error);
+        nextOptions[item.code] = [];
+      }
+    }),
+  );
+
+  fieldOptions.value = nextOptions;
 };
 
 /** 获取上传组件类型 */
@@ -776,20 +915,23 @@ const handleSave = async () => {
       }
       await saveConfig(
         activeTabConfig.value.code,
-        buildSubmitData(activeTabConfig.value.settings),
+        buildSubmitData(visibleCurrentTabSettings.value),
       );
     } else if (hasTabs.value) {
-      if (pageSettings.value.length > 0) {
-        await saveConfig(groupCode.value, buildSubmitData(pageSettings.value));
+      if (visiblePageSettings.value.length > 0) {
+        await saveConfig(
+          groupCode.value,
+          buildSubmitData(visiblePageSettings.value),
+        );
       }
       if (activeTabConfig.value) {
         await saveConfig(
           activeTabConfig.value.code,
-          buildSubmitData(activeTabConfig.value.settings),
+          buildSubmitData(visibleCurrentTabSettings.value),
         );
       }
     } else {
-      await saveConfig(groupCode.value, buildSubmitData(settings.value));
+      await saveConfig(groupCode.value, buildSubmitData(visibleSettings.value));
     }
     if (
       currentSaveSettings.value.some((item) => isUploadRelatedSetting(item))
@@ -818,6 +960,18 @@ const handleSave = async () => {
   }
 };
 
+watch(
+  formValues,
+  () => {
+    for (const item of settings.value) {
+      if (!isFieldVisible(item)) {
+        delete formErrors[item.code];
+      }
+    }
+  },
+  { deep: true },
+);
+
 watch([() => route.path, () => props.groupCode], loadConfig);
 
 onMounted(loadConfig);
@@ -837,12 +991,12 @@ onMounted(loadConfig);
           </div>
           <div class="header-text">
             <h2 class="header-title">{{ groupInfo.name }}</h2>
-            <p class="header-desc">共 {{ settings.length }} 项配置</p>
+            <p class="header-desc">共 {{ visibleSettings.length }} 项配置</p>
           </div>
         </div>
       </div>
 
-      <div v-if="settings.length > 0" class="setting-panel">
+      <div v-if="visibleSettings.length > 0" class="setting-panel">
         <!-- 选项卡导航（Tab 模式或 Page+Tabs 模式） -->
         <div
           v-if="(isTabMode || hasTabs) && tabs.length > 0"
@@ -854,10 +1008,10 @@ onMounted(loadConfig);
         </div>
 
         <!-- Page 设置项区域（Page+Tabs 模式） -->
-        <div v-if="hasTabs && pageSettings.length > 0" class="setting-card">
+        <div v-if="hasTabs && visiblePageSettings.length > 0" class="setting-card">
           <div class="form-grid">
             <div
-              v-for="item in pageSettings"
+              v-for="item in visiblePageSettings"
               :key="item.code"
               :data-field-code="item.code"
               class="form-item-wrapper"
@@ -870,7 +1024,7 @@ onMounted(loadConfig);
               }"
             >
               <div class="form-label">
-                <span class="label-text">{{ item.name }}</span>
+                <span class="label-text">{{ getFieldLabel(item) }}</span>
                 <span
                   v-if="item.rules?.some((r) => r.type === 'required')"
                   class="required-star"
@@ -883,7 +1037,7 @@ onMounted(loadConfig);
               <a-input
                 v-if="item.type === 'input'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 @blur="handleFieldChange(item)"
               />
@@ -892,7 +1046,7 @@ onMounted(loadConfig);
               <a-input-password
                 v-else-if="item.type === 'password'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 @blur="handleFieldChange(item)"
               />
@@ -903,9 +1057,33 @@ onMounted(loadConfig);
                   item.type === 'textarea' && !isOptionListLikeField(item)
                 "
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :rows="3"
                 :status="getFieldError(item.code) ? 'error' : undefined"
+                @blur="handleFieldChange(item)"
+              />
+
+              <a-select
+                v-else-if="getUiComponent(item) === 'remote_select'"
+                v-model:value="formValues[item.code]"
+                :placeholder="getFieldPlaceholder(item, 'select')"
+                :options="getFieldOptions(item)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                class="w-full"
+                option-filter-prop="label"
+                show-search
+                @change="handleFieldChange(item)"
+              />
+
+              <a-input-number
+                v-else-if="getUiComponent(item) === 'money_yuan'"
+                v-model:value="formValues[item.code]"
+                :addon-after="'元'"
+                :min="0"
+                :precision="2"
+                :placeholder="getFieldPlaceholder(item)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                class="w-full"
                 @blur="handleFieldChange(item)"
               />
 
@@ -913,7 +1091,7 @@ onMounted(loadConfig);
               <a-input-number
                 v-else-if="item.type === 'number'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
                 @blur="handleFieldChange(item)"
@@ -931,8 +1109,8 @@ onMounted(loadConfig);
               <a-select
                 v-else-if="item.type === 'select'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请选择${item.name}`"
-                :options="parseOptions(item.options)"
+                :placeholder="getFieldPlaceholder(item, 'select')"
+                :options="getFieldOptions(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
                 @change="handleFieldChange(item)"
@@ -942,7 +1120,7 @@ onMounted(loadConfig);
               <a-radio-group
                 v-else-if="item.type === 'radio'"
                 v-model:value="formValues[item.code]"
-                :options="parseOptions(item.options)"
+                :options="getFieldOptions(item)"
                 @change="handleFieldChange(item)"
               />
 
@@ -950,7 +1128,7 @@ onMounted(loadConfig);
               <a-checkbox-group
                 v-else-if="item.type === 'checkbox'"
                 v-model:value="formValues[item.code]"
-                :options="parseOptions(item.options)"
+                :options="getFieldOptions(item)"
                 @change="handleFieldChange(item)"
               />
 
@@ -1124,7 +1302,7 @@ onMounted(loadConfig);
         </div>
 
         <!-- 分隔线（Page+Tabs 模式） -->
-        <div v-if="hasTabs && pageSettings.length > 0" class="tab-divider">
+        <div v-if="hasTabs && visiblePageSettings.length > 0" class="tab-divider">
           <span class="tab-divider-text">选项卡配置</span>
         </div>
 
@@ -1132,7 +1310,7 @@ onMounted(loadConfig);
         <div v-if="isTabMode || hasTabs" class="setting-card">
           <div class="form-grid">
             <div
-              v-for="item in currentTabSettings"
+              v-for="item in visibleCurrentTabSettings"
               :key="item.code"
               :data-field-code="item.code"
               class="form-item-wrapper"
@@ -1145,7 +1323,7 @@ onMounted(loadConfig);
               }"
             >
               <div class="form-label">
-                <span class="label-text">{{ item.name }}</span>
+                <span class="label-text">{{ getFieldLabel(item) }}</span>
                 <span
                   v-if="item.rules?.some((r) => r.type === 'required')"
                   class="required-star"
@@ -1158,7 +1336,7 @@ onMounted(loadConfig);
               <a-input
                 v-if="item.type === 'input'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 @blur="handleFieldChange(item)"
               />
@@ -1167,7 +1345,7 @@ onMounted(loadConfig);
               <a-input-password
                 v-else-if="item.type === 'password'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 @blur="handleFieldChange(item)"
               />
@@ -1178,9 +1356,33 @@ onMounted(loadConfig);
                   item.type === 'textarea' && !isOptionListLikeField(item)
                 "
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :rows="3"
                 :status="getFieldError(item.code) ? 'error' : undefined"
+                @blur="handleFieldChange(item)"
+              />
+
+              <a-select
+                v-else-if="getUiComponent(item) === 'remote_select'"
+                v-model:value="formValues[item.code]"
+                :placeholder="getFieldPlaceholder(item, 'select')"
+                :options="getFieldOptions(item)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                class="w-full"
+                option-filter-prop="label"
+                show-search
+                @change="handleFieldChange(item)"
+              />
+
+              <a-input-number
+                v-else-if="getUiComponent(item) === 'money_yuan'"
+                v-model:value="formValues[item.code]"
+                :addon-after="'元'"
+                :min="0"
+                :precision="2"
+                :placeholder="getFieldPlaceholder(item)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                class="w-full"
                 @blur="handleFieldChange(item)"
               />
 
@@ -1188,7 +1390,7 @@ onMounted(loadConfig);
               <a-input-number
                 v-else-if="item.type === 'number'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
                 @blur="handleFieldChange(item)"
@@ -1206,8 +1408,8 @@ onMounted(loadConfig);
               <a-select
                 v-else-if="item.type === 'select'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请选择${item.name}`"
-                :options="parseOptions(item.options)"
+                :placeholder="getFieldPlaceholder(item, 'select')"
+                :options="getFieldOptions(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
                 @change="handleFieldChange(item)"
@@ -1217,7 +1419,7 @@ onMounted(loadConfig);
               <a-radio-group
                 v-else-if="item.type === 'radio'"
                 v-model:value="formValues[item.code]"
-                :options="parseOptions(item.options)"
+                :options="getFieldOptions(item)"
                 @change="handleFieldChange(item)"
               />
 
@@ -1225,7 +1427,7 @@ onMounted(loadConfig);
               <a-checkbox-group
                 v-else-if="item.type === 'checkbox'"
                 v-model:value="formValues[item.code]"
-                :options="parseOptions(item.options)"
+                :options="getFieldOptions(item)"
                 @change="handleFieldChange(item)"
               />
 
@@ -1402,7 +1604,7 @@ onMounted(loadConfig);
         <div v-if="!isTabMode && !hasTabs" class="setting-card">
           <div class="form-grid">
             <div
-              v-for="item in settings"
+              v-for="item in visibleSettings"
               :key="item.code"
               :data-field-code="item.code"
               class="form-item-wrapper"
@@ -1415,7 +1617,7 @@ onMounted(loadConfig);
               }"
             >
               <div class="form-label">
-                <span class="label-text">{{ item.name }}</span>
+                <span class="label-text">{{ getFieldLabel(item) }}</span>
                 <span
                   v-if="item.rules?.some((r) => r.type === 'required')"
                   class="required-star"
@@ -1428,7 +1630,7 @@ onMounted(loadConfig);
               <a-input
                 v-if="item.type === 'input'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 @blur="handleFieldChange(item)"
               />
@@ -1437,7 +1639,7 @@ onMounted(loadConfig);
               <a-input-password
                 v-else-if="item.type === 'password'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 @blur="handleFieldChange(item)"
               />
@@ -1448,9 +1650,33 @@ onMounted(loadConfig);
                   item.type === 'textarea' && !isOptionListLikeField(item)
                 "
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :rows="3"
                 :status="getFieldError(item.code) ? 'error' : undefined"
+                @blur="handleFieldChange(item)"
+              />
+
+              <a-select
+                v-else-if="getUiComponent(item) === 'remote_select'"
+                v-model:value="formValues[item.code]"
+                :placeholder="getFieldPlaceholder(item, 'select')"
+                :options="getFieldOptions(item)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                class="w-full"
+                option-filter-prop="label"
+                show-search
+                @change="handleFieldChange(item)"
+              />
+
+              <a-input-number
+                v-else-if="getUiComponent(item) === 'money_yuan'"
+                v-model:value="formValues[item.code]"
+                :addon-after="'元'"
+                :min="0"
+                :precision="2"
+                :placeholder="getFieldPlaceholder(item)"
+                :status="getFieldError(item.code) ? 'error' : undefined"
+                class="w-full"
                 @blur="handleFieldChange(item)"
               />
 
@@ -1458,7 +1684,7 @@ onMounted(loadConfig);
               <a-input-number
                 v-else-if="item.type === 'number'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请输入${item.name}`"
+                :placeholder="getFieldPlaceholder(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
                 @blur="handleFieldChange(item)"
@@ -1476,8 +1702,8 @@ onMounted(loadConfig);
               <a-select
                 v-else-if="item.type === 'select'"
                 v-model:value="formValues[item.code]"
-                :placeholder="item.placeholder || `请选择${item.name}`"
-                :options="parseOptions(item.options)"
+                :placeholder="getFieldPlaceholder(item, 'select')"
+                :options="getFieldOptions(item)"
                 :status="getFieldError(item.code) ? 'error' : undefined"
                 class="w-full"
                 @change="handleFieldChange(item)"
@@ -1487,7 +1713,7 @@ onMounted(loadConfig);
               <a-radio-group
                 v-else-if="item.type === 'radio'"
                 v-model:value="formValues[item.code]"
-                :options="parseOptions(item.options)"
+                :options="getFieldOptions(item)"
                 @change="handleFieldChange(item)"
               />
 
@@ -1495,7 +1721,7 @@ onMounted(loadConfig);
               <a-checkbox-group
                 v-else-if="item.type === 'checkbox'"
                 v-model:value="formValues[item.code]"
-                :options="parseOptions(item.options)"
+                :options="getFieldOptions(item)"
                 @change="handleFieldChange(item)"
               />
 

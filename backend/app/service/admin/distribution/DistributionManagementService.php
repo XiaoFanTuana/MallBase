@@ -59,13 +59,28 @@ class DistributionManagementService extends BaseService
 
     public function saveSettings(array $data): void
     {
+        $settingService = app()->make(SettingService::class);
+        $currentValues = $settingService->getGroupValues(DistributionConfigService::GROUP_CODE);
+        $submitted = [];
+        foreach (array_keys($currentValues) as $code) {
+            if (array_key_exists($code, $data) && $data[$code] !== null) {
+                $submitted[$code] = $data[$code];
+            }
+        }
+        $data = array_replace($currentValues, $submitted);
+
         $configService = app()->make(DistributionConfigService::class);
+        $distributionEnabled = $configService->normalizeSwitch((string) ($data['distribution_enabled'] ?? '0'));
+        $secondLevelEnabled = $configService->normalizeSwitch((string) ($data['second_level_enabled'] ?? '0'));
         $firstRate = $configService->normalizeRate((string) ($data['global_first_rate'] ?? '0'));
         $secondRate = $configService->normalizeRate((string) ($data['global_second_rate'] ?? '0'));
-        $configService->assertRatePair($firstRate, $secondRate);
+        if ($distributionEnabled === '1' && $secondLevelEnabled === '1') {
+            $configService->assertRatePair($firstRate, $secondRate);
+        }
         $data['distributor_open_mode'] = $configService->normalizeOpenMode((string) ($data['distributor_open_mode'] ?? DistributionConfigService::OPEN_MODE_MANUAL));
         $data['auto_open_level_id'] = $configService->normalizeUnsignedInt((string) ($data['auto_open_level_id'] ?? '1'), '自动开通等级ID不合法');
-        $data['second_level_enabled'] = $configService->normalizeSwitch((string) ($data['second_level_enabled'] ?? '0'));
+        $data['distribution_enabled'] = $distributionEnabled;
+        $data['second_level_enabled'] = $secondLevelEnabled;
         $data['self_purchase_enabled'] = $configService->normalizeSwitch((string) ($data['self_purchase_enabled'] ?? '0'));
         $data['relation_valid_days'] = $configService->normalizeUnsignedInt((string) ($data['relation_valid_days'] ?? '0'), '绑定关系有效期不合法');
         $data['settlement_days'] = $configService->normalizeUnsignedInt((string) ($data['settlement_days'] ?? '0'), '结算等待天数不合法');
@@ -78,7 +93,7 @@ class DistributionManagementService extends BaseService
         $data['invite_reward_amount_cents'] = $configService->normalizeCents((string) ($data['invite_reward_amount_cents'] ?? '0'), '固定邀请奖励金额不合法');
         $data['attribution_enabled'] = $configService->normalizeSwitch((string) ($data['attribution_enabled'] ?? '1'));
 
-        app()->make(SettingService::class)->saveGroupValuesWithValidation(
+        $settingService->saveGroupValuesWithValidation(
             DistributionConfigService::GROUP_CODE,
             $data
         );

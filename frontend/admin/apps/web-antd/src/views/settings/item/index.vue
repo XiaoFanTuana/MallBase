@@ -33,10 +33,26 @@ const TYPE_LABEL_MAP: Record<string, { color: string; label: string }> = {
   textarea: { color: 'blue', label: '多行文本' },
 };
 
+const DISPLAY_TYPE_LABEL_MAP: Record<string, string> = {
+  category: '目录',
+  page: '独立页面',
+  tab: '选项卡',
+};
+
+type GroupOption = {
+  code: string;
+  disabled?: boolean;
+  display_type?: SettingApi.SettingGroup['display_type'];
+  label: string;
+  value: number;
+};
+
 /* ---------------- 表单配置数据 ---------------- */
 const ruleTypesMap = ref<SettingApi.RuleTypesMap>({});
 const typeOptions = ref<SettingApi.TypeOption[]>([]);
 const formWarnings = ref<string[]>([]);
+const uiComponentOptions = ref<SettingApi.UiComponentOption[]>([]);
+const uiOptionSourceOptions = ref<SettingApi.UiOptionSourceOption[]>([]);
 
 const loadFormConfig = async () => {
   try {
@@ -44,25 +60,37 @@ const loadFormConfig = async () => {
     typeOptions.value = res.type_options || [];
     ruleTypesMap.value = res.rule_types || {};
     formWarnings.value = res.warnings || [];
+    uiComponentOptions.value = res.ui_components || [];
+    uiOptionSourceOptions.value = res.option_sources || [];
   } catch (error) {
     console.error('加载表单配置失败:', error);
   }
 };
 
 /* ---------------- 分组下拉数据 ---------------- */
-const groupOptions = ref<Array<{ label: string; value: number }>>([]);
+const groupOptions = ref<GroupOption[]>([]);
 
 const loadGroupOptions = async () => {
   try {
     const tree = await getSettingGroupAllApi();
     const flatten = (
       items: SettingApi.SettingGroup[],
-    ): Array<{ label: string; value: number }> => {
-      const result: Array<{ label: string; value: number }> = [];
+      parents: string[] = [],
+    ): GroupOption[] => {
+      const result: GroupOption[] = [];
       for (const item of items) {
-        result.push({ label: item.name, value: item.id });
+        const pathNames = [...parents, item.name];
+        const displayTypeLabel =
+          DISPLAY_TYPE_LABEL_MAP[item.display_type || 'page'] || '独立页面';
+        result.push({
+          code: item.code,
+          disabled: item.display_type !== 'page',
+          display_type: item.display_type,
+          label: `${pathNames.join(' / ')}（${displayTypeLabel}）`,
+          value: item.id,
+        });
         if (item.children?.length) {
-          result.push(...flatten(item.children));
+          result.push(...flatten(item.children, pathNames));
         }
       }
       return result;
@@ -120,6 +148,15 @@ const onModalSuccess = () => {
   loadData(searchParams.value);
 };
 
+const handleTableChange = (newPagination: {
+  current?: number;
+  pageSize?: number;
+}) => {
+  pagination.current = newPagination.current || 1;
+  pagination.pageSize = newPagination.pageSize || pagination.pageSize;
+  loadData(searchParams.value);
+};
+
 /* ---------------- 表格列 ---------------- */
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 80 },
@@ -162,11 +199,13 @@ onMounted(() => {
       <a-form
         class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-6"
       >
-        <a-form-item label="分组" class="mb-0">
+        <a-form-item label="分组" class="mb-0 md:col-span-2 xl:col-span-2">
           <a-select
             v-model:value="searchParams.group_id"
             placeholder="请选择分组"
             allow-clear
+            show-search
+            option-filter-prop="label"
             class="w-full"
             :options="groupOptions"
           />
@@ -217,13 +256,7 @@ onMounted(() => {
         :pagination="pagination"
         :scroll="{ x: 1000 }"
         row-key="id"
-        @change="
-          (newPagination) => {
-            pagination.current = newPagination.current;
-            pagination.pageSize = newPagination.pageSize;
-            loadData(searchParams);
-          }
-        "
+        @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'type'">
@@ -268,6 +301,8 @@ onMounted(() => {
       :rule-types-map="ruleTypesMap"
       :type-options="typeOptions"
       :form-warnings="formWarnings"
+      :ui-component-options="uiComponentOptions"
+      :ui-option-source-options="uiOptionSourceOptions"
       @success="onModalSuccess"
     />
   </div>
