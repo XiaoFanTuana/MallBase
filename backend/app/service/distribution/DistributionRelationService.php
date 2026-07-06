@@ -58,9 +58,10 @@ class DistributionRelationService extends BaseService
             throw new BusinessException('不能形成循环邀请关系');
         }
 
+        $expireTime = $this->relationExpireTime((int) $settings['relation_valid_days']);
         $attribution = $this->normalizeAttribution($attribution, (bool) $settings['attribution_enabled']);
 
-        $this->transaction(function () use ($userId, $parentUserId, $grandparentUserId, $inviteCode, $source, $attribution): void {
+        $relationId = (int) $this->transaction(function () use ($userId, $parentUserId, $grandparentUserId, $inviteCode, $source, $expireTime, $attribution): int {
             /** @var DistributionRelation $relation */
             $relation = $this->model();
             $relation->save([
@@ -69,7 +70,7 @@ class DistributionRelationService extends BaseService
                 'grandparent_user_id' => $grandparentUserId,
                 'invite_code' => strtoupper(trim($inviteCode)),
                 'source' => mb_substr(trim($source), 0, 32),
-                'expire_time' => null,
+                'expire_time' => $expireTime,
                 'attribution_scene' => $attribution['scene'],
                 'attribution_page' => $attribution['page'],
                 'attribution_target_type' => $attribution['target_type'],
@@ -87,7 +88,11 @@ class DistributionRelationService extends BaseService
                     ->update();
             }
 
+            return (int) $relation->id;
         });
+
+        app()->make(DistributionEnrollmentService::class)
+            ->tryGrantInviteReward($relationId, DistributionConfigService::INVITE_REWARD_TRIGGER_BIND);
     }
 
     /**
@@ -164,6 +169,14 @@ class DistributionRelationService extends BaseService
         return array_values($deduped);
     }
 
+    private function relationExpireTime(int $validDays): ?string
+    {
+        if ($validDays <= 0) {
+            return null;
+        }
+        return date('Y-m-d H:i:s', time() + ($validDays * 86400));
+    }
+
     /**
      * @param array<string,mixed> $attribution
      * @return array{scene:string,page:string,target_type:string,target_id:int}
@@ -184,6 +197,6 @@ class DistributionRelationService extends BaseService
 
     private function isRelationValid(string $expireTime): bool
     {
-        return true;
+        return $expireTime === '' || strtotime($expireTime) > time();
     }
 }

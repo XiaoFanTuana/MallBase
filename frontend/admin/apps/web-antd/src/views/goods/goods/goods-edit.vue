@@ -556,6 +556,7 @@ watch(
                             <a-input-number
                               v-else-if="field.type === 'number'"
                               v-model:value="(formData as any)[field.model]"
+                              :addon-after="field.suffix"
                               :controls="field.controls ?? false"
                               :min="field.min"
                               :precision="field.precision"
@@ -564,9 +565,6 @@ watch(
                             >
                               <template v-if="field.prefix" #prefix>
                                 {{ field.prefix }}
-                              </template>
-                              <template v-if="field.suffix" #suffix>
-                                {{ field.suffix }}
                               </template>
                             </a-input-number>
                           </template>
@@ -680,6 +678,7 @@ watch(
                             <a-input-number
                               v-else-if="field.type === 'number'"
                               v-model:value="(formData as any)[field.model]"
+                              :addon-after="field.suffix"
                               :controls="field.controls ?? false"
                               :min="field.min"
                               :precision="field.precision"
@@ -688,9 +687,6 @@ watch(
                             >
                               <template v-if="field.prefix" #prefix>
                                 {{ field.prefix }}
-                              </template>
-                              <template v-if="field.suffix" #suffix>
-                                {{ field.suffix }}
                               </template>
                             </a-input-number>
                           </template>
@@ -1123,6 +1119,9 @@ watch(
                                   v-model:value="
                                     batchData[getSkuExtensionBatchKey(column)]
                                   "
+                                  :addon-after="
+                                    getSkuExtensionField(column)?.suffix
+                                  "
                                   :placeholder="
                                     getSkuExtensionField(column)?.placeholder
                                   "
@@ -1139,12 +1138,6 @@ watch(
                                     #prefix
                                   >
                                     {{ getSkuExtensionField(column)?.prefix }}
-                                  </template>
-                                  <template
-                                    v-if="getSkuExtensionField(column)?.suffix"
-                                    #suffix
-                                  >
-                                    {{ getSkuExtensionField(column)?.suffix }}
                                   </template>
                                 </a-input-number>
                               </template>
@@ -1286,6 +1279,9 @@ watch(
                               v-model:value="
                                 (record as any)[String(column.dataIndex)]
                               "
+                              :addon-after="
+                                getSkuExtensionField(column)?.suffix
+                              "
                               :min="getSkuExtensionField(column)?.min"
                               :precision="
                                 getSkuExtensionField(column)?.precision
@@ -1299,12 +1295,6 @@ watch(
                                 #prefix
                               >
                                 {{ getSkuExtensionField(column)?.prefix }}
-                              </template>
-                              <template
-                                v-if="getSkuExtensionField(column)?.suffix"
-                                #suffix
-                              >
-                                {{ getSkuExtensionField(column)?.suffix }}
                               </template>
                             </a-input-number>
                           </template>

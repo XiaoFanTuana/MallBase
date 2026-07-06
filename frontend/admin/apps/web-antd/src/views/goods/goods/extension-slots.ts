@@ -291,6 +291,7 @@ const pointsSlot: GoodsEditExtensionSlot = {
       min: 0,
       placeholder: '每元积分',
       precision: 0,
+      suffix: '积分/元',
       submit(payload, source, context) {
         if (!isPointsSkuRatioMode(context)) return;
         payload.points_reward_mode = 'ratio';
@@ -300,7 +301,7 @@ const pointsSlot: GoodsEditExtensionSlot = {
       title: '每元积分',
       type: 'number',
       visible: isPointsSkuRatioMode,
-      width: 100,
+      width: 130,
     },
     {
       batchKey: '__points_reward_fixed__',
@@ -312,6 +313,7 @@ const pointsSlot: GoodsEditExtensionSlot = {
       min: 0,
       placeholder: '每件积分',
       precision: 0,
+      suffix: '积分/件',
       submit(payload, source, context) {
         if (!isPointsSkuFixedMode(context)) return;
         payload.points_reward_mode = 'fixed';
@@ -321,7 +323,7 @@ const pointsSlot: GoodsEditExtensionSlot = {
       title: '每件积分',
       type: 'number',
       visible: isPointsSkuFixedMode,
-      width: 100,
+      width: 130,
     },
   ],
   transformSubmit(submitData) {
@@ -364,7 +366,7 @@ const memberSlot: GoodsEditExtensionSlot = {
         min: 0,
         model: 'member_price',
         precision: 2,
-        prefix: '¥',
+        suffix: '元',
         type: 'number',
         width: '160px',
       },
@@ -386,14 +388,14 @@ const memberSlot: GoodsEditExtensionSlot = {
       min: 0,
       placeholder: '会员价',
       precision: 2,
-      prefix: '¥',
+      suffix: '元',
       submit(payload, source) {
         payload.member_price = source.member_price ?? null;
       },
-      title: '会员价',
+      title: '会员价(元)',
       type: 'number',
       visible: isMemberSkuPriceMode,
-      width: 110,
+      width: 120,
     },
   ],
   transformSubmit(submitData) {
@@ -564,6 +566,7 @@ const distributionSlot: GoodsEditExtensionSlot = {
       min: 0,
       placeholder: '一级比例',
       precision: 2,
+      suffix: '%',
       submit(payload, source, context) {
         if (!isDistributionSkuRateMode(context)) return;
         payload.distribution_commission_mode = 'rate';
@@ -576,7 +579,7 @@ const distributionSlot: GoodsEditExtensionSlot = {
         payload.distribution_first_fixed_amount = 0;
         payload.distribution_second_fixed_amount = 0;
       },
-      title: '一级佣金%',
+      title: '一级佣金(%)',
       type: 'number',
       visible: isDistributionSkuRateMode,
       width: 108,
@@ -593,11 +596,12 @@ const distributionSlot: GoodsEditExtensionSlot = {
       min: 0,
       placeholder: '二级比例',
       precision: 2,
+      suffix: '%',
       submit(payload, source, context) {
         if (!isDistributionSkuRateMode(context)) return;
         payload.distribution_second_rate = source.distribution_second_rate || 0;
       },
-      title: '二级佣金%',
+      title: '二级佣金(%)',
       type: 'number',
       visible: (context) =>
         isDistributionSkuRateMode(context) &&

@@ -30,8 +30,6 @@ class SettingService extends BaseService
         'client_theme_user_select_enabled',
         'invite_reward_bind_daily_limit',
         'invite_reward_bind_total_limit',
-        'invite_reward_trigger',
-        'relation_valid_days',
     ];
 
     private const UI_COMPONENTS = [

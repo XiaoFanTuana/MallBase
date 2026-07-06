@@ -293,7 +293,7 @@ class DistributionEnrollmentService extends BaseService
 
     private function isRelationValid(?string $expireTime): bool
     {
-        return true;
+        return $expireTime === null || trim($expireTime) === '' || strtotime($expireTime) > time();
     }
 
     private function decimalToCents(string $amount): int

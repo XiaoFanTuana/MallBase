@@ -194,7 +194,7 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         }
     }
 
-    public function testRelationExpireTimeIsIgnoredForPermanentRelationPolicy(): void
+    public function testExpiredRelationDoesNotGenerateCommission(): void
     {
         $this->requireDbTables($this->distributionTables());
 
@@ -211,8 +211,8 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             [$orderId, $orderSn] = $this->insertOrderWithItem($buyerId, '100.00');
             $this->eventService()->handleOrderPaid($this->findOrder($orderId));
 
-            $this->assertSame(1, (int) Db::name('distribution_order_commission')->where('order_sn', $orderSn)->count());
-            $this->assertSame(500, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('frozen_commission_cents'));
+            $this->assertSame(0, (int) Db::name('distribution_order_commission')->where('order_sn', $orderSn)->count());
+            $this->assertSame(0, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('frozen_commission_cents'));
         } finally {
             Db::rollback();
         }
@@ -456,7 +456,7 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         }
     }
 
-    public function testLegacyBindInviteRewardConfigStillGrantsOnFirstPaidOrderOnly(): void
+    public function testBindInviteRewardConfigGrantsWhenRelationIsBoundOnlyOnce(): void
     {
         $this->requireDbTables($this->distributionTables());
 
@@ -464,24 +464,15 @@ final class DistributionOrderEventServiceContractTest extends TestCase
         try {
             $this->resetDistributionConfig(7, false, '0.00', [
                 'invite_reward_enabled' => '1',
+                'invite_reward_trigger' => DistributionConfigService::INVITE_REWARD_TRIGGER_BIND,
                 'invite_reward_amount_cents' => '666',
             ]);
-            Db::name('setting')->where('code', 'invite_reward_trigger')->delete();
-            Db::name('setting')->insert([
-                'group_id' => $this->ensureDistributionConfigGroup(),
-                'name' => '固定邀请奖励触发',
-                'code' => 'invite_reward_trigger',
-                'value' => 'bind',
-                'type' => 'select',
-                'sort' => 100,
-            ]);
-            $this->flushSettings();
             [$parentId, $buyerId] = $this->createUsers(2);
             $this->openDistributor($parentId);
 
             $this->bindByInviteCode($buyerId, $this->inviteCode($parentId));
-            $this->assertSame(0, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('available_commission_cents'));
-            $this->assertSame(0, (int) Db::name('distribution_relation')->where('user_id', $buyerId)->value('invite_reward_status'));
+            $this->assertSame(666, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('available_commission_cents'));
+            $this->assertSame(1, (int) Db::name('distribution_relation')->where('user_id', $buyerId)->value('invite_reward_status'));
 
             [$orderId] = $this->insertOrderWithItem($buyerId, '100.00');
             $this->eventService()->handleOrderPaid($this->findOrder($orderId));
@@ -489,6 +480,31 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             $this->assertSame(666, (int) Db::name('distribution_distributor')->where('user_id', $parentId)->value('available_commission_cents'));
             $this->assertSame(1, (int) Db::name('distribution_relation')->where('user_id', $buyerId)->value('invite_reward_status'));
             $this->assertSame(1, (int) Db::name('distribution_commission_log')->where('user_id', $parentId)->where('biz_type', DistributionCommissionLog::BIZ_INVITE_REWARD)->count());
+        } finally {
+            Db::rollback();
+        }
+    }
+
+    public function testRelationValidDaysWritesExpireTimeWhenBinding(): void
+    {
+        $this->requireDbTables($this->distributionTables());
+
+        Db::startTrans();
+        try {
+            $this->resetDistributionConfig(7, false, '0.00', [
+                'relation_valid_days' => '2',
+            ]);
+            [$parentId, $buyerId] = $this->createUsers(2);
+            $this->openDistributor($parentId);
+
+            $before = time();
+            $this->bindByInviteCode($buyerId, $this->inviteCode($parentId));
+            $expireTime = (string) Db::name('distribution_relation')->where('user_id', $buyerId)->value('expire_time');
+            $expireTimestamp = strtotime($expireTime);
+
+            $this->assertNotFalse($expireTimestamp);
+            $this->assertGreaterThanOrEqual($before + 2 * 86400, $expireTimestamp);
+            $this->assertLessThanOrEqual(time() + 2 * 86400 + 5, $expireTimestamp);
         } finally {
             Db::rollback();
         }
@@ -649,12 +665,14 @@ final class DistributionOrderEventServiceContractTest extends TestCase
             ['name' => '自动开通等级ID', 'code' => 'auto_open_level_id', 'value' => '1', 'type' => 'number', 'sort' => 18],
             ['name' => '启用二级分佣', 'code' => 'second_level_enabled', 'value' => $secondLevelEnabled ? '1' : '0', 'type' => 'switch', 'sort' => 20],
             ['name' => '自购返佣', 'code' => 'self_purchase_enabled', 'value' => '0', 'type' => 'switch', 'sort' => 30],
+            ['name' => '绑定关系有效期天数', 'code' => 'relation_valid_days', 'value' => '0', 'type' => 'number', 'sort' => 35],
             ['name' => '结算等待天数', 'code' => 'settlement_days', 'value' => (string) $settlementDays, 'type' => 'number', 'sort' => 40],
             ['name' => '最低提现金额(分)', 'code' => 'min_withdraw_cents', 'value' => '10000', 'type' => 'number', 'sort' => 50],
             ['name' => '一级默认佣金比例(%)', 'code' => 'global_first_rate', 'value' => '5.00', 'type' => 'number', 'sort' => 60],
             ['name' => '二级默认佣金比例(%)', 'code' => 'global_second_rate', 'value' => $secondRate, 'type' => 'number', 'sort' => 70],
             ['name' => '满额开通门槛(分)', 'code' => 'amount_open_threshold_cents', 'value' => '0', 'type' => 'number', 'sort' => 80],
             ['name' => '启用固定邀请奖励', 'code' => 'invite_reward_enabled', 'value' => '0', 'type' => 'switch', 'sort' => 90],
+            ['name' => '固定邀请奖励触发', 'code' => 'invite_reward_trigger', 'value' => DistributionConfigService::INVITE_REWARD_TRIGGER_FIRST_ORDER, 'type' => 'select', 'sort' => 100],
             ['name' => '固定邀请奖励金额(分)', 'code' => 'invite_reward_amount_cents', 'value' => '0', 'type' => 'number', 'sort' => 110],
             ['name' => '启用分享归因', 'code' => 'attribution_enabled', 'value' => '1', 'type' => 'switch', 'sort' => 120],
         ];
