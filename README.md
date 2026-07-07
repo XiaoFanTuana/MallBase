@@ -125,7 +125,9 @@ mall-base/
 │   │   ├── specs/                  # 功能设计方案
 │   │   └── plans/                  # 实施计划
 │   └── testing/
-│       └── change-trigger-test-matrix.md  # 测试基线与触发矩阵
+│       ├── change-trigger-test-matrix.md  # 测试基线与触发矩阵
+│       ├── order-create-1000-concurrency-report.md  # 订单创建 1000 并发压测报告
+│       └── swoole-concurrency-config-guide.md  # Swoole 并发配置建议
 ├── docker-compose.yml              # 单后端容器（生产，需外部 MySQL / Redis）
 ├── docker-compose.dev.yml          # 开发全套（后端 + MySQL + Redis）
 ├── docker-compose.frontend-build.yml  # 后台前端打包
@@ -264,6 +266,8 @@ docker compose restart
 | [新增云存储上传驱动开发指南](docs/upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
 | [隐私与平台实例统计说明](docs/privacy.md) | 平台实例统计的数据范围、本地状态与关闭方式 |
 | [测试基线与触发矩阵](docs/testing/change-trigger-test-matrix.md) | 后端 / 前端测试入口与变更触发规则 |
+| [订单创建 1000 并发压测报告](docs/testing/order-create-1000-concurrency-report.md) | 1000 个不同用户同时下单的压测结果、数据一致性和边界说明 |
+| [Swoole 并发配置建议](docs/testing/swoole-concurrency-config-guide.md) | worker、连接数、backlog、连接池与订单高并发调参建议 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
 | [客户端装修功能设计方案](docs/superpowers/specs/2026-06-03-client-diy-design.md) | 客户端装修一期范围、后台信息架构和方案库模型 |
 | [客户端装修基础实施计划](docs/superpowers/plans/2026-06-03-client-diy-foundation-plan.md) | 客户端装修后端基础能力的历史实施计划 |

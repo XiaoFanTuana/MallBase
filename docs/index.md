@@ -23,6 +23,8 @@ rg -n "会员|积分|余额|装修|充值|成长值" README.md docs
 | 查看隐私与平台统计范围 | [privacy.md](./privacy.md) |
 | 做前端构建或上传 | [install/commands-frontend.md](./install/commands-frontend.md) |
 | 看测试入口 | [testing/change-trigger-test-matrix.md](./testing/change-trigger-test-matrix.md) |
+| 看订单压测结果 | [testing/order-create-1000-concurrency-report.md](./testing/order-create-1000-concurrency-report.md) |
+| 配 Swoole 并发参数 | [testing/swoole-concurrency-config-guide.md](./testing/swoole-concurrency-config-guide.md) |
 | 查业务文档入口 | [faq.md](./faq.md) |
 | 配置会员、积分、余额、装修 | [operation/index.md](./operation/index.md) |
 | 理解会员、积分、余额、装修逻辑 | [logic/index.md](./logic/index.md) |
@@ -124,6 +126,8 @@ rg -n "会员|积分|余额|装修|充值|成长值" README.md docs
 | [upload-storage-driver-extension.md](./upload-storage-driver-extension.md) | 新增云存储服务商时需要修改的后端、前端、seed、测试和文档清单 |
 | [privacy.md](./privacy.md) | 平台实例统计的数据范围、本地状态与关闭方式 |
 | [testing/change-trigger-test-matrix.md](./testing/change-trigger-test-matrix.md) | 测试基线与触发矩阵 |
+| [testing/order-create-1000-concurrency-report.md](./testing/order-create-1000-concurrency-report.md) | 订单创建 1000 并发压测报告 |
+| [testing/swoole-concurrency-config-guide.md](./testing/swoole-concurrency-config-guide.md) | Swoole worker、连接数、backlog 和连接池配置建议 |
 | [claude-code-guide.md](./claude-code-guide.md) | Claude Code 使用指南 |
 | [superpowers/specs/2026-06-03-client-diy-design.md](./superpowers/specs/2026-06-03-client-diy-design.md) | 客户端装修一期范围、后台信息架构和方案库模型 |
 | [superpowers/plans/2026-06-03-client-diy-foundation-plan.md](./superpowers/plans/2026-06-03-client-diy-foundation-plan.md) | 客户端装修后端基础能力的历史实施计划 |
