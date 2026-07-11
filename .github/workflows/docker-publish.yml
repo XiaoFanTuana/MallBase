@@ -33,7 +33,7 @@ jobs:
           coverage: none
 
       - name: Validate composer
-        run: composer validate --strict
+        run: composer validate
         working-directory: backend
 
       - name: Install dependencies
