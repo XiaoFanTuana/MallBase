@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Setting;
 
+use app\service\install\InstallLockService;
 use app\service\client\WechatAppFactory;
 use mall_base\exception\BusinessException;
 use PHPUnit\Framework\TestCase;
@@ -261,19 +262,33 @@ final class WechatOfficialOauthUrlTest extends TestCase
      */
     private function dispatchClientUserAuthPost(string $path): array
     {
-        $app = new App(dirname(__DIR__, 3));
+        $backendPath = dirname(__DIR__, 3);
+        $lockPath = $backendPath . '/runtime/install/install.lock';
+        $createdLock = !is_file($lockPath);
 
-        $request = $app->make(\think\Request::class);
-        $request->setPathinfo('client/api/user/auth/' . ltrim($path, '/'));
-        $request->withServer([
-            'REQUEST_METHOD' => 'POST',
-            'HTTP_HOST' => 'localhost',
-            'SERVER_NAME' => 'localhost',
-        ]);
+        if ($createdLock) {
+            (new InstallLockService($lockPath))->writeInstalledLock('2026-07-11 00:00:00');
+        }
 
-        $response = $app->http->run($request);
-        $body = json_decode($response->getContent(), true);
+        try {
+            $app = new App($backendPath);
 
-        return is_array($body) ? $body : [];
+            $request = $app->make(\think\Request::class);
+            $request->setPathinfo('client/api/user/auth/' . ltrim($path, '/'));
+            $request->withServer([
+                'REQUEST_METHOD' => 'POST',
+                'HTTP_HOST' => 'localhost',
+                'SERVER_NAME' => 'localhost',
+            ]);
+
+            $response = $app->http->run($request);
+            $body = json_decode($response->getContent(), true);
+
+            return is_array($body) ? $body : [];
+        } finally {
+            if ($createdLock && is_file($lockPath)) {
+                unlink($lockPath);
+            }
+        }
     }
 }
