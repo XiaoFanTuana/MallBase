@@ -1489,6 +1489,7 @@ class SettingService extends BaseService
         $list = app()->make(AssetHydrator::class)->hydrateSettings($list);
         $list = $this->filterVisibleSettings($list);
         $list = $this->attachResolvedUiMetaToSettingList($list);
+        $list = $this->maskSensitiveSettings($list);
 
         return compact('total', 'list');
     }
@@ -1600,6 +1601,15 @@ class SettingService extends BaseService
                 'updated' => true,
                 'warnings' => [],
             ];
+        }
+
+        $effectiveSetting = array_replace($setting->toArray(), $data);
+        if (
+            array_key_exists('value', $data)
+            && $this->isSensitiveSetting($effectiveSetting)
+            && $this->isBlankSensitiveValue($data['value'])
+        ) {
+            unset($data['value']);
         }
 
         // 记录原始 group_id，用于判断是否跨分组移动
@@ -2113,6 +2123,7 @@ class SettingService extends BaseService
                 $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
                 $settings = $this->filterVisibleSettings($settings);
                 $settings = $this->applyUiMetaToSettings($settings, (string) $child['code']);
+                $settings = $this->maskSensitiveSettings($settings);
                 // 返回扁平化的 TabConfigItem 格式：code, icon, id, name, settings
                 $tabs[] = [
                     'code' => $child['code'],
@@ -2150,6 +2161,7 @@ class SettingService extends BaseService
         $settings = app()->make(AssetHydrator::class)->hydrateSettings($settings);
         $settings = $this->filterVisibleSettings($settings);
         $settings = $this->applyUiMetaToSettings($settings, $groupCode);
+        $settings = $this->maskSensitiveSettings($settings);
 
         // 检查是否有 tab 类型的子分组
         $tabChildren = $this->model()
@@ -2174,6 +2186,7 @@ class SettingService extends BaseService
                 $childSettings = app()->make(AssetHydrator::class)->hydrateSettings($childSettings);
                 $childSettings = $this->filterVisibleSettings($childSettings);
                 $childSettings = $this->applyUiMetaToSettings($childSettings, (string) $child['code']);
+                $childSettings = $this->maskSensitiveSettings($childSettings);
                 $tabs[] = [
                     'code' => $child['code'],
                     'icon' => $child['icon'] ?? null,
@@ -2365,24 +2378,192 @@ class SettingService extends BaseService
      */
     public function getGroupValues(string $groupCode): array
     {
-        $config = $this->getGroupConfig($groupCode);
+        $group = $this->model()->where('code', $groupCode)->find();
+        if (!$group) {
+            throw new BusinessException('分组不存在');
+        }
+
+        if ($group->status !== 1) {
+            throw new BusinessException('分组已禁用');
+        }
+
         $values = [];
 
-        if ($config['display_type'] === SettingGroup::DISPLAY_TYPE_TAB) {
-            // tab 模式：从所有子分组的设置项中收集值
-            foreach ($config['tabs'] as $tab) {
-                foreach ($tab['settings'] as $setting) {
-                    $values[$setting['code']] = $setting['value'];
-                }
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_TAB) {
+            $childGroups = $this->model()
+                ->where('parent_id', $group->id)
+                ->where('status', 1)
+                ->select();
+
+            foreach ($childGroups as $childGroup) {
+                $values = array_replace($values, $this->getRawValuesByGroupId((int) $childGroup->id));
             }
-        } else {
-            // page 模式：直接从当前分组设置项中收集值
-            foreach ($config['settings'] as $setting) {
-                $values[$setting['code']] = $setting['value'];
+
+            return $values;
+        }
+
+        if ($group->display_type === SettingGroup::DISPLAY_TYPE_CATEGORY) {
+            return [];
+        }
+
+        return $this->getRawValuesByGroupId((int) $group->id);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getRawValuesByGroupId(int $groupId): array
+    {
+        $settings = $this->model(Setting::class)
+            ->where('group_id', $groupId)
+            ->select();
+
+        $values = [];
+        foreach ($settings as $setting) {
+            $values[(string) $setting->code] = $setting->value;
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $settings
+     * @return array<int, array<string, mixed>>
+     */
+    private function maskSensitiveSettings(array $settings): array
+    {
+        return array_map(fn (array $setting): array => $this->maskSensitiveSetting($setting), $settings);
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     * @return array<string, mixed>
+     */
+    private function maskSensitiveSetting(array $setting): array
+    {
+        if (!$this->isSensitiveSetting($setting)) {
+            return $setting;
+        }
+
+        $setting['has_value'] = !$this->isBlankSensitiveValue($setting['value'] ?? null);
+        $setting['value'] = '';
+        $setting['sensitive'] = true;
+
+        $ui = $setting['ui'] ?? [];
+        if (is_string($ui)) {
+            $decoded = json_decode($ui, true);
+            $ui = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($ui)) {
+            $ui = [];
+        }
+        $ui['sensitive'] = true;
+        $setting['ui'] = $ui;
+
+        return $setting;
+    }
+
+    private function isSensitiveSetting(mixed $setting): bool
+    {
+        if ($setting instanceof Setting) {
+            $setting = $setting->toArray();
+        }
+
+        if (!is_array($setting)) {
+            return false;
+        }
+
+        if ((string)($setting['type'] ?? '') === Setting::TYPE_PASSWORD) {
+            return true;
+        }
+
+        $ui = $setting['ui'] ?? null;
+        if (is_string($ui)) {
+            $decoded = json_decode($ui, true);
+            $ui = is_array($decoded) ? $decoded : null;
+        }
+
+        if (!is_array($ui)) {
+            return false;
+        }
+
+        return in_array($ui['sensitive'] ?? false, [true, 1, '1', 'true'], true);
+    }
+
+    private function isBlankSensitiveValue(mixed $value): bool
+    {
+        return $value === null || (is_string($value) && trim($value) === '');
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function fillSensitiveValuesForValidation(array $config, array $values): array
+    {
+        foreach ($this->collectSensitiveSettingsFromConfig($config) as $setting) {
+            $code = (string)($setting['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+
+            if (array_key_exists($code, $values) && !$this->isBlankSensitiveValue($values[$code])) {
+                continue;
+            }
+
+            $storedValue = $this->getStoredSettingValue($setting);
+            if (!$this->isBlankSensitiveValue($storedValue)) {
+                $values[$code] = $storedValue;
             }
         }
 
         return $values;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectSensitiveSettingsFromConfig(array $config): array
+    {
+        $settings = [];
+        if (($config['display_type'] ?? '') === SettingGroup::DISPLAY_TYPE_TAB) {
+            foreach ($config['tabs'] ?? [] as $tab) {
+                foreach (($tab['settings'] ?? []) as $setting) {
+                    if (is_array($setting) && $this->isSensitiveSetting($setting)) {
+                        $settings[] = $setting;
+                    }
+                }
+            }
+
+            return $settings;
+        }
+
+        foreach ($config['settings'] ?? [] as $setting) {
+            if (is_array($setting) && $this->isSensitiveSetting($setting)) {
+                $settings[] = $setting;
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * @param array<string, mixed> $setting
+     */
+    private function getStoredSettingValue(array $setting): mixed
+    {
+        $id = (int)($setting['id'] ?? 0);
+        if ($id > 0) {
+            return $this->model(Setting::class)
+                ->where('id', $id)
+                ->value('value');
+        }
+
+        return $this->model(Setting::class)
+            ->where('code', (string)($setting['code'] ?? ''))
+            ->value('value');
     }
 
     /**
@@ -2412,7 +2593,10 @@ class SettingService extends BaseService
 
                 foreach ($settings as $setting) {
                     if (array_key_exists($setting->code, $values)) {
-                        $updatedCodes[] = $this->saveSettingValue($setting, $values[$setting->code]);
+                        $updatedCode = $this->saveSettingValue($setting, $values[$setting->code]);
+                        if ($updatedCode !== null) {
+                            $updatedCodes[] = $updatedCode;
+                        }
                     }
                 }
 
@@ -2427,7 +2611,10 @@ class SettingService extends BaseService
 
             foreach ($settings as $setting) {
                 if (array_key_exists($setting->code, $values)) {
-                    $updatedCodes[] = $this->saveSettingValue($setting, $values[$setting->code]);
+                    $updatedCode = $this->saveSettingValue($setting, $values[$setting->code]);
+                    if ($updatedCode !== null) {
+                        $updatedCodes[] = $updatedCode;
+                    }
                 }
             }
         }
@@ -2438,8 +2625,12 @@ class SettingService extends BaseService
         return true;
     }
 
-    private function saveSettingValue(Setting $setting, mixed $value): string
+    private function saveSettingValue(Setting $setting, mixed $value): ?string
     {
+        if ($this->isSensitiveSetting($setting) && $this->isBlankSensitiveValue($value)) {
+            return null;
+        }
+
         if ((string)$setting->type === Setting::TYPE_OPTION_LIST) {
             $value = $this->normalizeOptionListValue($value);
         }
@@ -2500,7 +2691,8 @@ class SettingService extends BaseService
     public function saveGroupValuesWithValidation(string $groupCode, array $values): bool
     {
         $config = $this->getGroupConfig($groupCode);
-        $effectiveValues = array_replace($this->collectValuesFromConfig($config), $values);
+        $valuesForValidation = $this->fillSensitiveValuesForValidation($config, $values);
+        $effectiveValues = array_replace($this->collectValuesFromConfig($config), $valuesForValidation);
         $allSettings = $this->collectSettingsForValidation($config, $effectiveValues);
 
         $validate = new SettingValueValidate();

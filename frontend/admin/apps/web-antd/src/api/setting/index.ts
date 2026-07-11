@@ -149,6 +149,7 @@ export namespace SettingApi {
     label?: string;
     option_source?: UiOptionSourceValue;
     placeholder?: string;
+    sensitive?: boolean;
     section?: string;
     section_code?: string;
     visible_when?: UiCondition[];
@@ -173,6 +174,10 @@ export namespace SettingApi {
     is_required: number;
     /** 后端返回的验证规则列表 */
     rules?: ValidationRule[];
+    /** 敏感配置是否已有值，敏感字段不回传明文 */
+    has_value?: boolean;
+    /** 是否敏感配置 */
+    sensitive?: boolean;
     /** 设置项已保存的动态表单交互元数据 */
     ui?: null | SettingItemUi;
     /** 合并代码默认值后的动态表单交互元数据，仅用于列表展示 */

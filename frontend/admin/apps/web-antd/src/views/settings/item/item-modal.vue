@@ -980,7 +980,19 @@ const handleOk = async () => {
             </a-form-item>
 
             <a-form-item label="默认值" name="value">
+              <a-input-password
+                v-if="formData.type === 'password'"
+                v-model:value="formData.value"
+                :disabled="isSystemSetting"
+                :placeholder="
+                  isEdit && editData?.has_value
+                    ? '已设置，留空表示不修改'
+                    : '请输入密码'
+                "
+                autocomplete="new-password"
+              />
               <a-input
+                v-else
                 v-model:value="formData.value"
                 :disabled="isSystemSetting"
                 placeholder="默认值"

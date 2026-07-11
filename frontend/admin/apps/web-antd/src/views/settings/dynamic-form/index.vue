@@ -243,6 +243,12 @@ function getFieldPlaceholder(
   item: SettingApi.SettingItem,
   action: 'input' | 'select' = 'input',
 ): string {
+  if (
+    (item.sensitive || item.ui?.sensitive || item.type === 'password') &&
+    item.has_value
+  ) {
+    return '已配置，留空保持不变';
+  }
   if (item.ui?.placeholder) return item.ui.placeholder;
   if (item.placeholder) return item.placeholder;
   return `${action === 'select' ? '请选择' : '请输入'}${getFieldLabel(item)}`;
