@@ -6,14 +6,14 @@
 #
 # 设计约束：
 #   - 项目根目录 .env 是 Docker 开发全套模式的唯一主配置源
-#   - backend/.env 是 ThinkPHP / Swoole 运行时派生文件，不作为第二真相源
-#   - 若用户已经定义了根 .env 中的值，则绝不重新随机化或覆盖
+#   - backend/.env 是 ThinkPHP / Swoole 运行时派生文件
+#   - 已定义的根 .env 值不会被重新随机化或覆盖
 #
 # 本脚本负责：
 #   1. 根 .env 缺失时从 deploy/docker/.example.env 生成
-#   2. 根 .env 已存在时仅补齐缺失字段；敏感字段只有在占位符状态下才随机化
-#   3. 基于 backend/.example.env 重新派生 backend/.env，并用根 .env 覆盖共享字段
-#   4. 为 backend/.env 写入中文头注释，明确“请改根 .env，不要改 backend/.env”
+#   2. 根 .env 已存在时只补齐缺失字段
+#   3. 根据 backend/.example.env 派生 backend/.env
+#   4. 用根 .env 覆盖数据库、Redis、JWT、CORS 与实例统计等共享字段
 # ============================================================
 set -eu
 
@@ -25,8 +25,8 @@ ROOT_TPL="${WORKDIR}/deploy/docker/.example.env"
 PLACEHOLDER="please-change-or-leave-for-random"
 BACKEND_HEADER_1="# 由 Docker 开发全套模式自动生成，请勿手动修改。"
 BACKEND_HEADER_2="# 唯一主配置源：项目根目录 /.env"
-ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER JWT_SECRET JWT_EXPIRE JWT_REFRESH_EXPIRE SITE_URL"
-ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER JWT_SECRET JWT_EXPIRE JWT_REFRESH_EXPIRE"
+ROOT_TO_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER JWT_SECRET JWT_EXPIRE JWT_REFRESH_EXPIRE SITE_URL CORS_ALLOWED_ORIGINS CORS_ALLOW_CREDENTIALS PLATFORM_REPORT_DISABLED"
+ROOT_INIT_FROM_BACKEND_KEYS="SWOOLE_HTTP_PORT SWOOLE_WORKER_NUM DB_HOST DB_PORT DB_NAME DB_USER DB_PASS REDIS_HOST REDIS_PORT REDIS_CACHE_DB REDIS_PASSWORD CACHE_DRIVER JWT_SECRET JWT_EXPIRE JWT_REFRESH_EXPIRE CORS_ALLOWED_ORIGINS CORS_ALLOW_CREDENTIALS PLATFORM_REPORT_DISABLED"
 
 rand24() { LC_ALL=C od -An -N12 -tx1 /dev/urandom | tr -d ' \n'; }
 rand64() { LC_ALL=C od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
@@ -72,10 +72,12 @@ fill_missing_from_template() {
         case "$line" in
             ''|\#*) continue ;;
         esac
+
         key=$(printf '%s' "$line" | awk -F'=' '{print $1}' | tr -d ' ')
         [ -z "$key" ] && continue
+
         if ! has_key "$target" "$key"; then
-            printf '>>> [ensure-env] 补齐 %s 缺失字段：%s\n' "$target" "$key"
+            printf '>>> [ensure-env] 向 %s 补齐字段：%s\n' "$target" "$key"
             printf '%s\n' "$line" >> "$target"
         fi
     done < "$template"
@@ -116,37 +118,43 @@ migrate_legacy_redis_port() {
 
 rebuild_backend_env() {
     tmp_env=$(mktemp)
-    cp "$BACKEND_TPL" "$tmp_env"
+    : > "$tmp_env"
 
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
-            ''|\#*) continue ;;
+            ''|\#*)
+                printf '%s\n' "$line" >> "$tmp_env"
+                continue
+                ;;
         esac
 
-        key=$(printf '%s' "$line" | awk -F'=' '{print $1}' | tr -d ' ')
-        tpl_val=$(printf '%s' "$line" | sed "s|^${key}=||")
-        current_val=$(get_value "$BACKEND_ENV" "$key")
+        key=${line%%=*}
+        tpl_val=${line#*=}
+        current_val=""
         value=$tpl_val
+
+        if [ -f "$BACKEND_ENV" ]; then
+            current_val=$(get_value "$BACKEND_ENV" "$key")
+        fi
 
         if [ -n "$current_val" ]; then
             value=$current_val
         fi
 
-        for sync_key in $ROOT_TO_BACKEND_KEYS; do
-            if [ "$key" = "$sync_key" ]; then
+        case " $ROOT_TO_BACKEND_KEYS " in
+            *" $key "*)
                 root_val=$(get_value "$ROOT_ENV" "$key")
                 if [ -n "$root_val" ]; then
                     value=$root_val
                 fi
-                break
-            fi
-        done
+                ;;
+        esac
 
         if [ "$key" = "JWT_SECRET" ] && { [ -z "$value" ] || [ "$value" = "$PLACEHOLDER" ]; }; then
             value=$(rand64)
         fi
 
-        set_value "$tmp_env" "$key" "$value"
+        printf '%s=%s\n' "$key" "$value" >> "$tmp_env"
     done < "$BACKEND_TPL"
 
     {

@@ -24,7 +24,16 @@ final class EnvTemplateParseTest extends TestCase
             . 'Avoid ( ) & | $ " inside # comments — use full-width or reword.'
         );
 
-        foreach (['DB_HOST', 'DB_PORT', 'REDIS_PORT', 'SWOOLE_HTTP_PORT', 'SWOOLE_WORKER_NUM'] as $key) {
+        foreach ([
+            'DB_HOST',
+            'DB_PORT',
+            'REDIS_PORT',
+            'SWOOLE_HTTP_PORT',
+            'SWOOLE_WORKER_NUM',
+            'CORS_ALLOWED_ORIGINS',
+            'CORS_ALLOW_CREDENTIALS',
+            'PLATFORM_REPORT_DISABLED',
+        ] as $key) {
             $this->assertArrayHasKey($key, $parsed, "missing required key: {$key}");
         }
     }
@@ -64,6 +73,9 @@ final class EnvTemplateParseTest extends TestCase
             'REDIS_CACHE_DB',
             'REDIS_PASSWORD',
             'CACHE_DRIVER',
+            'CORS_ALLOWED_ORIGINS',
+            'CORS_ALLOW_CREDENTIALS',
+            'PLATFORM_REPORT_DISABLED',
         ];
         foreach ($required as $key) {
             $this->assertArrayHasKey($key, $parsed, "deploy/docker/.example.env missing required key: {$key}");
@@ -113,6 +125,9 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertSame($rootParsed['JWT_SECRET'] ?? null, $backendParsed['JWT_SECRET'] ?? null);
             $this->assertSame($rootParsed['JWT_EXPIRE'] ?? null, $backendParsed['JWT_EXPIRE'] ?? null);
             $this->assertSame($rootParsed['JWT_REFRESH_EXPIRE'] ?? null, $backendParsed['JWT_REFRESH_EXPIRE'] ?? null);
+            $this->assertSame($rootParsed['CORS_ALLOWED_ORIGINS'] ?? null, $backendParsed['CORS_ALLOWED_ORIGINS'] ?? null);
+            $this->assertSame($rootParsed['CORS_ALLOW_CREDENTIALS'] ?? null, $backendParsed['CORS_ALLOW_CREDENTIALS'] ?? null);
+            $this->assertSame($rootParsed['PLATFORM_REPORT_DISABLED'] ?? null, $backendParsed['PLATFORM_REPORT_DISABLED'] ?? null);
             $this->assertArrayNotHasKey('REDIS_HOST_PORT', $backendParsed);
             $this->assertArrayNotHasKey('CRON_ENABLE', $rootParsed);
             $this->assertArrayNotHasKey('SWOOLE_QUEUE_ENABLE', $rootParsed);

@@ -11,6 +11,7 @@ name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
 
 services:
   backend:
+    image: ${MALLBASE_BACKEND_IMAGE:-mallbase-backend:latest}
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile

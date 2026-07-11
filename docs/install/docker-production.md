@@ -9,6 +9,8 @@
 - 宿主机可配置 Nginx，并能托管 H5 根目录和 `/admin/` 静态目录
 - 客户端 H5 与后台前端静态资源将在本地开发机或 CI 上提前构建
 
+使用 GitHub Actions 生成 Admin、H5 和微信小程序制品时，先阅读 [frontend-release-artifacts.md](./frontend-release-artifacts.md)。后端 Docker 镜像与前端制品分别发布，版本标签应保持一致。
+
 ## 完整步骤
 
 ### 1. 准备生产环境变量
@@ -112,6 +114,21 @@ sh deploy/upload-frontend.sh \
 完整脚本说明见 [upload-frontend.md](./upload-frontend.md)。
 
 ### 5. 构建并启动后端容器
+
+如果使用 GitHub Actions 已推送到 Docker Hub 的多架构镜像，先在 `.env` 设置：
+
+```env
+MALLBASE_BACKEND_IMAGE=<你的DockerHub用户名>/mallbase-backend:latest
+```
+
+然后执行：
+
+```bash
+docker compose pull backend
+docker compose up -d
+```
+
+如果要在服务器本地重新构建镜像，继续使用：
 
 ```bash
 docker compose up -d --build
