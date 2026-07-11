@@ -15,6 +15,9 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    env:
+      PHP_CACHE_DRIVER: file
+      PHP_QUEUE_CONNECTION: sync
 
     steps:
       - name: Checkout
