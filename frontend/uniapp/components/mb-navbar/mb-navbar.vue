@@ -1,6 +1,10 @@
 <template>
   <view>
-    <view class="mb-navbar" :style="{ backgroundColor: bgColor }">
+    <view
+      class="mb-navbar"
+      :class="{ 'mb-navbar--immersive': immersive }"
+      :style="{ backgroundColor: bgColor }"
+    >
       <view v-if="accentLine" class="mb-navbar__accent" />
       <view class="mb-navbar__status" :style="{ height: statusBarHeight + 'px' }" />
       <view class="mb-navbar__content" :style="contentStyle">
@@ -32,6 +36,7 @@ const props = defineProps({
   bgColor: { type: String, default: 'var(--color-bg, #ffffff)' },
   textColor: { type: String, default: 'var(--color-text, #191b23)' },
   accentLine: { type: Boolean, default: false },
+  immersive: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['back'])
@@ -112,6 +117,13 @@ function onBack() {
   box-shadow: 0 8rpx 28rpx rgba(15, 23, 42, 0.06);
   -webkit-backdrop-filter: blur(24rpx);
   backdrop-filter: blur(24rpx);
+}
+
+.mb-navbar--immersive {
+  border-bottom: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .mb-navbar__accent {
