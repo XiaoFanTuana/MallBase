@@ -44,7 +44,7 @@ final class ConfigControllerClientBasicTest extends TestCase
         $data = $response['data'] ?? [];
         $this->assertIsArray($data);
 
-        foreach (['client_site_name', 'client_logo'] as $key) {
+        foreach (['client_site_name', 'client_logo', 'distribution_enabled'] as $key) {
             $this->assertArrayHasKey($key, $data, "client basic 缺少字段 {$key}");
         }
         $this->assertArrayNotHasKey('client_home_banners', $data);
@@ -76,6 +76,7 @@ final class ConfigControllerClientBasicTest extends TestCase
             '/"default_avatar"\s*:/',
             '/"mime_[a-zA-Z_]+"\s*:/',
             '/"local_[a-zA-Z_]+"\s*:/',
+            '/"customer_service_[a-zA-Z_]+"\s*:/',
         ];
 
         foreach ($forbiddenPatterns as $pattern) {

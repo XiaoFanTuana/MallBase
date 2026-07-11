@@ -10,29 +10,29 @@ const TABBAR_PAGES = DEFAULT_TABBAR_ITEMS.map((item) =>
 
 const TABBAR_DEFAULT_KEYWORDS = [
   {
-    key: "home",
+    key: 'home',
     match: (item) =>
-      item.pagePath.includes("/pages/index/") || item.text.includes("首页"),
+      item.pagePath.includes('/pages/index/') || item.text.includes('首页'),
   },
   {
-    key: "category",
+    key: 'category',
     match: (item) =>
-      item.pagePath.includes("/pages/category/") || item.text.includes("分类"),
+      item.pagePath.includes('/pages/category/') || item.text.includes('分类'),
   },
   {
-    key: "cart",
+    key: 'cart',
     match: (item) =>
-      item.pagePath.includes("/pages/cart/") || item.text.includes("购物车"),
+      item.pagePath.includes('/pages/cart/') || item.text.includes('购物车'),
   },
   {
-    key: "order",
+    key: 'order',
     match: (item) =>
-      item.pagePath.includes("/pages/order/") || item.text.includes("订单"),
+      item.pagePath.includes('/pages/order/') || item.text.includes('订单'),
   },
   {
-    key: "profile",
+    key: 'profile',
     match: (item) =>
-      item.pagePath.includes("/pages/profile/") || item.text.includes("我的"),
+      item.pagePath.includes('/pages/profile/') || item.text.includes('我的'),
   },
 ];
 
@@ -40,12 +40,12 @@ function getDefaultTabbarKey(item, index) {
   const matched = TABBAR_DEFAULT_KEYWORDS.find((option) => option.match(item));
   if (matched) return matched.key;
   const fallback = DEFAULT_TABBAR_ITEMS[index % DEFAULT_TABBAR_ITEMS.length];
-  return fallback?.key || "home";
+  return fallback?.key || 'home';
 }
 
 function getDefaultTabbarAsset(item, index, active = false) {
   const key = getDefaultTabbarKey(item, index);
-  return `/static/images/tabbar/${key}${active ? "-active" : ""}.png`;
+  return `/static/images/tabbar/${key}${active ? '-active' : ''}.png`;
 }
 
 export function mergeDecorateConfig(config) {
@@ -305,31 +305,31 @@ export function normalizePageStyle(style, fallback = {}) {
       source.background_color_end ??
       fallback.backgroundColorEnd ??
       fallback.background_color_end ??
-      "",
+      '',
     backgroundColorStart:
       source.backgroundColorStart ??
       source.background_color_start ??
       fallback.backgroundColorStart ??
       fallback.background_color_start ??
-      "",
+      '',
     backgroundGradientDirection:
       source.backgroundGradientDirection ??
       source.background_gradient_direction ??
       fallback.backgroundGradientDirection ??
       fallback.background_gradient_direction ??
-      "horizontal",
+      'horizontal',
     backgroundMode:
       source.backgroundMode ??
       source.background_mode ??
       fallback.backgroundMode ??
       fallback.background_mode ??
-      "color",
+      'color',
     background_image:
       source.background_image ??
       source.backgroundImage ??
       fallback.background_image ??
       fallback.backgroundImage ??
-      "",
+      '',
     padding:
       paddingTop === paddingRight &&
       paddingRight === paddingBottom &&
@@ -399,8 +399,8 @@ export function normalizeTabbarItems(items) {
     .map((item, index) => {
       const baseItem = {
         key: item.key || item.name || `tab-${index}`,
-        text: item.text || item.label || item.title || "",
-        pagePath: normalizePath(item.pagePath || item.path || item.url || ""),
+        text: item.text || item.label || item.title || '',
+        pagePath: normalizePath(item.pagePath || item.path || item.url || ''),
       };
       const iconPath = normalizeTabbarAsset(
         [
@@ -462,7 +462,7 @@ function normalizeTabbarAsset(values, fallback = '') {
 }
 
 function getAssetRawValue(path) {
-  if (path && typeof path === "object") {
+  if (path && typeof path === 'object') {
     return (
       path.full_url ||
       path.fullUrl ||
@@ -472,7 +472,7 @@ function getAssetRawValue(path) {
       path.response?.full_url ||
       path.response?.fullUrl ||
       path.response?.url ||
-      ""
+      ''
     );
   }
   return path;
@@ -480,23 +480,23 @@ function getAssetRawValue(path) {
 
 export function normalizeAssetPath(path) {
   path = getAssetRawValue(path);
-  if (!path) return "";
+  if (!path) return '';
   path = String(path).trim();
-  if (!path || /^\d+$/.test(path)) return "";
-  if (/^(?:https?:)?\/\//.test(path) || path.startsWith("data:image/")) {
+  if (!path || /^\d+$/.test(path)) return '';
+  if (/^(?:https?:)?\/\//.test(path) || path.startsWith('data:image/')) {
     return path;
   }
-  if (path.includes(":")) return "";
+  if (path.includes(':')) return '';
   if (/^(?:\/)?(?:static|upload)\//.test(path)) {
-    return path.startsWith("/") ? path : `/${path}`;
+    return path.startsWith('/') ? path : `/${path}`;
   }
   if (/^\/.+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)) {
     return path;
   }
   if (/^.+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)) {
-    return `/${path.replace(/^\/+/, "")}`;
+    return `/${path.replace(/^\/+/, '')}`;
   }
-  return "";
+  return '';
 }
 
 export function isTabbarPage(path) {
@@ -581,8 +581,13 @@ function normalizeModuleType(type) {
   const aliases = {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
+    distribution: 'distributionEntry',
+    distributionCard: 'distributionEntry',
+    memberCard: 'memberEntry',
     orderEntry: 'orderShortcut',
     profileHeader: 'userCard',
+    points: 'pointsEntry',
+    pointsCard: 'pointsEntry',
     userInfo: 'userCard',
     walletCard: 'wallet',
     walletEntry: 'wallet',

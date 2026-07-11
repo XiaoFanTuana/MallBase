@@ -229,6 +229,10 @@ const SCHEME_TABS: Array<{
   },
 ];
 
+const OVERVIEW_SCHEME_PAGE_SIZE = 12;
+const OVERVIEW_SCHEME_PAGE_SIZE_OPTIONS = ['12', '24', '48'];
+const EDITOR_SCHEME_LIST_LIMIT = 100;
+
 const HOME_MODULES: Array<{
   desc: string;
   icon: string;
@@ -305,6 +309,12 @@ const PROFILE_MODULES = [
     type: 'userInfo',
   },
   {
+    desc: '会员等级、折扣和成长值进度',
+    icon: 'lucide:badge-check',
+    label: '会员卡片',
+    type: 'memberEntry',
+  },
+  {
     desc: '默认四个订单状态入口',
     icon: 'lucide:package-check',
     label: '订单入口',
@@ -317,6 +327,18 @@ const PROFILE_MODULES = [
     type: 'walletEntry',
   },
   {
+    desc: '积分余额、明细和查看入口',
+    icon: 'lucide:badge-cent',
+    label: '积分卡片',
+    type: 'pointsEntry',
+  },
+  {
+    desc: '分销佣金、团队和推广入口',
+    icon: 'lucide:network',
+    label: '分销卡片',
+    type: 'distributionEntry',
+  },
+  {
     desc: '默认四个常用服务入口',
     icon: 'lucide:layout-list',
     label: '服务菜单',
@@ -326,7 +348,12 @@ const PROFILE_MODULES = [
 
 const PROFILE_TYPE_ALIAS: Record<string, string> = {
   customMenu: 'serviceMenu',
+  distribution: 'distributionEntry',
+  distributionCard: 'distributionEntry',
+  memberCard: 'memberEntry',
   orderShortcut: 'orderEntry',
+  points: 'pointsEntry',
+  pointsCard: 'pointsEntry',
   profileHeader: 'userInfo',
   walletCard: 'walletEntry',
 };
@@ -335,13 +362,13 @@ const HOME_TYPE_ALIAS: Record<string, string> = {
   categoryEntry: 'entryCard',
 };
 
-const DEMO_ASSET_BASE_URL = `${
+const DECORATE_ASSET_BASE_URL = `${
   new URL(import.meta.env.VITE_GLOB_API_URL || '/', window.location.origin)
     .origin
-}/static/demo/`;
+}/static/decorate/`;
 
-const createDemoAssetFile = (url: string, name: string) => ({
-  full_url: `${DEMO_ASSET_BASE_URL}${name}`,
+const createDecorateAssetFile = (url: string, name: string) => ({
+  full_url: `${DECORATE_ASSET_BASE_URL}${name}`,
   name,
   url,
 });
@@ -398,9 +425,9 @@ const normalizeEditorUploadImage = (value: any) => {
 };
 
 const DEFAULT_BANNER_IMAGE_BY_INDEX = [
-  createDemoAssetFile('48', 'decorate-banner-market.png'),
-  createDemoAssetFile('49', 'decorate-banner-member.png'),
-  createDemoAssetFile('50', 'decorate-banner-home.png'),
+  createDecorateAssetFile('1001', 'decorate-banner-market.png'),
+  createDecorateAssetFile('1002', 'decorate-banner-member.png'),
+  createDecorateAssetFile('1003', 'decorate-banner-home.png'),
 ];
 
 const LEGACY_DEFAULT_BANNER_IDS = new Set(['6', '7', '8', '41']);
@@ -431,67 +458,67 @@ const DEFAULT_NAV_IMAGE_BY_KEY: Record<
   string,
   { full_url: string; name: string; url: string }
 > = {
-  beauty: createDemoAssetFile('52', 'decorate-nav-beauty.png'),
-  food: createDemoAssetFile('55', 'decorate-nav-food.png'),
-  home: createDemoAssetFile('54', 'decorate-nav-home.png'),
-  phone: createDemoAssetFile('51', 'decorate-nav-digital.png'),
-  shirt: createDemoAssetFile('53', 'decorate-nav-fashion.png'),
-  sport: createDemoAssetFile('56', 'decorate-nav-sport.png'),
+  beauty: createDecorateAssetFile('1005', 'decorate-nav-beauty.png'),
+  food: createDecorateAssetFile('1008', 'decorate-nav-food.png'),
+  home: createDecorateAssetFile('1007', 'decorate-nav-home.png'),
+  phone: createDecorateAssetFile('1004', 'decorate-nav-digital.png'),
+  shirt: createDecorateAssetFile('1006', 'decorate-nav-fashion.png'),
+  sport: createDecorateAssetFile('1009', 'decorate-nav-sport.png'),
 };
 
 const DEFAULT_CUBE_ITEMS = [
   {
-    image: createDemoAssetFile('57', 'decorate-cube-new.png'),
+    image: createDecorateAssetFile('1010', 'decorate-cube-new.png'),
     path: '/pages-sub/goods/list?sort=newest',
     title: '新品上架',
   },
   {
-    image: createDemoAssetFile('58', 'decorate-cube-picks.png'),
+    image: createDecorateAssetFile('1011', 'decorate-cube-picks.png'),
     path: '/pages-sub/goods/list?is_recommend=1',
     title: '精选榜单',
   },
   {
-    image: createDemoAssetFile('59', 'decorate-cube-member.png'),
+    image: createDecorateAssetFile('1012', 'decorate-cube-member.png'),
     path: '/pages-sub/goods/list?sort=sales',
     title: '会员专享',
   },
   {
-    image: createDemoAssetFile('60', 'decorate-cube-sale.png'),
+    image: createDecorateAssetFile('1013', 'decorate-cube-sale.png'),
     path: '/pages-sub/goods/list?is_hot=1',
     title: '限时满减',
   },
 ];
 
 const DEFAULT_PROFILE_ORDER_IMAGE_BY_INDEX = [
-  createDemoAssetFile(
-    'static/demo/profile-order-pay.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-pay.svg',
     'profile-order-pay.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-ship.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-ship.svg',
     'profile-order-ship.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-receive.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-receive.svg',
     'profile-order-receive.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-refund.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-refund.svg',
     'profile-order-refund.svg',
   ),
 ];
 
 const DEFAULT_PROFILE_SERVICE_IMAGE_BY_INDEX = [
-  createDemoAssetFile(
-    'static/demo/profile-service-address.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-address.svg',
     'profile-service-address.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-settings.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-settings.svg',
     'profile-service-settings.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-support.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-support.svg',
     'profile-service-support.svg',
   ),
 ];
@@ -686,6 +713,7 @@ const selectedIndex = ref(0);
 const selectedSchemeId = ref<null | number>(null);
 const schemeSettingsOpen = ref(false);
 const schemeList = ref<ClientDecorateApi.SchemeItem[]>([]);
+const schemeListTotal = ref(0);
 const themeList = ref<ClientThemeApi.ThemeItem[]>([]);
 const previewCategoryTree = ref<GoodsCategoryApi.CategoryItem[]>([]);
 const previewGoods = ref<GoodsApi.GoodsItem | null>(null);
@@ -700,6 +728,12 @@ const overviewSchemes = reactive<
   home: [],
   profile: [],
   tabbar: [],
+});
+const overviewPager = reactive({
+  keyword: '',
+  limit: OVERVIEW_SCHEME_PAGE_SIZE,
+  page: 1,
+  total: 0,
 });
 const iconPrefix = ref('ant-design');
 const mouseDrag = ref<null | {
@@ -941,7 +975,16 @@ const paletteGroups = computed(() => {
   }
   if (activeType.value === 'profile') {
     return [
-      { items: pick(['userInfo', 'walletEntry']), title: '基础组件' },
+      {
+        items: pick([
+          'userInfo',
+          'memberEntry',
+          'walletEntry',
+          'pointsEntry',
+          'distributionEntry',
+        ]),
+        title: '基础组件',
+      },
       {
         items: pick(['orderEntry', 'serviceMenu']),
         title: '入口组件',
@@ -973,17 +1016,11 @@ const isReadonlyScheme = computed(() => isSystemScheme.value);
 const schemeSummary = computed(() => ({
   activeName:
     schemeList.value.find((item) => item.is_active === 1)?.name || '未设置',
-  count: schemeList.value.length,
+  count: schemeListTotal.value || schemeList.value.length,
 }));
 
 const overviewActiveSchemes = computed(
   () => overviewSchemes[activeType.value] || [],
-);
-
-const overviewActiveName = computed(
-  () =>
-    overviewActiveSchemes.value.find((item) => item.is_active === 1)?.name ||
-    '未设置',
 );
 
 const schemeSelectOptions = computed(() =>
@@ -1115,7 +1152,7 @@ const getTabbarStaticImagePath = (key: string, active = false) =>
   `static/images/tabbar/${key}${active ? '-active' : ''}.png`;
 
 const getFloatingStaticIconPath = (key: string) =>
-  `static/client/floating/${key}.png`;
+  `static/decorate/floating/${key}.png`;
 
 const SYSTEM_FLOATING_ITEM_IDS = new Set([
   'floating-cart',
@@ -1433,9 +1470,12 @@ const PROFILE_TEXT_STYLE_ROLES = [
 
 const PROFILE_TEXT_STYLE_ROLES_BY_TYPE: Record<string, string[]> = {
   orderEntry: ['itemLabel', 'more', 'title'],
+  memberEntry: ['amount', 'meta', 'title'],
   serviceMenu: ['itemLabel', 'title'],
   userInfo: ['meta', 'subtitle', 'title'],
   walletEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
+  pointsEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
+  distributionEntry: ['action', 'amount', 'meta', 'primaryAction', 'title'],
   entryCard: ['subtitle', 'title'],
   imageCube: ['itemLabel'],
   navGrid: ['itemLabel'],
@@ -1789,7 +1829,10 @@ const normalizeProfileItems = (
 };
 
 const getProfileDefaultTitle = (type: string) => {
+  if (type === 'memberEntry') return '会员等级';
   if (type === 'orderEntry') return '我的订单';
+  if (type === 'pointsEntry') return '我的积分';
+  if (type === 'distributionEntry') return '分销中心';
   return '我的服务';
 };
 
@@ -1811,6 +1854,11 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
       paddingX: 28,
       paddingY: 28,
     },
+    memberEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
     serviceMenu: base,
     userInfo: {
       ...base,
@@ -1819,6 +1867,16 @@ const getProfileStyleDefaults = (type: string): Record<string, any> => {
       radius: 0,
     },
     walletEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+    pointsEntry: {
+      ...base,
+      paddingX: 28,
+      paddingY: 28,
+    },
+    distributionEntry: {
       ...base,
       paddingX: 28,
       paddingY: 28,
@@ -1915,7 +1973,10 @@ const normalizeEditorConfig = (
   schemeType: ClientDecorateApi.SchemeType = activeType.value,
 ) => {
   const profileTypes = new Set([
+    'distributionEntry',
+    'memberEntry',
     'orderEntry',
+    'pointsEntry',
     'serviceMenu',
     'userInfo',
     'walletEntry',
@@ -2337,6 +2398,12 @@ const normalizeEditorConfig = (
     delete config.show_level;
     config.show_mobile = normalizeBooleanValue(config.show_mobile, true);
   }
+  if (type === 'memberEntry') {
+    config.title = config.title || '会员等级';
+    config.show_discount = normalizeBooleanValue(config.show_discount, true);
+    config.show_growth = normalizeBooleanValue(config.show_growth, true);
+    config.show_progress = normalizeBooleanValue(config.show_progress, true);
+  }
   if (type === 'walletEntry') {
     config.title = config.title || '我的余额';
     config.show_balance = normalizeBooleanValue(config.show_balance, true);
@@ -2346,6 +2413,28 @@ const normalizeEditorConfig = (
       config.show_view_button,
       true,
     );
+  }
+  if (type === 'pointsEntry') {
+    config.title = config.title || '我的积分';
+    config.show_records = normalizeBooleanValue(config.show_records, true);
+    config.show_view_button = normalizeBooleanValue(
+      config.show_view_button,
+      true,
+    );
+  }
+  if (type === 'distributionEntry') {
+    config.title = config.title || '分销中心';
+    config.show_commission = normalizeBooleanValue(
+      config.show_commission,
+      true,
+    );
+    config.show_team = normalizeBooleanValue(config.show_team, true);
+    config.show_invite = normalizeBooleanValue(config.show_invite, true);
+    config.show_withdraw_button = normalizeBooleanValue(
+      config.show_withdraw_button,
+      true,
+    );
+    config.show_records = normalizeBooleanValue(config.show_records, true);
   }
   if (isHomeModule || isProfileModule) {
     syncProfilePaddingCompat(config);
@@ -2408,11 +2497,11 @@ const defaultHomeConfig = (
       title: '夏日好物限时满减',
     }),
     entryCard: withStyle({
-      background_image: createDemoAssetFile(
-        '61',
+      background_image: createDecorateAssetFile(
+        '1014',
         'decorate-entry-category.png',
       ),
-      icon_image: createDemoAssetFile('61', 'decorate-entry-category.png'),
+      icon_image: createDecorateAssetFile('1014', 'decorate-entry-category.png'),
       padding: 24,
       path: '/pages/category/index',
       radius: 24,
@@ -2575,6 +2664,12 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
       items: defaultProfileOrderItems(),
       title: '我的订单',
     }),
+    memberEntry: withStyle('memberEntry', {
+      show_discount: true,
+      show_growth: true,
+      show_progress: true,
+      title: '会员等级',
+    }),
     serviceMenu: withStyle('serviceMenu', {
       columns: 4,
       display: 'list',
@@ -2589,6 +2684,19 @@ const defaultProfileConfig = (type: string): Record<string, any> => {
       show_records: true,
       show_view_button: true,
       title: '我的余额',
+    }),
+    pointsEntry: withStyle('pointsEntry', {
+      show_records: true,
+      show_view_button: true,
+      title: '我的积分',
+    }),
+    distributionEntry: withStyle('distributionEntry', {
+      show_commission: true,
+      show_team: true,
+      show_invite: true,
+      show_withdraw_button: true,
+      show_records: true,
+      title: '分销中心',
     }),
   };
   const config = defaults[normalizeProfileModuleType(type)] ||
@@ -2888,21 +2996,69 @@ const loadPreviewBusinessData = async () => {
   }
 };
 
+const getOverviewListParams = () => {
+  const keyword = overviewPager.keyword.trim();
+  return {
+    keyword: keyword || undefined,
+    limit: overviewPager.limit,
+    page: overviewPager.page,
+    type: activeType.value,
+  };
+};
+
+const fetchOverviewSchemes = async (): Promise<void> => {
+  const result = await getClientDecorateSchemeListApi(getOverviewListParams());
+  const total = Number(result.total || 0);
+  const list = result.list || [];
+  if (list.length === 0 && total > 0 && overviewPager.page > 1) {
+    overviewPager.page = Math.max(1, Math.ceil(total / overviewPager.limit));
+    await fetchOverviewSchemes();
+    return;
+  }
+
+  overviewPager.total = total;
+  overviewSchemes[activeType.value] = list;
+};
+
 const loadOverviewSchemes = async () => {
   overviewLoading.value = true;
   try {
-    const result = await getClientDecorateSchemeListApi({
-      limit: 100,
-      page: 1,
-      type: activeType.value,
-    });
-    overviewSchemes[activeType.value] = result.list || [];
+    await fetchOverviewSchemes();
   } catch (error) {
     console.error('加载装修卡片失败:', error);
     message.error('加载装修卡片失败');
   } finally {
     overviewLoading.value = false;
   }
+};
+
+const resetOverviewPager = () => {
+  overviewPager.keyword = '';
+  overviewPager.limit = OVERVIEW_SCHEME_PAGE_SIZE;
+  overviewPager.page = 1;
+  overviewPager.total = 0;
+};
+
+const handleOverviewKeywordChange = (keyword: string) => {
+  overviewPager.keyword = keyword;
+};
+
+const handleOverviewSearch = async (keyword: string) => {
+  overviewPager.keyword = keyword.trim();
+  overviewPager.page = 1;
+  await loadOverviewSchemes();
+};
+
+const handleOverviewReset = async () => {
+  resetOverviewPager();
+  await loadOverviewSchemes();
+};
+
+const handleOverviewPageChange = async (page: number, pageSize: number) => {
+  const nextPageSize = Number(pageSize || overviewPager.limit);
+  overviewPager.page = nextPageSize === overviewPager.limit ? page : 1;
+  overviewPager.limit = nextPageSize;
+  await loadOverviewSchemes();
 };
 
 const loadSchemeDetail = async (id: number) => {
@@ -2942,20 +3098,35 @@ const loadSchemeDetail = async (id: number) => {
   });
   ensureFloatingSingleItemId();
   selectedIndex.value = 0;
+  return detail;
 };
 
 const loadSchemes = async () => {
   loading.value = true;
   try {
     const result = await getClientDecorateSchemeListApi({
-      limit: 100,
+      limit: EDITOR_SCHEME_LIST_LIMIT,
       page: 1,
       type: activeType.value,
     });
+    schemeListTotal.value = Number(result.total || 0);
     schemeList.value = result.list || [];
-    overviewSchemes[activeType.value] = schemeList.value;
+    if (selectedSchemeId.value) {
+      const selectedInList = schemeList.value.find(
+        (item) => item.id === selectedSchemeId.value,
+      );
+      const selected = selectedInList
+        ? await loadSchemeDetail(selectedInList.id)
+        : await loadSchemeDetail(selectedSchemeId.value);
+      if (!selectedInList) {
+        schemeList.value = [
+          selected,
+          ...schemeList.value.filter((item) => item.id !== selected.id),
+        ];
+      }
+      return;
+    }
     const next =
-      schemeList.value.find((item) => item.id === selectedSchemeId.value) ||
       schemeList.value.find((item) => item.is_active === 1) ||
       schemeList.value[0];
     if (next) {
@@ -3125,6 +3296,12 @@ const normalizeSchemaForClient = (
           delete props.show_level;
           props.show_mobile = normalizeBooleanValue(props.show_mobile, true);
         }
+        if (activeType.value === 'profile' && moduleType === 'memberEntry') {
+          props.title = props.title || '会员等级';
+          props.show_discount = normalizeBooleanValue(props.show_discount, true);
+          props.show_growth = normalizeBooleanValue(props.show_growth, true);
+          props.show_progress = normalizeBooleanValue(props.show_progress, true);
+        }
         if (activeType.value === 'profile' && moduleType === 'walletEntry') {
           props.title = props.title || '我的余额';
           props.show_balance = normalizeBooleanValue(props.show_balance, true);
@@ -3134,6 +3311,31 @@ const normalizeSchemaForClient = (
             props.show_view_button,
             true,
           );
+        }
+        if (activeType.value === 'profile' && moduleType === 'pointsEntry') {
+          props.title = props.title || '我的积分';
+          props.show_records = normalizeBooleanValue(props.show_records, true);
+          props.show_view_button = normalizeBooleanValue(
+            props.show_view_button,
+            true,
+          );
+        }
+        if (
+          activeType.value === 'profile' &&
+          moduleType === 'distributionEntry'
+        ) {
+          props.title = props.title || '分销中心';
+          props.show_commission = normalizeBooleanValue(
+            props.show_commission,
+            true,
+          );
+          props.show_team = normalizeBooleanValue(props.show_team, true);
+          props.show_invite = normalizeBooleanValue(props.show_invite, true);
+          props.show_withdraw_button = normalizeBooleanValue(
+            props.show_withdraw_button,
+            true,
+          );
+          props.show_records = normalizeBooleanValue(props.show_records, true);
         }
         if (activeType.value === 'home' && moduleType === 'entryCard') {
           props.icon_image = normalizeEditorUploadImage(
@@ -3306,8 +3508,10 @@ const handleSave = async () => {
 
 const handleCopy = async () => {
   if (!selectedSchemeId.value) return;
-  await copyClientDecorateSchemeApi(selectedSchemeId.value);
-  message.success('复制成功');
+  const result = await copyClientDecorateSchemeApi(selectedSchemeId.value);
+  selectedSchemeId.value = result.id;
+  selectedIndex.value = 0;
+  message.success('已复制，正在编辑副本');
   await loadSchemes();
 };
 
@@ -3589,12 +3793,25 @@ const handleModuleMouseDown = (index: number, event: MouseEvent) => {
   );
 };
 
+const getPaletteClickInsertIndex = () => {
+  if (!['home', 'profile'].includes(activeType.value)) {
+    return schemeForm.schema.length;
+  }
+  if (!selectedModule.value) return schemeForm.schema.length;
+
+  const currentIndex = schemeForm.schema.findIndex(
+    (item) => item.id === selectedModule.value?.id,
+  );
+  if (currentIndex === -1) return schemeForm.schema.length;
+  return currentIndex + 1;
+};
+
 const handlePaletteClick = (type: string) => {
   if (suppressPaletteClick.value) {
     suppressPaletteClick.value = false;
     return;
   }
-  addModuleByType(type);
+  addModuleByType(type, getPaletteClickInsertIndex());
 };
 
 const addNavItem = (module: ModuleItem) => {
@@ -3769,6 +3986,7 @@ watch(
     viewMode.value = 'overview';
     selectedSchemeId.value = null;
     selectedIndex.value = 0;
+    resetOverviewPager();
     await Promise.all([loadSchemes(), refreshOverview()]);
   },
 );
@@ -3847,12 +4065,6 @@ onBeforeUnmount(resetMouseDrag);
       </div>
 
       <a-space v-if="viewMode === 'overview'" wrap>
-        <a-button :loading="overviewLoading" @click="refreshOverview">
-          刷新预览
-        </a-button>
-        <a-button type="primary" @click="handleOverviewCreate">
-          新建方案
-        </a-button>
         <a-button @click="router.push('/client/theme')">主题设置</a-button>
       </a-space>
 
@@ -3899,7 +4111,6 @@ onBeforeUnmount(resetMouseDrag);
 
     <DecorateSchemeList
       v-if="viewMode === 'overview'"
-      :active-help="activeTabMeta.help"
       :active-type-label="activeTypeLabel"
       :current-theme-tokens="currentThemeTokens"
       :get-overview-scheme-module-summary="getOverviewSchemeModuleSummary"
@@ -3912,9 +4123,13 @@ onBeforeUnmount(resetMouseDrag);
       :get-scheme-status-label="getSchemeStatusLabel"
       :get-scheme-type-label="getSchemeTypeLabel"
       :is-readonly-overview-scheme="isReadonlyOverviewScheme"
-      :overview-active-name="overviewActiveName"
       :overview-active-schemes="overviewActiveSchemes"
+      :overview-keyword="overviewPager.keyword"
       :overview-loading="overviewLoading"
+      :overview-page="overviewPager.page"
+      :overview-page-size="overviewPager.limit"
+      :overview-page-size-options="OVERVIEW_SCHEME_PAGE_SIZE_OPTIONS"
+      :overview-total="overviewPager.total"
       :preview-category-tree="previewCategoryTree"
       :preview-goods="previewGoods"
       :preview-goods-list="previewGoodsList"
@@ -3923,6 +4138,11 @@ onBeforeUnmount(resetMouseDrag);
       @create="handleOverviewCreate"
       @delete="handleOverviewDelete"
       @edit="handleOverviewEdit"
+      @page-change="handleOverviewPageChange"
+      @refresh="refreshOverview"
+      @reset="handleOverviewReset"
+      @search="handleOverviewSearch"
+      @update:overview-keyword="handleOverviewKeywordChange"
     />
 
     <DecorateEditor

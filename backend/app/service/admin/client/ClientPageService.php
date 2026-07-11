@@ -16,6 +16,7 @@ class ClientPageService extends BaseService
     protected string $modelClass = ClientPage::class;
 
     private const THEME_SETTING_PAGE_PATH = '/pages-sub/user/theme';
+    private const CATEGORY_NAME_DISTRIBUTION = '分销页面';
 
     protected function buildListQuery(array $where)
     {
@@ -28,8 +29,8 @@ class ClientPageService extends BaseService
             ->when(($where['page_type'] ?? null) !== null && $where['page_type'] !== '', function ($q) use ($where) {
                 $q->where('page_type', $where['page_type']);
             })
-            ->when(($where['category'] ?? null) !== null && $where['category'] !== '', function ($q) use ($where) {
-                $q->where('category', $where['category']);
+            ->when(($where['category_id'] ?? null) !== null && $where['category_id'] !== '', function ($q) use ($where) {
+                $q->where('category_id', (int) $where['category_id']);
             })
             ->when(($where['source'] ?? null) !== null && $where['source'] !== '', function ($q) use ($where) {
                 $q->where('source', $where['source']);
@@ -47,6 +48,7 @@ class ClientPageService extends BaseService
             ->page($page, $limit)
             ->select()
             ->toArray();
+        $list = $this->withCategoryLabels($list, $this->categoryLabels());
 
         $total = $this->buildListQuery($where)->count();
 
@@ -60,7 +62,12 @@ class ClientPageService extends BaseService
             throw new BusinessException('页面不存在');
         }
 
-        return $page->toArray();
+        $info = $page->toArray();
+        $labels = $this->categoryLabels();
+        $categoryId = (int) ($info['category_id'] ?? 0);
+        $info['category_label'] = $labels[$categoryId] ?? '';
+
+        return $info;
     }
 
     /**
@@ -80,10 +87,12 @@ class ClientPageService extends BaseService
             fn (array $item): bool => $this->normalizePagePath((string) ($item['path'] ?? '')) !== self::THEME_SETTING_PAGE_PATH
         ));
 
+        $categoryLabels = $this->categoryLabels();
         $groupMap = [];
-        foreach ($this->categoryLabels() as $key => $label) {
-            $groupMap[$key] = [
-                'key' => $key,
+        foreach ($categoryLabels as $id => $label) {
+            $groupKey = (string) $id;
+            $groupMap[$groupKey] = [
+                'key' => $groupKey,
                 'label' => $label,
                 'count' => 0,
                 'items' => [],
@@ -91,12 +100,18 @@ class ClientPageService extends BaseService
         }
 
         foreach ($list as $item) {
-            $category = (string) ($item['category'] ?? ClientPage::CATEGORY_OTHER);
-            if (!isset($groupMap[$category])) {
-                $category = ClientPage::CATEGORY_OTHER;
+            $categoryId = (int) ($item['category_id'] ?? 0);
+            $groupKey = (string) $categoryId;
+            if (!isset($groupMap[$groupKey])) {
+                $groupMap[$groupKey] = [
+                    'key' => $groupKey,
+                    'label' => $categoryLabels[$categoryId] ?? '未分类',
+                    'count' => 0,
+                    'items' => [],
+                ];
             }
-            $groupMap[$category]['items'][] = $this->formatPickerItem($item, $category);
-            $groupMap[$category]['count'] = count($groupMap[$category]['items']);
+            $groupMap[$groupKey]['items'][] = $this->formatPickerItem($item, $categoryId, $categoryLabels);
+            $groupMap[$groupKey]['count'] = count($groupMap[$groupKey]['items']);
         }
 
         return [
@@ -112,7 +127,7 @@ class ClientPageService extends BaseService
     {
         $data = $this->normalizePayload($data);
         $this->validateWritableSource($data['source']);
-        $this->validateCategory($data['category']);
+        $this->validateCategoryId($data['category_id']);
         $this->validatePath($data['path']);
         $this->validateUniquePath($data['path']);
 
@@ -133,7 +148,7 @@ class ClientPageService extends BaseService
 
         $data = $this->normalizePayload($data);
         $this->validateWritableSource($data['source']);
-        $this->validateCategory($data['category']);
+        $this->validateCategoryId($data['category_id']);
         $this->validatePath($data['path']);
         $this->validateUniquePath($data['path'], $id);
 
@@ -143,7 +158,7 @@ class ClientPageService extends BaseService
     }
 
     /**
-     * @return array<string, string>
+     * @return array<int, string>
      */
     protected function pageTypeLabels(): array
     {
@@ -155,23 +170,14 @@ class ClientPageService extends BaseService
     }
 
     /**
-     * @return array<string, string>
+     * @return array<int, string>
      */
     public function categoryLabels(): array
     {
-        return [
-            ClientPage::CATEGORY_BASIC => '基础页面',
-            ClientPage::CATEGORY_GOODS => '商品页面',
-            ClientPage::CATEGORY_CONTENT => '内容页面',
-            ClientPage::CATEGORY_ORDER => '订单页面',
-            ClientPage::CATEGORY_AFTERSALE => '售后页面',
-            ClientPage::CATEGORY_USER => '会员页面',
-            ClientPage::CATEGORY_MARKETING => '营销页面',
-            ClientPage::CATEGORY_OTHER => '其他页面',
-        ];
+        return app()->make(ClientPageCategoryService::class)->getLabelMap();
     }
 
-    protected function formatPickerItem(array $item, string $category): array
+    protected function formatPickerItem(array $item, int $categoryId, array $categoryLabels): array
     {
         $type = (string) ($item['page_type'] ?? ClientPage::TYPE_PAGE);
 
@@ -181,8 +187,8 @@ class ClientPageService extends BaseService
             'path' => (string) ($item['path'] ?? ''),
             'page_type' => $type,
             'page_type_label' => $this->pageTypeLabels()[$type] ?? '页面',
-            'category' => $category,
-            'category_label' => $this->categoryLabels()[$category] ?? '其他页面',
+            'category_id' => $categoryId,
+            'category_label' => $categoryLabels[$categoryId] ?? '',
             'package_root' => $item['package_root'] ?? null,
             'need_login' => (int) ($item['need_login'] ?? 0),
             'source' => (string) ($item['source'] ?? ClientPage::SOURCE_AUTO),
@@ -232,6 +238,10 @@ class ClientPageService extends BaseService
         }
 
         $tabPaths = $this->collectTabPaths($decoded);
+        $categoryService = app()->make(ClientPageCategoryService::class);
+        $categoryIds = $categoryService->getIdMap();
+        $systemCategoryIds = $categoryService->getSystemNameIdMap();
+        $defaultCategoryId = $categoryService->getDefaultCategoryId();
         $rows = [];
         foreach ((array) ($decoded['pages'] ?? []) as $index => $page) {
             if (!is_array($page) || empty($page['path'])) {
@@ -242,7 +252,11 @@ class ClientPageService extends BaseService
                 'name' => $this->inferPageName($path, (string) ($page['style']['navigationBarTitleText'] ?? '')),
                 'path' => $path,
                 'page_type' => in_array($path, $tabPaths, true) ? ClientPage::TYPE_TAB : ClientPage::TYPE_PAGE,
-                'category' => $this->inferCategory($path),
+                'category_id' => $this->resolveCategoryId(
+                    $this->inferCategoryId($path, $defaultCategoryId, $systemCategoryIds),
+                    $categoryIds,
+                    $defaultCategoryId
+                ),
                 'package_root' => null,
                 'need_login' => $this->inferNeedLogin($path) ? 1 : 0,
                 'source' => ClientPage::SOURCE_SYSTEM,
@@ -266,7 +280,11 @@ class ClientPageService extends BaseService
                     'name' => $this->inferPageName($path, (string) ($page['style']['navigationBarTitleText'] ?? '')),
                     'path' => $path,
                     'page_type' => ClientPage::TYPE_SUBPACKAGE,
-                    'category' => $this->inferCategory($path),
+                    'category_id' => $this->resolveCategoryId(
+                        $this->inferCategoryId($path, $defaultCategoryId, $systemCategoryIds),
+                        $categoryIds,
+                        $defaultCategoryId
+                    ),
                     'package_root' => $root,
                     'need_login' => $this->inferNeedLogin($path) ? 1 : 0,
                     'source' => ClientPage::SOURCE_SYSTEM,
@@ -296,7 +314,7 @@ class ClientPageService extends BaseService
                     $existing->save([
                         'name' => $row['name'],
                         'page_type' => $row['page_type'],
-                        'category' => $row['category'],
+                        'category_id' => $row['category_id'],
                         'package_root' => $row['package_root'],
                         'need_login' => $row['need_login'],
                         'sort' => $row['sort'],
@@ -320,8 +338,19 @@ class ClientPageService extends BaseService
         $data['path'] = '/' . trim((string) ($data['path'] ?? ''), '/');
         $data['name'] = trim((string) ($data['name'] ?? ''));
         $data['page_type'] = (string) ($data['page_type'] ?? ClientPage::TYPE_PAGE);
-        $category = trim((string) ($data['category'] ?? ''));
-        $data['category'] = $category !== '' ? $category : $this->inferCategory($data['path']);
+        $data['category_id'] = (int) ($data['category_id'] ?? 0);
+        if ($data['category_id'] <= 0) {
+            $categoryService = app()->make(ClientPageCategoryService::class);
+            $data['category_id'] = $this->resolveCategoryId(
+                $this->inferCategoryId(
+                    $data['path'],
+                    $categoryService->getDefaultCategoryId(),
+                    $categoryService->getSystemNameIdMap()
+                ),
+                $categoryService->getIdMap(),
+                $categoryService->getDefaultCategoryId()
+            );
+        }
         $data['package_root'] = trim((string) ($data['package_root'] ?? '')) ?: null;
         $data['need_login'] = (int) ($data['need_login'] ?? 0);
         $data['source'] = (string) ($data['source'] ?? ClientPage::SOURCE_MANUAL);
@@ -332,11 +361,25 @@ class ClientPageService extends BaseService
         return $data;
     }
 
-    protected function validateCategory(string $category): void
+    protected function validateCategoryId(int $categoryId): void
     {
-        if (!in_array($category, ClientPage::validCategories(), true)) {
-            throw new BusinessException('页面分类不正确');
+        app()->make(ClientPageCategoryService::class)->assertSelectableCategoryId($categoryId);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $list
+     * @param array<int, string> $labels
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withCategoryLabels(array $list, array $labels): array
+    {
+        foreach ($list as &$item) {
+            $categoryId = (int) ($item['category_id'] ?? 0);
+            $item['category_label'] = $labels[$categoryId] ?? '';
         }
+        unset($item);
+
+        return $list;
     }
 
     protected function validatePath(string $path): void
@@ -420,6 +463,17 @@ class ClientPageService extends BaseService
             '/pages-sub/wallet/index' => '钱包',
             '/pages-sub/wallet/records' => '钱包记录',
             '/pages-sub/wallet/recharge' => '余额充值',
+            '/pages-sub/points/index' => '积分',
+            '/pages-sub/points/records' => '积分记录',
+            '/pages-sub/points/mall' => '积分商城',
+            '/pages-sub/points/mall-detail' => '积分商品详情',
+            '/pages-sub/points/exchange-confirm' => '确认积分兑换',
+            '/pages-sub/points/exchange-orders' => '积分兑换记录',
+            '/pages-sub/points/exchange-detail' => '积分兑换详情',
+            '/pages-sub/distribution/index' => '分销中心',
+            '/pages-sub/distribution/records' => '佣金明细',
+            '/pages-sub/distribution/team' => '我的团队',
+            '/pages-sub/distribution/withdraw' => '佣金提现',
             '/pages-sub/address/list' => '地址列表',
             '/pages-sub/address/edit' => '编辑地址',
             '/pages-sub/review/post' => '发布评价',
@@ -434,14 +488,34 @@ class ClientPageService extends BaseService
         return mb_substr((string) end($parts), 0, 80);
     }
 
-    protected function inferCategory(string $path): string
+    protected function resolveCategoryId(int $categoryId, array $categoryIds, int $defaultCategoryId): int
     {
+        return $categoryIds[$categoryId] ?? $defaultCategoryId;
+    }
+
+    /**
+     * @param array<string, int> $systemCategoryIds
+     */
+    protected function inferCategoryId(string $path, int $defaultCategoryId, array $systemCategoryIds): int
+    {
+        if (str_starts_with($path, '/pages-sub/points/')) {
+            return ClientPage::CATEGORY_ID_POINTS;
+        }
+
+        if (str_starts_with($path, '/pages-sub/wallet/')) {
+            return ClientPage::CATEGORY_ID_WALLET;
+        }
+
+        if (str_starts_with($path, '/pages-sub/distribution/')) {
+            return $systemCategoryIds[self::CATEGORY_NAME_DISTRIBUTION] ?? $defaultCategoryId;
+        }
+
         foreach ([
-            ClientPage::CATEGORY_GOODS => ['/pages-sub/goods/', '/pages-sub/search/'],
-            ClientPage::CATEGORY_CONTENT => ['/pages-sub/article/'],
-            ClientPage::CATEGORY_ORDER => ['/pages-sub/order/', '/pages-sub/logistics/', '/pages-sub/review/'],
-            ClientPage::CATEGORY_AFTERSALE => ['/pages-sub/refund/'],
-            ClientPage::CATEGORY_USER => ['/pages-sub/user/', '/pages-sub/wallet/', '/pages-sub/address/'],
+            ClientPage::CATEGORY_ID_GOODS => ['/pages-sub/goods/', '/pages-sub/search/'],
+            ClientPage::CATEGORY_ID_CONTENT => ['/pages-sub/article/'],
+            ClientPage::CATEGORY_ID_ORDER => ['/pages-sub/order/', '/pages-sub/logistics/', '/pages-sub/review/'],
+            ClientPage::CATEGORY_ID_AFTERSALE => ['/pages-sub/refund/'],
+            ClientPage::CATEGORY_ID_USER => ['/pages-sub/user/', '/pages-sub/address/'],
         ] as $category => $prefixes) {
             foreach ($prefixes as $prefix) {
                 if (str_starts_with($path, $prefix)) {
@@ -451,16 +525,19 @@ class ClientPageService extends BaseService
         }
 
         if (str_starts_with($path, '/pages/')) {
-            return ClientPage::CATEGORY_BASIC;
+            return ClientPage::CATEGORY_ID_BASIC;
         }
 
         $segments = explode('/', trim($path, '/'));
         foreach ([
-            ClientPage::CATEGORY_GOODS => ['goods', 'search'],
-            ClientPage::CATEGORY_CONTENT => ['article', 'content'],
-            ClientPage::CATEGORY_ORDER => ['order', 'logistics', 'review'],
-            ClientPage::CATEGORY_AFTERSALE => ['refund'],
-            ClientPage::CATEGORY_USER => ['user', 'wallet', 'address'],
+            ClientPage::CATEGORY_ID_GOODS => ['goods', 'search'],
+            ClientPage::CATEGORY_ID_CONTENT => ['article', 'content'],
+            ClientPage::CATEGORY_ID_ORDER => ['order', 'logistics', 'review'],
+            ClientPage::CATEGORY_ID_AFTERSALE => ['refund'],
+            ClientPage::CATEGORY_ID_USER => ['user', 'address'],
+            ClientPage::CATEGORY_ID_POINTS => ['points'],
+            ClientPage::CATEGORY_ID_WALLET => ['wallet'],
+            $systemCategoryIds[self::CATEGORY_NAME_DISTRIBUTION] ?? $defaultCategoryId => ['distribution'],
         ] as $category => $markers) {
             foreach ($markers as $marker) {
                 if (in_array($marker, $segments, true)) {
@@ -469,7 +546,7 @@ class ClientPageService extends BaseService
             }
         }
 
-        return ClientPage::CATEGORY_OTHER;
+        return $defaultCategoryId;
     }
 
     protected function inferNeedLogin(string $path): bool
@@ -480,7 +557,7 @@ class ClientPageService extends BaseService
             }
         }
 
-        foreach (['/pages/cart/', '/pages/order/', '/pages/profile/', '/pages-sub/order/', '/pages-sub/refund/', '/pages-sub/user/', '/pages-sub/wallet/', '/pages-sub/address/', '/pages-sub/review/'] as $prefix) {
+        foreach (['/pages/cart/', '/pages/order/', '/pages/profile/', '/pages-sub/order/', '/pages-sub/refund/', '/pages-sub/user/', '/pages-sub/wallet/', '/pages-sub/distribution/', '/pages-sub/address/', '/pages-sub/review/'] as $prefix) {
             if (str_starts_with($path, $prefix)) {
                 return true;
             }

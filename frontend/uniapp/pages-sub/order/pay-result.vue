@@ -57,7 +57,16 @@ const resultMeta = computed(() => {
 // 轮询配置：2s/次，最多 30 次（共 1min）
 const POLL_INTERVAL_MS = 2000
 const POLL_MAX_TIMES = 30
-const ORDER_STATUS_PAID = 10 // 与后端 OrderStatus::PAID 保持一致
+const ORDER_STATUS_PAID = 10
+const ORDER_STATUS_SHIPPED = 20
+const ORDER_STATUS_RECEIVED = 30
+const ORDER_STATUS_COMPLETED = 40
+const PAID_ORDER_STATUSES = [
+  ORDER_STATUS_PAID,
+  ORDER_STATUS_SHIPPED,
+  ORDER_STATUS_RECEIVED,
+  ORDER_STATUS_COMPLETED,
+] // 已支付、已发货、已收货、已完成
 
 let pollTimer = null
 let pollCount = 0
@@ -81,6 +90,10 @@ function normalizePayStatus(payStatus) {
     return 'pending'
   }
   return 'fail'
+}
+
+function isPaidOrderStatus(orderStatus) {
+  return orderStatus === ORDER_STATUS_PAID || PAID_ORDER_STATUSES.includes(orderStatus)
 }
 
 function applyPayResult(payResult) {
@@ -147,7 +160,7 @@ async function pollOrderStatus() {
       amount.value = detail?.pay_amount || detail?.total_amount || ''
     }
     const orderStatus = Number(detail?.status ?? 0)
-    if (orderStatus === ORDER_STATUS_PAID) {
+    if (isPaidOrderStatus(orderStatus)) {
       status.value = 'success'
       message.value = ''
       clearPoll()
@@ -288,6 +301,7 @@ async function onPayMethodSelect(code) {
       @select="onPayMethodSelect"
       @close="closeSheet"
     />
+      <mb-copyright-footer />
       <mb-floating-action />
 </view>
 </template>
@@ -409,22 +423,31 @@ async function onPayMethodSelect(code) {
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    flex-wrap: nowrap;
     margin-top: 28rpx;
     color: var(--color-text-title, #191b23);
+    line-height: 1;
+    white-space: nowrap;
   }
 
   &__amount-prefix {
+    display: inline-block;
+    flex-shrink: 0;
     margin-right: 8rpx;
     padding-bottom: 8rpx;
     font-size: 28rpx;
     font-weight: 700;
     line-height: 1;
+    white-space: nowrap;
   }
 
   &__amount-value {
+    display: inline-block;
+    flex-shrink: 0;
     font-size: 64rpx;
     font-weight: 800;
     line-height: 1;
+    white-space: nowrap;
   }
 
   &__info {

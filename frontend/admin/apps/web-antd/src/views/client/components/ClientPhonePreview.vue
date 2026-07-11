@@ -120,11 +120,11 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
       height: 314,
       list: [
         {
-          image: 'static/demo/decorate-banner-market.png',
+          image: 'static/decorate/decorate-banner-market.png',
           title: '夏日好物限时满减',
         },
         {
-          image: 'static/demo/decorate-banner-member.png',
+          image: 'static/decorate/decorate-banner-member.png',
           title: '会员精选 每日上新',
         },
       ],
@@ -136,12 +136,12 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
     props: {
       columns: 6,
       items: [
-        { image: 'static/demo/decorate-nav-digital.png', label: '数码' },
-        { image: 'static/demo/decorate-nav-beauty.png', label: '美妆' },
-        { image: 'static/demo/decorate-nav-fashion.png', label: '服饰' },
-        { image: 'static/demo/decorate-nav-home.png', label: '家居' },
-        { image: 'static/demo/decorate-nav-food.png', label: '美食' },
-        { image: 'static/demo/decorate-nav-sport.png', label: '运动' },
+        { image: 'static/decorate/decorate-nav-digital.png', label: '数码' },
+        { image: 'static/decorate/decorate-nav-beauty.png', label: '美妆' },
+        { image: 'static/decorate/decorate-nav-fashion.png', label: '服饰' },
+        { image: 'static/decorate/decorate-nav-home.png', label: '家居' },
+        { image: 'static/decorate/decorate-nav-food.png', label: '美食' },
+        { image: 'static/decorate/decorate-nav-sport.png', label: '运动' },
       ],
     },
     type: 'navGrid',
@@ -160,22 +160,22 @@ const DEFAULT_HOME_MODULES: ModuleItem[] = [
 
 const DEFAULT_PROFILE_ORDER_ITEMS = [
   {
-    image: 'static/demo/profile-order-pay.svg',
+    image: 'static/decorate/profile-order-pay.svg',
     label: '待付款',
     path: '/pages-sub/order/list?status=10',
   },
   {
-    image: 'static/demo/profile-order-ship.svg',
+    image: 'static/decorate/profile-order-ship.svg',
     label: '待发货',
     path: '/pages-sub/order/list?status=20',
   },
   {
-    image: 'static/demo/profile-order-receive.svg',
+    image: 'static/decorate/profile-order-receive.svg',
     label: '待收货',
     path: '/pages-sub/order/list?status=30',
   },
   {
-    image: 'static/demo/profile-order-refund.svg',
+    image: 'static/decorate/profile-order-refund.svg',
     label: '退款售后',
     path: '/pages-sub/refund/list',
   },
@@ -183,17 +183,17 @@ const DEFAULT_PROFILE_ORDER_ITEMS = [
 
 const DEFAULT_PROFILE_SERVICE_ITEMS = [
   {
-    image: 'static/demo/profile-service-address.svg',
+    image: 'static/decorate/profile-service-address.svg',
     label: '地址管理',
     path: '/pages-sub/address/list',
   },
   {
-    image: 'static/demo/profile-service-settings.svg',
+    image: 'static/decorate/profile-service-settings.svg',
     label: '系统设置',
     path: '/pages-sub/user/settings',
   },
   {
-    image: 'static/demo/profile-service-support.svg',
+    image: 'static/decorate/profile-service-support.svg',
     label: '联系客服',
     path: '',
   },
@@ -322,6 +322,11 @@ const PROFILE_ICON_PRESETS = [
     text: '客',
     type: 'service',
   },
+  {
+    keywords: ['distribution', 'commission', '分销', '佣金', '团队'],
+    text: '分',
+    type: 'distribution',
+  },
 ];
 
 const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
@@ -332,6 +337,17 @@ const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
       show_mobile: true,
     },
     type: 'userCard',
+  },
+  {
+    id: 'preview-member',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_discount: true,
+      show_growth: true,
+      show_progress: true,
+      title: '会员等级',
+    },
+    type: 'memberEntry',
   },
   {
     id: 'preview-orders',
@@ -353,6 +369,29 @@ const DEFAULT_PROFILE_MODULES: ModuleItem[] = [
       title: '我的余额',
     },
     type: 'wallet',
+  },
+  {
+    id: 'preview-points',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_records: true,
+      show_view_button: true,
+      title: '我的积分',
+    },
+    type: 'pointsEntry',
+  },
+  {
+    id: 'preview-distribution',
+    props: {
+      ...DEFAULT_PROFILE_CARD_STYLE,
+      show_commission: true,
+      show_invite: true,
+      show_records: true,
+      show_team: true,
+      show_withdraw_button: true,
+      title: '分销中心',
+    },
+    type: 'distributionEntry',
   },
   {
     id: 'preview-service',
@@ -426,6 +465,10 @@ const MODULE_LABELS: Record<string, string> = {
   title: '标题栏',
   userCard: '用户信息',
   wallet: '钱包卡片',
+  memberEntry: '会员卡片',
+  points: '积分卡片',
+  pointsEntry: '积分卡片',
+  distributionEntry: '分销卡片',
 };
 
 const GOODS_FALLBACK = {
@@ -473,12 +516,12 @@ const pageTitle = computed(() => {
 });
 
 const normalizedModules = computed(() => {
-  const fallback =
-    props.kind === 'floating'
-      ? []
-      : props.kind === 'profile'
-        ? DEFAULT_PROFILE_MODULES
-        : DEFAULT_HOME_MODULES;
+  let fallback: ModuleItem[] = DEFAULT_HOME_MODULES;
+  if (props.kind === 'floating') {
+    fallback = [];
+  } else if (props.kind === 'profile') {
+    fallback = DEFAULT_PROFILE_MODULES;
+  }
   const source = (
     props.modules.length > 0 ? props.modules : fallback
   ) as ModuleItem[];
@@ -683,7 +726,12 @@ function normalizeProfileType(type: string) {
   const alias: Record<string, string> = {
     categoryEntry: 'entryCard',
     customMenu: 'serviceMenu',
+    distribution: 'distributionEntry',
+    distributionCard: 'distributionEntry',
+    memberCard: 'memberEntry',
     orderEntry: 'orderShortcut',
+    points: 'pointsEntry',
+    pointsCard: 'pointsEntry',
     profileHeader: 'userCard',
     userInfo: 'userCard',
     walletEntry: 'wallet',
@@ -1708,6 +1756,32 @@ function walletActions(module: ModuleItem): WalletPreviewAction[] {
   return actions;
 }
 
+function pointsActions(module: ModuleItem): WalletPreviewAction[] {
+  const actions: WalletPreviewAction[] = [];
+  if (module.props.show_records !== false) {
+    actions.push({ key: 'records', label: '积分明细', primary: false });
+  }
+  if (module.props.show_view_button !== false) {
+    actions.push({ key: 'view', label: '去查看', primary: true });
+  }
+  return actions;
+}
+
+function distributionShowCommission(module: ModuleItem) {
+  return module.props.show_commission !== false;
+}
+
+function distributionActions(module: ModuleItem): WalletPreviewAction[] {
+  const actions: WalletPreviewAction[] = [];
+  if (module.props.show_records !== false) {
+    actions.push({ key: 'records', label: '佣金明细', primary: false });
+  }
+  if (module.props.show_withdraw_button !== false) {
+    actions.push({ key: 'withdraw', label: '去提现', primary: true });
+  }
+  return actions;
+}
+
 function richTextHtml(module: ModuleItem) {
   return (
     module.props?.content ||
@@ -1795,8 +1869,14 @@ const floatingPreviewConfig = computed(() => {
         styleColor(style.backgroundColor) || 'var(--mb-preview-primary)',
       color: styleColor(style.color) || '#ffffff',
       radius: clampNumber(style.radius, 44, 0, 120),
-      shadowBlur: clampNumber(style.shadowBlur ?? style.shadow_blur, 30, 0, 160),
-      shadowColor: styleColor(style.shadowColor ?? style.shadow_color) || '#0f172a',
+      shadowBlur: clampNumber(
+        style.shadowBlur ?? style.shadow_blur,
+        30,
+        0,
+        160,
+      ),
+      shadowColor:
+        styleColor(style.shadowColor ?? style.shadow_color) || '#0f172a',
       shadowEnabled: style.shadowEnabled !== false,
       shadowOffsetX: clampNumber(
         style.shadowOffsetX ?? style.shadow_offset_x,
@@ -2420,6 +2500,55 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                 </div>
 
                 <div
+                  v-else-if="module.type === 'memberEntry'"
+                  class="profile-member-card"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <div class="profile-member-card__top">
+                    <div class="profile-member-card__main">
+                      <small
+                        v-if="profileTextVisible(module, 'title')"
+                        :style="profileTextStyle(module, 'title')"
+                      >
+                        {{ module.props.title || '会员等级' }}
+                      </small>
+                      <strong
+                        v-if="profileTextVisible(module, 'amount')"
+                        :style="profileTextStyle(module, 'amount')"
+                      >
+                        普通会员
+                      </strong>
+                    </div>
+                    <span
+                      v-if="module.props.show_discount !== false"
+                      class="profile-member-card__badge"
+                    >
+                      暂无专属折扣
+                    </span>
+                  </div>
+                  <div
+                    v-if="module.props.show_progress !== false"
+                    class="profile-member-card__progress"
+                  >
+                    <i />
+                  </div>
+                  <p
+                    v-if="
+                      profileTextVisible(module, 'meta') &&
+                      (module.props.show_growth !== false ||
+                        module.props.show_progress !== false)
+                    "
+                    class="profile-member-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span v-if="module.props.show_growth !== false">
+                      成长值 0
+                    </span>
+                    <span>距下一等级还差 0 成长值</span>
+                  </p>
+                </div>
+
+                <div
                   v-else-if="module.type === 'wallet'"
                   class="profile-wallet-card"
                   :style="moduleBoxStyle(module)"
@@ -2457,6 +2586,128 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   >
                     <span
                       v-for="action in walletActions(module)"
+                      :key="action.key"
+                      :style="
+                        profileTextStyle(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                      "
+                    >
+                      {{
+                        profileTextVisible(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                          ? action.label
+                          : ''
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-else-if="module.type === 'pointsEntry'"
+                  class="profile-points-card"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <small
+                    v-if="profileTextVisible(module, 'title')"
+                    :style="profileTextStyle(module, 'title')"
+                  >
+                    {{ module.props.title || '我的积分' }}
+                  </small>
+                  <strong
+                    v-if="profileTextVisible(module, 'amount')"
+                    :style="profileTextStyle(module, 'amount')"
+                  >
+                    0
+                  </strong>
+                  <p
+                    v-if="profileTextVisible(module, 'meta')"
+                    class="profile-points-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span>累计获得 0</span>
+                    <i>•</i>
+                    <span>累计扣减 0</span>
+                  </p>
+                  <div
+                    v-if="pointsActions(module).length > 0"
+                    class="profile-points-card__actions"
+                  >
+                    <span
+                      v-for="action in pointsActions(module)"
+                      :key="action.key"
+                      :style="
+                        profileTextStyle(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                      "
+                    >
+                      {{
+                        profileTextVisible(
+                          module,
+                          action.primary ? 'primaryAction' : 'action',
+                        )
+                          ? action.label
+                          : ''
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-else-if="module.type === 'distributionEntry'"
+                  class="profile-distribution-card"
+                  :style="moduleBoxStyle(module)"
+                >
+                  <small
+                    v-if="profileTextVisible(module, 'title')"
+                    :style="profileTextStyle(module, 'title')"
+                  >
+                    {{ module.props.title || '分销中心' }}
+                  </small>
+                  <strong
+                    v-if="
+                      distributionShowCommission(module) &&
+                      profileTextVisible(module, 'amount')
+                    "
+                    :style="profileTextStyle(module, 'amount')"
+                  >
+                    ¥0.00
+                  </strong>
+                  <p
+                    v-if="
+                      profileTextVisible(module, 'meta') &&
+                      (module.props.show_team !== false ||
+                        module.props.show_invite !== false)
+                    "
+                    class="profile-distribution-card__meta"
+                    :style="profileTextStyle(module, 'meta')"
+                  >
+                    <span v-if="module.props.show_team !== false">
+                      团队 0 人
+                    </span>
+                    <i
+                      v-if="
+                        module.props.show_team !== false &&
+                        module.props.show_invite !== false
+                      "
+                    >
+                      •
+                    </i>
+                    <span v-if="module.props.show_invite !== false">
+                      邀请码 MB0000
+                    </span>
+                  </p>
+                  <div
+                    v-if="distributionActions(module).length > 0"
+                    class="profile-distribution-card__actions"
+                  >
+                    <span
+                      v-for="action in distributionActions(module)"
                       :key="action.key"
                       :style="
                         profileTextStyle(
@@ -3527,7 +3778,6 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   position: relative;
   display: grid;
   min-height: 92px;
-  padding: 12px;
   overflow: hidden;
   place-items: end start;
   border-radius: 10px;
@@ -3562,13 +3812,14 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .client-phone-preview--compact .home-cube__item {
   min-height: 64px;
-  padding: 8px;
   font-size: 11px;
 }
 
 .home-products,
 .home-rich,
+.profile-member-card,
 .profile-order-card,
+.profile-points-card,
 .profile-service-card,
 .profile-wallet-card {
   padding: 14px;
@@ -3577,7 +3828,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   background: var(--mb-preview-bg);
 }
 
+.profile-member-card,
 .profile-order-card,
+.profile-points-card,
 .profile-service-card,
 .profile-wallet-card {
   margin: 0;
@@ -3585,7 +3838,9 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 
 .client-phone-preview--compact .home-products,
 .client-phone-preview--compact .home-rich,
+.client-phone-preview--compact .profile-member-card,
 .client-phone-preview--compact .profile-order-card,
+.client-phone-preview--compact .profile-points-card,
 .client-phone-preview--compact .profile-service-card,
 .client-phone-preview--compact .profile-wallet-card {
   padding: 10px;
@@ -4168,6 +4423,81 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   color: var(--mb-preview-text-secondary);
 }
 
+.profile-member-card__top,
+.profile-member-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-member-card__main {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.profile-member-card small {
+  color: var(--mb-preview-text-tertiary);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.profile-member-card strong {
+  margin-top: 3px;
+  color: var(--mb-preview-text-title);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.profile-member-card__badge {
+  max-width: 110px;
+  padding: 3px 7px;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: var(--mb-preview-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mb-preview-primary) 10%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.profile-member-card__progress {
+  height: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--mb-preview-bg-surface);
+}
+
+.profile-member-card__progress i {
+  display: block;
+  width: 28%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mb-preview-primary);
+}
+
+.profile-member-card__meta {
+  margin: 6px 0 0;
+  color: var(--mb-preview-text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.profile-member-card__meta span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-distribution-card strong,
+.profile-points-card strong,
 .profile-wallet-card strong {
   display: block;
   margin-top: 5px;
@@ -4176,11 +4506,15 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1;
 }
 
+.profile-distribution-card small,
+.profile-points-card small,
 .profile-wallet-card small {
   display: block;
   color: var(--mb-preview-text-secondary);
 }
 
+.profile-distribution-card__meta,
+.profile-points-card__meta,
 .profile-wallet-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -4192,10 +4526,14 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   line-height: 1.4;
 }
 
+.profile-distribution-card__meta i,
+.profile-points-card__meta i,
 .profile-wallet-card__meta i {
   font-style: normal;
 }
 
+.profile-distribution-card__actions,
+.profile-points-card__actions,
 .profile-wallet-card__actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
@@ -4203,6 +4541,8 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   margin-top: 12px;
 }
 
+.profile-distribution-card__actions span,
+.profile-points-card__actions span,
 .profile-wallet-card__actions span {
   padding: 7px;
   overflow: hidden;
@@ -4215,6 +4555,8 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
   white-space: nowrap;
 }
 
+.profile-distribution-card__actions span:last-child,
+.profile-points-card__actions span:last-child,
 .profile-wallet-card__actions span:last-child {
   color: white;
   background: var(--mb-preview-primary);
@@ -4306,6 +4648,11 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
 .profile-entry-icon--service {
   --profile-icon-bg: rgb(0 132 135 / 10%);
   --profile-icon-color: #007f82;
+}
+
+.profile-entry-icon--distribution {
+  --profile-icon-bg: rgb(96 70 185 / 10%);
+  --profile-icon-color: #6046b9;
 }
 
 .profile-cell strong {

@@ -6,9 +6,9 @@ use app\model\auth\Permission;
 use think\facade\Route;
 
 Route::group('client/page', function () {
-    Route::get('list', 'list')->name('SystemClientPageList')->option(['_alias' => '页面列表', '_desc' => '获取客户端页面列表', '_auth' => true, '_type' => Permission::TYPE_API]);
-    Route::get('info/:id', 'info')->name('SystemClientPageInfo')->option(['_alias' => '页面详情', '_desc' => '获取客户端页面详情', '_auth' => true, '_type' => Permission::TYPE_API]);
-    Route::get('picker', 'picker')->name('SystemClientPagePicker')->option(['_alias' => '页面链接选择', '_desc' => '获取客户端页面链接选择列表', '_auth' => true, '_type' => Permission::TYPE_API]);
+    Route::get('list', 'list')->name('SystemClientPageList')->option(['_alias' => '页面列表', '_desc' => '获取客户端页面列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemClientPageInfo')->option(['_alias' => '页面详情', '_desc' => '获取客户端页面详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('picker', 'picker')->name('SystemClientPagePicker')->option(['_alias' => '页面链接选择', '_desc' => '获取客户端页面链接选择列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
     Route::post('create', 'create')->name('SystemClientPageCreate')->option(['_alias' => '创建页面', '_desc' => '创建客户端页面', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::put('update/:id', 'update')->name('SystemClientPageUpdate')->option(['_alias' => '更新页面', '_desc' => '更新客户端页面', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
     Route::delete('delete/:id', 'delete')->name('SystemClientPageDelete')->option(['_alias' => '删除页面', '_desc' => '删除客户端页面', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
@@ -16,15 +16,37 @@ Route::group('client/page', function () {
 })->prefix('admin.client.PageController/')
     ->middleware([JwtAuth::class, CheckPermission::class])
     ->option([
-        '_group_name' => '页面库',
+        '_group_name' => '页面列表',
         '_group_code' => 'SystemClientPage',
         '_group_name_desc' => '客户端页面库管理',
-        '_parent' => 'SystemClientDiy',
-        '_icon' => 'lucide:files',
-        '_path' => '/client/page',
+        '_parent' => 'SystemClientPageManagement',
+        '_icon' => 'lucide:list',
+        '_path' => '/client/page/list',
         '_auth' => true,
         '_component' => '/client/page/index',
         '_sort' => 10,
+    ]);
+
+Route::group('client/page/category', function () {
+    Route::get('list', 'list')->name('SystemClientPageCategoryList')->option(['_alias' => '页面分类列表', '_desc' => '获取客户端页面分类列表', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('all', 'all')->name('SystemClientPageCategoryAll')->option(['_alias' => '全部页面分类', '_desc' => '获取全部客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::get('info/:id', 'info')->name('SystemClientPageCategoryInfo')->option(['_alias' => '页面分类详情', '_desc' => '获取客户端页面分类详情', '_auth' => true, '_type' => Permission::TYPE_MENU]);
+    Route::post('create', 'create')->name('SystemClientPageCategoryCreate')->option(['_alias' => '创建页面分类', '_desc' => '创建客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('update/:id', 'update')->name('SystemClientPageCategoryUpdate')->option(['_alias' => '更新页面分类', '_desc' => '更新客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::delete('delete/:id', 'delete')->name('SystemClientPageCategoryDelete')->option(['_alias' => '删除页面分类', '_desc' => '删除客户端页面分类', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+    Route::put('updateStatus/:id', 'updateStatus')->name('SystemClientPageCategoryUpdateStatus')->option(['_alias' => '页面分类状态', '_desc' => '更新客户端页面分类状态', '_auth' => true, '_type' => Permission::TYPE_BUTTON]);
+})->prefix('admin.client.PageCategoryController/')
+    ->middleware([JwtAuth::class, CheckPermission::class])
+    ->option([
+        '_group_name' => '页面分类',
+        '_group_code' => 'SystemClientPageCategory',
+        '_group_name_desc' => '客户端页面分类管理',
+        '_parent' => 'SystemClientPageManagement',
+        '_icon' => 'lucide:folder-tree',
+        '_path' => '/client/page/category',
+        '_auth' => true,
+        '_component' => '/client/page/category/index',
+        '_sort' => 20,
     ]);
 
 Route::group('client/decorate/scheme', function () {

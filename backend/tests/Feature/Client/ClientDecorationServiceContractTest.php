@@ -26,7 +26,8 @@ final class ClientDecorationServiceContractTest extends TestCase
 
     public function testPagesJsonImportCreatesAndUpdatesPageLibraryRows(): void
     {
-        $this->requireDbTables(['client_page']);
+        $this->requireDbTables(['client_page', 'client_page_category']);
+        $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientPageService');
         $this->cleanupClientTestRows();
 
@@ -37,6 +38,8 @@ final class ClientDecorationServiceContractTest extends TestCase
         $result = $service->importFromUniappPages($this->makePagesJson('Codex 首页'));
         $this->assertSame(0, $result['skipped']);
         $this->assertGreaterThanOrEqual(3, $result['created']);
+        $basicCategoryId = $this->clientPageCategoryId('基础页面');
+        $goodsCategoryId = $this->clientPageCategoryId('商品页面');
 
         $home = Db::name('client_page')->where('path', '/codex-test/home/index')->find();
         $profile = Db::name('client_page')->where('path', '/codex-test/profile/index')->find();
@@ -44,7 +47,7 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $this->assertIsArray($home);
         $this->assertSame('tab', $home['page_type']);
-        $this->assertSame('basic', $home['category']);
+        $this->assertSame($basicCategoryId, (int) $home['category_id']);
         $this->assertSame('system', $home['source']);
         $this->assertSame(0, (int) $home['need_login']);
 
@@ -53,7 +56,7 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $this->assertIsArray($detail);
         $this->assertSame('subpackage', $detail['page_type']);
-        $this->assertSame('goods', $detail['category']);
+        $this->assertSame($goodsCategoryId, (int) $detail['category_id']);
         $this->assertSame('codex-sub-test', $detail['package_root']);
 
         $updated = $service->importFromUniappPages($this->makePagesJson('Codex 首页改名'));
@@ -66,26 +69,28 @@ final class ClientDecorationServiceContractTest extends TestCase
 
         $picker = $service->getPickerGroups([]);
         $groups = array_column($picker['groups'], null, 'key');
-        $this->assertArrayHasKey('basic', $groups);
-        $this->assertArrayHasKey('goods', $groups);
-        $this->assertSame('基础页面', $groups['basic']['label']);
-        $this->assertSame('商品页面', $groups['goods']['label']);
+        $this->assertArrayHasKey((string) $basicCategoryId, $groups);
+        $this->assertArrayHasKey((string) $goodsCategoryId, $groups);
+        $this->assertSame('基础页面', $groups[(string) $basicCategoryId]['label']);
+        $this->assertSame('商品页面', $groups[(string) $goodsCategoryId]['label']);
 
-        $goodsPaths = array_column($groups['goods']['items'], 'path');
+        $goodsPaths = array_column($groups[(string) $goodsCategoryId]['items'], 'path');
         $this->assertContains('/codex-sub-test/goods/detail', $goodsPaths);
     }
 
     public function testClientPageProtectsSystemRowsAndRejectsDuplicatePaths(): void
     {
-        $this->requireDbTables(['client_page']);
+        $this->requireDbTables(['client_page', 'client_page_category']);
+        $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientPageService');
         $this->cleanupClientTestRows();
+        $otherCategoryId = $this->clientPageCategoryId('其他页面');
 
         $systemId = (int) Db::name('client_page')->insertGetId([
             'name' => 'CodexTest 系统页面',
             'path' => '/codex-test/system-page',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
             'package_root' => null,
             'need_login' => 0,
             'source' => 'system',
@@ -102,7 +107,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 手动页面',
             'path' => '/codex-test/manual-page',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
         ]);
         $this->assertGreaterThan(0, $manualId);
 
@@ -110,7 +115,7 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 重复页面',
             'path' => 'codex-test/manual-page',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
         ]));
         $this->assertNotNull($duplicateError);
         $this->assertStringContainsString('页面路径已存在', $duplicateError->getMessage());
@@ -119,10 +124,62 @@ final class ClientDecorationServiceContractTest extends TestCase
             'name' => 'CodexTest 根路径',
             'path' => '/',
             'page_type' => 'page',
-            'category' => 'other',
+            'category_id' => $otherCategoryId,
         ]));
         $this->assertNotNull($rootPathError);
         $this->assertStringContainsString('页面路径必须以 / 开头', $rootPathError->getMessage());
+    }
+
+    public function testClientPageCategoryCrudControlsPageBinding(): void
+    {
+        $this->requireDbTables(['client_page', 'client_page_category']);
+        $this->ensureClientPageDefaultCategories();
+        $pageService = $this->makeService('app\\service\\admin\\client\\ClientPageService');
+        $categoryService = $this->makeService('app\\service\\admin\\client\\ClientPageCategoryService');
+        $this->cleanupClientTestRows();
+
+        $categoryId = $categoryService->create([
+            'name' => 'CodexTest 分类',
+            'description' => 'CodexTest 页面分类',
+            'sort' => 88,
+            'status' => 1,
+        ]);
+        $this->assertGreaterThan(0, $categoryId);
+
+        $pageId = $pageService->create([
+            'name' => 'CodexTest 自定义分类页面',
+            'path' => '/codex-test/custom-category',
+            'page_type' => 'page',
+            'category_id' => $categoryId,
+        ]);
+        $this->assertGreaterThan(0, $pageId);
+
+        $page = $pageService->getInfo($pageId);
+        $this->assertSame($categoryId, (int) $page['category_id']);
+        $this->assertSame('CodexTest 分类', $page['category_label']);
+
+        $list = $pageService->getList(['category_id' => $categoryId], 1, 15);
+        $this->assertSame(1, (int) $list['total']);
+        $this->assertSame('CodexTest 分类', $list['list'][0]['category_label']);
+
+        $picker = $pageService->getPickerGroups([]);
+        $groups = array_column($picker['groups'], null, 'key');
+        $this->assertArrayHasKey((string) $categoryId, $groups);
+        $this->assertSame('CodexTest 分类', $groups[(string) $categoryId]['label']);
+
+        $deleteError = $this->captureBusinessException(fn() => $categoryService->delete($categoryId));
+        $this->assertNotNull($deleteError);
+        $this->assertStringContainsString('该分类下还有页面', $deleteError->getMessage());
+
+        $categoryService->updateStatus($categoryId, 0);
+        $disabledError = $this->captureBusinessException(fn() => $pageService->create([
+            'name' => 'CodexTest 禁用分类页面',
+            'path' => '/codex-test/disabled-category',
+            'page_type' => 'page',
+            'category_id' => $categoryId,
+        ]));
+        $this->assertNotNull($disabledError);
+        $this->assertStringContainsString('页面分类不存在或已禁用', $disabledError->getMessage());
     }
 
     public function testDecorationSchemeProtectsSystemRowsAndValidatesSchemas(): void
@@ -242,7 +299,8 @@ final class ClientDecorationServiceContractTest extends TestCase
 
     public function testDecorationTargetPickerDoesNotExposeThemeEntry(): void
     {
-        $this->requireDbTables(['client_page', 'goods', 'goods_category', 'goods_brand', 'goods_tag']);
+        $this->requireDbTables(['client_page', 'client_page_category', 'goods', 'goods_category', 'goods_brand', 'goods_tag']);
+        $this->ensureClientPageDefaultCategories();
         $service = $this->makeService('app\\service\\admin\\client\\ClientDecorationSchemeService');
 
         Db::startTrans();
@@ -252,7 +310,7 @@ final class ClientDecorationServiceContractTest extends TestCase
                 'name' => 'CodexTest 主题设置页',
                 'path' => '/pages-sub/user/theme',
                 'page_type' => 'subpackage',
-                'category' => 'user',
+                'category_id' => $this->clientPageCategoryId('会员页面'),
                 'package_root' => 'pages-sub',
                 'need_login' => 1,
                 'source' => 'system',
@@ -776,6 +834,8 @@ final class ClientDecorationServiceContractTest extends TestCase
                 ['id' => 'profile-user', 'type' => 'userInfo', 'props' => []],
                 ['id' => 'profile-order', 'type' => 'orderEntry', 'props' => []],
                 ['id' => 'profile-wallet', 'type' => 'walletEntry', 'props' => []],
+                ['id' => 'profile-points', 'type' => 'pointsEntry', 'props' => []],
+                ['id' => 'profile-distribution', 'type' => 'distributionEntry', 'props' => []],
                 ['id' => 'profile-service', 'type' => 'serviceMenu', 'props' => ['items' => []]],
             ],
         ]);
@@ -790,22 +850,27 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertSame('', $schema['pageStyle']['backgroundColorStart']);
 
         $modules = array_column($schema['modules'], null, 'type');
+        $moduleTypes = array_column($schema['modules'], 'type');
 
         $this->assertArrayHasKey('userInfo', $modules);
+        $this->assertArrayHasKey('memberEntry', $modules);
         $this->assertArrayHasKey('orderEntry', $modules);
         $this->assertArrayHasKey('walletEntry', $modules);
+        $this->assertArrayHasKey('pointsEntry', $modules);
+        $this->assertArrayHasKey('distributionEntry', $modules);
         $this->assertArrayHasKey('serviceMenu', $modules);
+        $this->assertSame(['userInfo', 'memberEntry', 'orderEntry'], array_slice($moduleTypes, 0, 3));
         $this->assertCount(4, $modules['orderEntry']['props']['items']);
         $this->assertCount(3, $modules['serviceMenu']['props']['items']);
         $this->assertSame(
-            'static/demo/profile-order-pay.svg',
+            'static/decorate/profile-order-pay.svg',
             $modules['orderEntry']['props']['items'][0]['image']
         );
         $this->assertTrue(($modules['orderEntry']['props']['items'][0]['visible'] ?? true) !== false);
         $this->assertTrue(($modules['orderEntry']['props']['items'][0]['enabled'] ?? true) !== false);
         $this->assertArrayNotHasKey('icon', $modules['orderEntry']['props']['items'][0]);
         $this->assertSame(
-            'static/demo/profile-service-settings.svg',
+            'static/decorate/profile-service-settings.svg',
             $modules['serviceMenu']['props']['items'][1]['image']
         );
         $this->assertSame('系统设置', $modules['serviceMenu']['props']['items'][1]['label']);
@@ -813,18 +878,26 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertArrayNotHasKey('action', $modules['serviceMenu']['props']['items'][1]);
         $this->assertArrayNotHasKey('icon', $modules['serviceMenu']['props']['items'][1]);
         $this->assertSame('我的订单', $modules['orderEntry']['props']['title']);
+        $this->assertSame('会员等级', $modules['memberEntry']['props']['title']);
         $this->assertSame('我的余额', $modules['walletEntry']['props']['title']);
+        $this->assertSame('我的积分', $modules['pointsEntry']['props']['title']);
+        $this->assertSame('分销中心', $modules['distributionEntry']['props']['title']);
         $this->assertSame('我的服务', $modules['serviceMenu']['props']['title']);
         $this->assertSame('grid', $modules['orderEntry']['props']['display']);
         $this->assertSame('list', $modules['serviceMenu']['props']['display']);
         $this->assertSame(28, $modules['orderEntry']['props']['paddingX']);
         $this->assertSame(28, $modules['orderEntry']['props']['paddingY']);
         $this->assertSame(20, $modules['walletEntry']['props']['radius']);
+        $this->assertSame(20, $modules['pointsEntry']['props']['radius']);
+        $this->assertSame(20, $modules['distributionEntry']['props']['radius']);
         $this->assertSame(10, $modules['serviceMenu']['props']['paddingX']);
         $this->assertSame(0, $modules['serviceMenu']['props']['paddingY']);
         $this->assertSame(28, $modules['userInfo']['props']['paddingX']);
         $this->assertSame(28, $modules['userInfo']['props']['paddingY']);
         $this->assertSame(0, $modules['userInfo']['props']['radius']);
+        $this->assertSame(28, $modules['memberEntry']['props']['paddingX']);
+        $this->assertSame(28, $modules['memberEntry']['props']['paddingY']);
+        $this->assertSame(20, $modules['memberEntry']['props']['radius']);
         $this->assertSame('', $modules['orderEntry']['props']['backgroundColorStart']);
         $this->assertSame('', $modules['orderEntry']['props']['backgroundColorEnd']);
         $this->assertArrayNotHasKey('bottomBackground', $modules['orderEntry']['props']);
@@ -843,9 +916,174 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertSame(0, $modules['orderEntry']['props']['shadowSpread']);
         $this->assertArrayNotHasKey('textVisibility', $modules['orderEntry']['props']);
         $this->assertArrayNotHasKey('show_level', $modules['userInfo']['props']);
+        $this->assertTrue($modules['memberEntry']['props']['show_discount']);
+        $this->assertTrue($modules['memberEntry']['props']['show_growth']);
+        $this->assertTrue($modules['memberEntry']['props']['show_progress']);
         $this->assertArrayNotHasKey('show_points', $modules['walletEntry']['props']);
         $this->assertTrue($modules['walletEntry']['props']['show_records']);
         $this->assertTrue($modules['walletEntry']['props']['show_view_button']);
+        $this->assertTrue($modules['pointsEntry']['props']['show_records']);
+        $this->assertTrue($modules['pointsEntry']['props']['show_view_button']);
+        $this->assertTrue($modules['distributionEntry']['props']['show_commission']);
+        $this->assertTrue($modules['distributionEntry']['props']['show_team']);
+        $this->assertTrue($modules['distributionEntry']['props']['show_invite']);
+        $this->assertTrue($modules['distributionEntry']['props']['show_withdraw_button']);
+        $this->assertTrue($modules['distributionEntry']['props']['show_records']);
+    }
+
+    public function testDecorationSchemaNormalizesLegacyDemoDecorationAssets(): void
+    {
+        $service = $this->makeDecorationServiceForSchemaNormalization();
+        $method = $this->schemaNormalizerMethod($service);
+        $schema = $method->invoke($service, 'home', [
+            'components' => [
+                [
+                    'id' => 'banner',
+                    'type' => 'banner',
+                    'props' => [
+                        'items' => [
+                            [
+                                'image' => [
+                                    'url' => '48',
+                                    'asset_id' => 48,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-banner-market.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'nav',
+                    'type' => 'navGrid',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '美妆',
+                                'image' => [
+                                    'url' => '52',
+                                    'asset_id' => 52,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-nav-beauty.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'cube',
+                    'type' => 'imageCube',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '新品',
+                                'image' => [
+                                    'url' => '57',
+                                    'asset_id' => 57,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-cube-new.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'entry',
+                    'type' => 'entryCard',
+                    'props' => [
+                        'icon_image' => [
+                            'url' => '61',
+                            'asset_id' => 61,
+                            'full_url' => 'http://localhost:8080/static/demo/decorate-entry-category.png',
+                        ],
+                        'background_image' => 'http://localhost:8080/static/demo/decorate-entry-category.png',
+                    ],
+                ],
+            ],
+        ]);
+        $modules = array_column($schema['components'], null, 'type');
+
+        $this->assertSame('static/decorate/decorate-banner-market.png', $modules['banner']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-nav-beauty.png', $modules['navGrid']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-cube-new.png', $modules['imageCube']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-entry-category.png', $modules['entryCard']['props']['icon_image']);
+        $this->assertSame('static/decorate/decorate-entry-category.png', $modules['entryCard']['props']['background_image']);
+
+        $profileSchema = $method->invoke($service, 'profile', [
+            'modules' => [
+                [
+                    'id' => 'order',
+                    'type' => 'orderEntry',
+                    'props' => [
+                        'items' => [
+                            [
+                                'label' => '待付款',
+                                'image' => 'http://localhost:8080/static/demo/profile-order-pay.svg',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $profileModules = array_column($profileSchema['modules'], null, 'type');
+        $this->assertSame('static/decorate/profile-order-pay.svg', $profileModules['orderEntry']['props']['items'][0]['image']);
+    }
+
+    public function testAdminDecorationHydrationNormalizesLegacyDemoDecorationAssets(): void
+    {
+        $service = $this->makeService('app\\service\\admin\\client\\ClientDecorationSchemeService');
+        $method = new \ReflectionMethod($service, 'hydrateSchemeSchemaAssets');
+        $method->setAccessible(true);
+
+        $schema = $method->invoke($service, 'home', [
+            'components' => [
+                [
+                    'id' => 'banner',
+                    'type' => 'banner',
+                    'props' => [
+                        'items' => [
+                            [
+                                'image' => [
+                                    'url' => '48',
+                                    'asset_id' => 48,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-banner-market.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'nav',
+                    'type' => 'navGrid',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '美妆',
+                                'image' => 'http://localhost:8080/static/demo/decorate-nav-beauty.png',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'cube',
+                    'type' => 'imageCube',
+                    'props' => [
+                        'items' => [
+                            [
+                                'title' => '新品',
+                                'image' => [
+                                    'url' => '57',
+                                    'asset_id' => 57,
+                                    'full_url' => 'http://localhost:8080/static/demo/decorate-cube-new.png',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $modules = array_column($schema['components'], null, 'type');
+
+        $this->assertSame('static/decorate/decorate-banner-market.png', $modules['banner']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-nav-beauty.png', $modules['navGrid']['props']['items'][0]['image']);
+        $this->assertSame('static/decorate/decorate-cube-new.png', $modules['imageCube']['props']['items'][0]['image']);
     }
 
     public function testDecorationProfileKeepsLegacyPageAndModuleStyleAliases(): void
@@ -868,7 +1106,7 @@ final class ClientDecorationServiceContractTest extends TestCase
                     'props' => [
                         'items' => [
                             [
-                                'image' => 'static/demo/profile-order-pay.svg',
+                                'image' => 'static/decorate/profile-order-pay.svg',
                                 'label' => '待付款',
                                 'path' => '/pages-sub/order/list?status=10',
                                 'visible' => false,
@@ -907,7 +1145,8 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertSame(20, $schema['pageStyle']['paddingLeft']);
         $this->assertSame(20, $schema['pageStyle']['paddingRight']);
 
-        $props = $schema['modules'][0]['props'];
+        $modules = array_column($schema['modules'], null, 'type');
+        $props = $modules['orderEntry']['props'];
         $this->assertSame(1, $props['paddingTop']);
         $this->assertSame(2, $props['paddingRight']);
         $this->assertSame(3, $props['paddingBottom']);
@@ -1017,7 +1256,8 @@ final class ClientDecorationServiceContractTest extends TestCase
             ],
         ]);
 
-        $item = $schema['modules'][0]['props']['items'][0];
+        $modules = array_column($schema['modules'], null, 'type');
+        $item = $modules['serviceMenu']['props']['items'][0];
         $this->assertSame('theme', $item['key']);
         $this->assertSame('', $item['path']);
         $this->assertArrayNotHasKey('action', $item);
@@ -1044,7 +1284,8 @@ final class ClientDecorationServiceContractTest extends TestCase
             ],
         ]);
 
-        $item = $schema['modules'][0]['props']['items'][0];
+        $modules = array_column($schema['modules'], null, 'type');
+        $item = $modules['serviceMenu']['props']['items'][0];
         $this->assertSame('theme', $item['key']);
         $this->assertSame('', $item['path']);
         $this->assertArrayNotHasKey('action', $item);
@@ -1331,6 +1572,11 @@ final class ClientDecorationServiceContractTest extends TestCase
                     ->whereOr('path', 'like', '/codex-sub-test/%')
                     ->delete();
             }
+            if ($this->safeTableExists('client_page_category')) {
+                Db::name('client_page_category')
+                    ->whereLike('name', 'CodexTest%')
+                    ->delete();
+            }
         } catch (Throwable) {
             // 清理失败不覆盖测试主体结果。
         }
@@ -1348,6 +1594,16 @@ final class ClientDecorationServiceContractTest extends TestCase
         } catch (Throwable) {
             // 清理失败不覆盖测试主体结果。
         }
+    }
+
+    private function clientPageCategoryId(string $name): int
+    {
+        $id = (int) Db::name('client_page_category')->where('name', $name)->value('id');
+        if ($id <= 0) {
+            $this->fail("缺少页面分类：{$name}");
+        }
+
+        return $id;
     }
 
     private function makePagesJson(string $homeTitle): string
@@ -1384,6 +1640,37 @@ final class ClientDecorationServiceContractTest extends TestCase
         $this->assertIsString($content);
 
         return $content;
+    }
+
+    private function ensureClientPageDefaultCategories(): void
+    {
+        $rows = [
+            ['id' => 1, 'name' => '基础页面', 'description' => '客户端主包、底部导航等基础页面', 'sort' => 10],
+            ['id' => 2, 'name' => '商品页面', 'description' => '商品列表、详情、搜索等页面', 'sort' => 20],
+            ['id' => 3, 'name' => '内容页面', 'description' => '文章、内容等页面', 'sort' => 30],
+            ['id' => 4, 'name' => '订单页面', 'description' => '订单、物流、评价等页面', 'sort' => 40],
+            ['id' => 5, 'name' => '售后页面', 'description' => '退款、售后等页面', 'sort' => 50],
+            ['id' => 6, 'name' => '会员页面', 'description' => '登录、资料、地址等会员页面', 'sort' => 60],
+            ['id' => 7, 'name' => '积分页面', 'description' => '积分、积分商城、兑换记录等页面', 'sort' => 70],
+            ['id' => 8, 'name' => '余额页面', 'description' => '余额、充值、余额记录等页面', 'sort' => 80],
+            ['id' => 9, 'name' => '其他页面', 'description' => '未归入固定业务模块的页面', 'sort' => 900],
+        ];
+
+        foreach ($rows as $row) {
+            $exists = Db::name('client_page_category')->where('id', $row['id'])->find();
+            $payload = array_merge($row, [
+                'is_system' => 1,
+                'status' => 1,
+                'delete_time' => null,
+            ]);
+
+            if ($exists) {
+                Db::name('client_page_category')->where('id', $exists['id'])->update($payload);
+                continue;
+            }
+
+            Db::name('client_page_category')->insert($payload);
+        }
     }
 
     private function captureBusinessException(callable $callback): ?BusinessException

@@ -1,7 +1,9 @@
 <script setup>
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { getPayMethods } from "@/api/config";
+import { getBasicConfig, getPayMethods } from "@/api/config";
+import { getDistributionSummary } from "@/api/distribution/distribution";
+import { getPointsInfo } from "@/api/points/points";
 import { getWalletInfo } from "@/api/user/wallet";
 import config from "@/config/index";
 import { useDecorateStore } from "@/store/decorate";
@@ -16,7 +18,26 @@ const wallet = ref({
   total_recharge: "0.00",
   total_consume: "0.00",
 });
+const points = ref({
+  balance_points: 0,
+  total_income_points: 0,
+  total_expense_points: 0,
+});
+const distribution = ref({
+  available_commission: "0.00",
+  direct_user_count: 0,
+  enabled: true,
+  frozen_commission: "0.00",
+  indirect_user_count: 0,
+  invite_code: "",
+  is_distributor: false,
+  pending_withdraw: "0.00",
+  status: 0,
+});
 const balancePaymentEnabled = ref(false);
+const pointsEnabled = ref(true);
+const memberEnabled = ref(false);
+const distributionEnabled = ref(true);
 const profileIconPresets = [
   {
     type: "pay",
@@ -98,19 +119,24 @@ const profileIconPresets = [
       "ant-design:customer-service-outlined",
     ],
   },
+  {
+    type: "distribution",
+    text: "分",
+    keywords: ["distribution", "commission", "分销", "佣金", "团队"],
+  },
 ];
 
 const defaultProfileOrderImages = [
-  "static/demo/profile-order-pay.svg",
-  "static/demo/profile-order-ship.svg",
-  "static/demo/profile-order-receive.svg",
-  "static/demo/profile-order-refund.svg",
+  "static/decorate/profile-order-pay.svg",
+  "static/decorate/profile-order-ship.svg",
+  "static/decorate/profile-order-receive.svg",
+  "static/decorate/profile-order-refund.svg",
 ];
 
 const defaultProfileServiceImages = [
-  "static/demo/profile-service-address.svg",
-  "static/demo/profile-service-settings.svg",
-  "static/demo/profile-service-support.svg",
+  "static/decorate/profile-service-address.svg",
+  "static/decorate/profile-service-settings.svg",
+  "static/decorate/profile-service-support.svg",
 ];
 
 function defaultProfileEntryImage(type, index) {
@@ -145,6 +171,39 @@ const walletRecharge = computed(() =>
   formatAmount(wallet.value.total_recharge),
 );
 const walletConsume = computed(() => formatAmount(wallet.value.total_consume));
+const pointsBalance = computed(() => Number(points.value.balance_points || 0));
+const pointsIncome = computed(() =>
+  Number(points.value.total_income_points || 0),
+);
+const pointsExpense = computed(() =>
+  Number(points.value.total_expense_points || 0),
+);
+const distributionAvailable = computed(() =>
+  formatAmount(distribution.value.available_commission),
+);
+const distributionFrozen = computed(() =>
+  formatAmount(distribution.value.frozen_commission),
+);
+const distributionPending = computed(() =>
+  formatAmount(distribution.value.pending_withdraw),
+);
+const distributionTeamTotal = computed(
+  () =>
+    Number(distribution.value.direct_user_count || 0) +
+    Number(distribution.value.indirect_user_count || 0),
+);
+const distributionInviteCode = computed(
+  () => String(distribution.value.invite_code || ""),
+);
+const distributionIsDistributor = computed(
+  () =>
+    distribution.value.is_distributor === true &&
+    Number(distribution.value.status) === 1,
+);
+const memberSummary = computed(() => userStore.userInfo?.member || {});
+const memberVisible = computed(
+  () => logged.value && memberEnabled.value && memberSummary.value?.enabled === true,
+);
 
 const profileModules = computed(() => {
   const modules = Array.isArray(decorateStore.profileModules)
@@ -185,14 +244,48 @@ onShow(async () => {
   userStore.restoreToken();
   await decorateStore.fetchThemes({ force: true });
   await decorateStore.fetchMyThemePreference({ force: true });
+  await fetchFeatureState();
   fetchPayMethodState();
   if (userStore.isLoggedIn) {
     userStore.fetchUserInfo();
+    if (pointsEnabled.value) {
+      fetchPoints();
+    } else {
+      resetPoints();
+    }
     if (balancePaymentEnabled.value) {
       fetchWallet();
     }
+    if (distributionEnabled.value) {
+      fetchDistribution();
+    } else {
+      resetDistribution();
+    }
+  } else {
+    resetDistribution();
   }
 });
+
+async function fetchFeatureState() {
+  try {
+    const data = await getBasicConfig();
+    pointsEnabled.value = settingSwitchEnabled(data?.points_enabled, true);
+    memberEnabled.value = settingSwitchEnabled(data?.member_enabled, false);
+    distributionEnabled.value = settingSwitchEnabled(
+      data?.distribution_enabled,
+      true,
+    );
+  } catch {
+    pointsEnabled.value = true;
+    memberEnabled.value = false;
+    distributionEnabled.value = true;
+  }
+}
+
+function settingSwitchEnabled(value, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return ["1", "true", "on"].includes(String(value).toLowerCase());
+}
 
 async function fetchPayMethodState() {
   try {
@@ -222,6 +315,67 @@ async function fetchWallet() {
       total_consume: "0.00",
     };
   }
+}
+
+async function fetchPoints() {
+  if (!pointsEnabled.value) {
+    resetPoints();
+    return;
+  }
+
+  try {
+    const data = await getPointsInfo();
+    points.value = {
+      ...points.value,
+      ...(data || {}),
+    };
+  } catch {
+    points.value = {
+      balance_points: 0,
+      total_income_points: 0,
+      total_expense_points: 0,
+    };
+  }
+}
+
+function resetPoints() {
+  points.value = {
+    balance_points: 0,
+    total_income_points: 0,
+    total_expense_points: 0,
+  };
+}
+
+async function fetchDistribution() {
+  if (!distributionEnabled.value) {
+    resetDistribution();
+    return;
+  }
+
+  try {
+    const data = await getDistributionSummary();
+    distribution.value = {
+      ...distribution.value,
+      ...(data || {}),
+    };
+    distributionEnabled.value = data?.enabled !== false;
+  } catch {
+    resetDistribution();
+  }
+}
+
+function resetDistribution() {
+  distribution.value = {
+    available_commission: "0.00",
+    direct_user_count: 0,
+    enabled: distributionEnabled.value,
+    frozen_commission: "0.00",
+    indirect_user_count: 0,
+    invite_code: "",
+    is_distributor: false,
+    pending_withdraw: "0.00",
+    status: 0,
+  };
 }
 
 function formatAmount(value) {
@@ -309,6 +463,60 @@ function tapWalletAction(action) {
     return;
   }
   goWallet();
+}
+
+function pointsActions(module) {
+  if (!pointsEnabled.value) return [];
+  const props = module.props || {};
+  return [
+    props.show_records !== false
+      ? { key: "records", label: "积分明细", primary: false }
+      : null,
+    props.show_view_button !== false
+      ? { key: "view", label: "去查看", primary: true }
+      : null,
+  ].filter(Boolean);
+}
+
+function tapPointsAction(action) {
+  if (action.key === "records") {
+    goPointsRecords();
+    return;
+  }
+  goPoints();
+}
+
+function showDistributionCommission(module) {
+  return module.props?.show_commission !== false;
+}
+
+function distributionActions(module) {
+  if (!distributionEnabled.value) return [];
+  const props = module.props || {};
+  return [
+    props.show_records !== false && distributionIsDistributor.value
+      ? { key: "records", label: "佣金明细", primary: false }
+      : null,
+    props.show_withdraw_button !== false
+      ? {
+          key: distributionIsDistributor.value ? "withdraw" : "center",
+          label: distributionIsDistributor.value ? "去提现" : "去开通",
+          primary: true,
+        }
+      : null,
+  ].filter(Boolean);
+}
+
+function tapDistributionAction(action) {
+  if (action.key === "records") {
+    goDistributionRecords();
+    return;
+  }
+  if (action.key === "withdraw") {
+    goDistributionWithdraw();
+    return;
+  }
+  goDistribution();
 }
 
 function serviceMenuIsGrid(module) {
@@ -679,10 +887,16 @@ function moduleBoxStyle(module) {
 
 function profileModuleVisible(module) {
   if (module.type === "wallet") return balancePaymentEnabled.value;
+  if (module.type === "pointsEntry") return pointsEnabled.value;
+  if (module.type === "distributionEntry") return distributionEnabled.value;
+  if (module.type === "memberEntry") return memberVisible.value;
   if (module.type === "logout") return logged.value;
   return [
     "divider",
+    "memberEntry",
     "orderShortcut",
+    "pointsEntry",
+    "distributionEntry",
     "richText",
     "serviceMenu",
     "spacing",
@@ -808,6 +1022,78 @@ function goWalletRecords() {
     return;
   }
   uni.navigateTo({ url: "/pages-sub/wallet/records" });
+}
+
+function goPoints() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!pointsEnabled.value) {
+    uni.showToast({ title: "积分功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/points/index" });
+}
+
+function goPointsRecords() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!pointsEnabled.value) {
+    uni.showToast({ title: "积分功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/points/records" });
+}
+
+function goDistribution() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!distributionEnabled.value) {
+    uni.showToast({ title: "分销功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/distribution/index" });
+}
+
+function goDistributionRecords() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!distributionEnabled.value || !distributionIsDistributor.value) {
+    goDistribution();
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/distribution/records" });
+}
+
+function goDistributionWithdraw() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!distributionEnabled.value || !distributionIsDistributor.value) {
+    goDistribution();
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/distribution/withdraw" });
+}
+
+function goMember() {
+  if (!userStore.isLoggedIn) {
+    goLogin();
+    return;
+  }
+  if (!memberEnabled.value) {
+    uni.showToast({ title: "会员功能未开启", icon: "none" });
+    return;
+  }
+  uni.navigateTo({ url: "/pages-sub/member/index" });
 }
 
 async function callCustomerService() {
@@ -957,6 +1243,20 @@ function handleLogout() {
             </view>
           </view>
 
+          <mb-member-card
+            v-else-if="module.type === 'memberEntry'"
+            :enabled="memberEnabled"
+            :logged="logged"
+            :member="memberSummary"
+            :show-discount="styleBoolean(module.props?.show_discount, true)"
+            :show-growth="styleBoolean(module.props?.show_growth, true)"
+            :show-progress="styleBoolean(module.props?.show_progress, true)"
+            :style="moduleBoxStyle(module)"
+            :title="module.props.title || '会员等级'"
+            variant="compact"
+            @tap="goMember"
+          />
+
           <view
             v-else-if="module.type === 'wallet' && balancePaymentEnabled"
             class="wallet-card"
@@ -1023,6 +1323,223 @@ function handleLogout() {
                   class="wallet-card__action-text"
                   :class="{
                     'wallet-card__action-text--primary': action.primary,
+                  }"
+                  :style="
+                    textStyle(
+                      module,
+                      action.primary ? 'primaryAction' : 'action',
+                    )
+                  "
+                >
+                  {{
+                    textVisible(
+                      module,
+                      action.primary ? "primaryAction" : "action",
+                    )
+                      ? action.label
+                      : ""
+                  }}
+                </text>
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-else-if="module.type === 'pointsEntry'"
+            class="points-card"
+            :style="moduleBoxStyle(module)"
+            @tap="goPoints"
+          >
+            <view class="points-card__main">
+              <text
+                v-if="textVisible(module, 'title')"
+                class="points-card__label"
+                :style="textStyle(module, 'title')"
+                >{{ module.props.title || "我的积分" }}</text
+              >
+              <view
+                v-if="textVisible(module, 'amount')"
+                class="points-card__amount"
+              >
+                <text
+                  class="points-card__value"
+                  :style="textStyle(module, 'amount')"
+                  >{{ logged ? pointsBalance : 0 }}</text
+                >
+                <text
+                  class="points-card__unit"
+                  :style="textStyle(module, 'amount')"
+                  >积分</text
+                >
+              </view>
+              <view
+                v-if="textVisible(module, 'meta')"
+                class="points-card__meta"
+              >
+                <text
+                  class="points-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >累计获得 {{ logged ? pointsIncome : 0 }}</text
+                >
+                <text
+                  class="points-card__dot"
+                  :style="textStyle(module, 'meta')"
+                  >•</text
+                >
+                <text
+                  class="points-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >累计使用 {{ logged ? pointsExpense : 0 }}</text
+                >
+              </view>
+            </view>
+            <view
+              v-if="pointsActions(module).length > 0"
+              class="points-card__actions"
+            >
+              <view
+                v-for="action in pointsActions(module)"
+                :key="action.key"
+                class="points-card__action"
+                :class="{ 'points-card__action--primary': action.primary }"
+                @tap.stop="tapPointsAction(action)"
+              >
+                <text
+                  class="points-card__action-text"
+                  :class="{
+                    'points-card__action-text--primary': action.primary,
+                  }"
+                  :style="
+                    textStyle(
+                      module,
+                      action.primary ? 'primaryAction' : 'action',
+                    )
+                  "
+                >
+                  {{
+                    textVisible(
+                      module,
+                      action.primary ? "primaryAction" : "action",
+                    )
+                      ? action.label
+                      : ""
+                  }}
+                </text>
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-else-if="module.type === 'distributionEntry'"
+            class="distribution-card"
+            :style="moduleBoxStyle(module)"
+            @tap="goDistribution"
+          >
+            <view class="distribution-card__main">
+              <text
+                v-if="textVisible(module, 'title')"
+                class="distribution-card__label"
+                :style="textStyle(module, 'title')"
+                >{{ module.props.title || "分销中心" }}</text
+              >
+              <view
+                v-if="
+                  showDistributionCommission(module) &&
+                  textVisible(module, 'amount')
+                "
+                class="distribution-card__amount"
+              >
+                <text
+                  class="distribution-card__symbol"
+                  :style="textStyle(module, 'amount')"
+                  >¥</text
+                >
+                <text
+                  class="distribution-card__value"
+                  :style="textStyle(module, 'amount')"
+                  >{{ logged ? distributionAvailable : "0.00" }}</text
+                >
+              </view>
+              <view
+                v-if="
+                  textVisible(module, 'meta') &&
+                  (module.props.show_team !== false ||
+                    module.props.show_invite !== false ||
+                    showDistributionCommission(module))
+                "
+                class="distribution-card__meta"
+              >
+                <text
+                  v-if="module.props.show_team !== false"
+                  class="distribution-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >团队 {{ logged ? distributionTeamTotal : 0 }} 人</text
+                >
+                <text
+                  v-if="
+                    module.props.show_team !== false &&
+                    (module.props.show_invite !== false ||
+                      showDistributionCommission(module))
+                  "
+                  class="distribution-card__dot"
+                  :style="textStyle(module, 'meta')"
+                  >•</text
+                >
+                <text
+                  v-if="module.props.show_invite !== false"
+                  class="distribution-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >邀请码
+                  {{
+                    logged && distributionInviteCode
+                      ? distributionInviteCode
+                      : "登录后生成"
+                  }}</text
+                >
+                <text
+                  v-if="
+                    showDistributionCommission(module) &&
+                    module.props.show_invite === false
+                  "
+                  class="distribution-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >冻结 ¥{{ logged ? distributionFrozen : "0.00" }}</text
+                >
+                <text
+                  v-if="
+                    showDistributionCommission(module) &&
+                    module.props.show_invite === false
+                  "
+                  class="distribution-card__dot"
+                  :style="textStyle(module, 'meta')"
+                  >•</text
+                >
+                <text
+                  v-if="
+                    showDistributionCommission(module) &&
+                    module.props.show_invite === false
+                  "
+                  class="distribution-card__meta-text"
+                  :style="textStyle(module, 'meta')"
+                  >提现中 ¥{{ logged ? distributionPending : "0.00" }}</text
+                >
+              </view>
+            </view>
+            <view
+              v-if="distributionActions(module).length > 0"
+              class="distribution-card__actions"
+            >
+              <view
+                v-for="action in distributionActions(module)"
+                :key="action.key"
+                class="distribution-card__action"
+                :class="{ 'distribution-card__action--primary': action.primary }"
+                @tap.stop="tapDistributionAction(action)"
+              >
+                <text
+                  class="distribution-card__action-text"
+                  :class="{
+                    'distribution-card__action-text--primary': action.primary,
                   }"
                   :style="
                     textStyle(
@@ -1232,6 +1749,7 @@ function handleLogout() {
       </template>
     </view>
 
+    <mb-copyright-footer />
     <view v-if="decorateStore.tabbarMode === 'custom'" class="bottom-spacer" />
     <mb-custom-tabbar current="/pages/profile/index" />
     <mb-floating-action />
@@ -1346,6 +1864,8 @@ function handleLogout() {
 }
 
 .wallet-card,
+.points-card,
+.distribution-card,
 .order-card,
 .cell-group,
 .plain-rich {
@@ -1355,6 +1875,14 @@ function handleLogout() {
 }
 
 .wallet-card {
+  padding: 28rpx;
+}
+
+.points-card {
+  padding: 28rpx;
+}
+
+.distribution-card {
   padding: 28rpx;
 }
 
@@ -1434,6 +1962,119 @@ function handleLogout() {
   color: #ffffff;
 }
 
+.points-card__label {
+  display: block;
+  width: 100%;
+  font-size: 24rpx;
+  color: var(--color-text-secondary, #434654);
+}
+
+.distribution-card__label {
+  display: block;
+  width: 100%;
+  font-size: 24rpx;
+  color: var(--color-text-secondary, #434654);
+}
+
+.points-card__amount {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+  margin-top: 10rpx;
+}
+
+.distribution-card__amount {
+  display: flex;
+  align-items: baseline;
+  margin-top: 10rpx;
+}
+
+.distribution-card__symbol {
+  font-size: 32rpx;
+  color: var(--color-text-title, #191b23);
+  font-weight: 700;
+}
+
+.distribution-card__value {
+  margin-left: 4rpx;
+  font-size: 52rpx;
+  line-height: 1;
+  color: var(--color-text-title, #191b23);
+  font-weight: 800;
+}
+
+.points-card__value {
+  font-size: 52rpx;
+  line-height: 1;
+  color: var(--color-text-title, #191b23);
+  font-weight: 800;
+}
+
+.points-card__unit {
+  font-size: 24rpx;
+  color: var(--color-text-secondary, #434654);
+  font-weight: 700;
+}
+
+.points-card__meta,
+.points-card__actions,
+.distribution-card__meta,
+.distribution-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.points-card__meta,
+.distribution-card__meta {
+  margin-top: 16rpx;
+}
+
+.points-card__meta-text,
+.points-card__dot,
+.distribution-card__meta-text,
+.distribution-card__dot {
+  font-size: 22rpx;
+  color: var(--color-text-tertiary, #737686);
+}
+
+.points-card__actions,
+.distribution-card__actions {
+  margin-top: 24rpx;
+}
+
+.points-card__action,
+.distribution-card__action {
+  flex: 1;
+  min-height: 64rpx;
+  padding: 12rpx 24rpx;
+  box-sizing: border-box;
+  border-radius: 999rpx;
+  background: var(--color-bg-surface, #f3f3fe);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.points-card__action--primary,
+.distribution-card__action--primary {
+  background: var(--color-primary, #0d50d5);
+}
+
+.points-card__action-text,
+.distribution-card__action-text {
+  font-size: 24rpx;
+  line-height: 1.2;
+  color: var(--color-text-secondary, #434654);
+  font-weight: 600;
+}
+
+.points-card__action-text--primary,
+.distribution-card__action-text--primary {
+  color: #ffffff;
+}
+
 .order-card {
   padding: 28rpx;
 }
@@ -1505,7 +2146,9 @@ function handleLogout() {
 .order-card__label {
   display: block;
   width: 100%;
+  text-align: center;
   font-size: 24rpx;
+  line-height: 1.2;
   color: var(--color-text-secondary, #434654);
 }
 
@@ -1629,6 +2272,11 @@ function handleLogout() {
 .profile-icon--service {
   --profile-icon-bg: rgba(0, 132, 135, 0.1);
   --profile-icon-color: #007f82;
+}
+
+.profile-icon--distribution {
+  --profile-icon-bg: rgba(96, 70, 185, 0.1);
+  --profile-icon-color: #6046b9;
 }
 
 .cell__label {

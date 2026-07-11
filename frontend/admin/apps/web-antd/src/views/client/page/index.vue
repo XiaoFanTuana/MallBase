@@ -11,6 +11,7 @@ import { message, Modal, Switch } from 'ant-design-vue';
 import {
   createClientPageApi,
   deleteClientPageApi,
+  getAllClientPageCategoriesApi,
   getClientPageInfoApi,
   getClientPageListApi,
   importClientPageApi,
@@ -22,10 +23,22 @@ defineOptions({ name: 'ClientPageManagement' });
 
 const pagesJsonPlaceholder =
   '粘贴 pages.json 内容，例如：{"pages":[...],"subPackages":[...]}';
+const CATEGORY_TAG_COLORS = [
+  'blue',
+  'green',
+  'geekblue',
+  'purple',
+  'orange',
+  'cyan',
+  'magenta',
+  'gold',
+  'default',
+];
+const DEFAULT_CATEGORY_ID = 9;
 
 type ImportMode = 'file' | 'json';
 type PageCategoryRow = {
-  category: ClientPageApi.PageCategory;
+  category_id: ClientPageApi.PageCategoryId;
   children: PageTablePageRow[];
   id: string;
   isCategory: true;
@@ -48,20 +61,6 @@ const PAGE_TYPE_OPTIONS: Array<{
   { label: '分包页面', value: 'subpackage', color: 'purple' },
 ];
 
-const CATEGORY_OPTIONS: Array<{
-  color: string;
-  label: string;
-  value: ClientPageApi.PageCategory;
-}> = [
-  { label: '基础页面', value: 'basic', color: 'blue' },
-  { label: '商品页面', value: 'goods', color: 'green' },
-  { label: '订单页面', value: 'order', color: 'purple' },
-  { label: '售后页面', value: 'aftersale', color: 'orange' },
-  { label: '会员页面', value: 'user', color: 'cyan' },
-  { label: '营销页面', value: 'marketing', color: 'magenta' },
-  { label: '其他页面', value: 'other', color: 'default' },
-];
-
 const SOURCE_OPTIONS: Array<{
   color: string;
   label: string;
@@ -76,11 +75,33 @@ const FORM_SOURCE_OPTIONS = SOURCE_OPTIONS.filter(
   (item) => item.value !== 'system',
 );
 
+const pageCategories = ref<ClientPageApi.PageCategoryItem[]>([]);
+const defaultCategoryId = computed(
+  () =>
+    pageCategories.value.find((item) => item.id === DEFAULT_CATEGORY_ID)?.id ??
+    pageCategories.value[0]?.id ??
+    0,
+);
+const pageCategoryOptions = computed(() =>
+  pageCategories.value.map((item) => ({
+    label: item.name,
+    value: item.id,
+  })),
+);
+
 const typeMap = computed(() =>
   Object.fromEntries(PAGE_TYPE_OPTIONS.map((item) => [item.value, item])),
 );
 const categoryMap = computed(() =>
-  Object.fromEntries(CATEGORY_OPTIONS.map((item) => [item.value, item])),
+  Object.fromEntries(
+    pageCategories.value.map((item, index) => [
+      item.id,
+      {
+        color: CATEGORY_TAG_COLORS[index % CATEGORY_TAG_COLORS.length],
+        label: item.name,
+      },
+    ]),
+  ),
 );
 const sourceMap = computed(() =>
   Object.fromEntries(SOURCE_OPTIONS.map((item) => [item.value, item])),
@@ -98,16 +119,23 @@ const { tableData, loading, pagination, loadData } = useTableCrud<
 );
 
 const searchParams = ref<ClientPageApi.ListParams>({
-  category: undefined,
+  category_id: undefined,
   keyword: '',
   page_type: undefined,
   source: undefined,
   status: undefined,
 });
 
+const loadPageCategories = async () => {
+  pageCategories.value = await getAllClientPageCategoriesApi();
+  if (!formData.category_id && defaultCategoryId.value > 0) {
+    formData.category_id = defaultCategoryId.value;
+  }
+};
+
 const resetSearch = () => {
   searchParams.value = {
-    category: undefined,
+    category_id: undefined,
     keyword: '',
     page_type: undefined,
     source: undefined,
@@ -118,10 +146,10 @@ const resetSearch = () => {
 };
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 100 },
+  { title: 'ID', dataIndex: 'id', width: 130 },
   { title: '页面名称', dataIndex: 'name', width: 190 },
   { title: '页面路径', dataIndex: 'path', width: 260, ellipsis: true },
-  { title: '页面分类', dataIndex: 'category', width: 120 },
+  { title: '页面分类', dataIndex: 'category_id', width: 120 },
   { title: '页面类型', dataIndex: 'page_type', width: 120 },
   { title: '分包 root', dataIndex: 'package_root', width: 130 },
   { title: '登录', dataIndex: 'need_login', width: 90 },
@@ -134,24 +162,44 @@ const columns = [
 
 const treeTableData = computed<PageTableRow[]>(() => {
   const rows: PageTableRow[] = [];
+  const groupedCodes = new Set<string>();
 
-  CATEGORY_OPTIONS.forEach((category) => {
+  const pushCategoryGroup = (category: {
+    label: string;
+    value: ClientPageApi.PageCategoryId;
+  }) => {
     const children = tableData.value
-      .filter((item) => (item.category || 'other') === category.value)
+      .filter((item) => item.category_id === category.value)
       .map((item) => ({
         ...item,
         tableKey: `page-${item.id}`,
       }));
     if (children.length === 0) return;
 
+    groupedCodes.add(String(category.value));
     rows.push({
-      category: category.value,
+      category_id: category.value,
       children,
       id: '',
       isCategory: true,
       name: `${category.label}（${children.length}）`,
       path: '',
       tableKey: `category-${category.value}`,
+    });
+  };
+
+  pageCategoryOptions.value.forEach((category) => pushCategoryGroup(category));
+
+  [
+    ...new Set(
+      tableData.value
+        .map((item) => item.category_id)
+        .filter((categoryId) => !groupedCodes.has(String(categoryId))),
+    ),
+  ].forEach((categoryId) => {
+    pushCategoryGroup({
+      label: `分类 #${categoryId}`,
+      value: categoryId,
     });
   });
 
@@ -167,7 +215,7 @@ const formData = reactive<ClientPageApi.SaveParams>({
   name: '',
   path: '',
   page_type: 'page',
-  category: 'other',
+  category_id: 0,
   package_root: null,
   need_login: 0,
   source: 'manual',
@@ -176,8 +224,32 @@ const formData = reactive<ClientPageApi.SaveParams>({
   status: 1,
 });
 
+const enabledPageCategoryOptions = computed(() => {
+  const options = pageCategories.value
+    .filter((item) => item.status === 1)
+    .map((item) => ({
+      label: item.name,
+      value: item.id,
+    }));
+
+  if (
+    formData.category_id &&
+    !options.some((item) => item.value === formData.category_id)
+  ) {
+    const current = pageCategories.value.find(
+      (item) => item.id === formData.category_id,
+    );
+    options.push({
+      label: current?.name ?? `分类 #${formData.category_id}`,
+      value: formData.category_id,
+    });
+  }
+
+  return options;
+});
+
 const formRules: Record<string, Rule[]> = {
-  category: [{ required: true, message: '请选择页面分类' }],
+  category_id: [{ required: true, message: '请选择页面分类' }],
   name: [{ required: true, message: '请输入页面名称', whitespace: true }],
   page_type: [{ required: true, message: '请选择页面类型' }],
   path: [{ required: true, message: '请输入页面路径', whitespace: true }],
@@ -200,7 +272,7 @@ const resetForm = () => {
     name: '',
     path: '',
     page_type: 'page',
-    category: 'other',
+    category_id: defaultCategoryId.value,
     package_root: null,
     need_login: 0,
     source: 'manual',
@@ -230,7 +302,7 @@ const handleEdit = async (record: PageTableRow) => {
       name: detail.name,
       path: detail.path,
       page_type: detail.page_type,
-      category: detail.category || 'other',
+      category_id: detail.category_id || defaultCategoryId.value,
       package_root: detail.package_root ?? null,
       need_login: detail.need_login ?? 0,
       source: detail.source || 'manual',
@@ -360,7 +432,8 @@ const handleImport = async () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await loadPageCategories();
   loadData(searchParams.value);
 });
 </script>
@@ -369,11 +442,22 @@ onMounted(() => {
   <div class="client-page p-4">
     <div class="client-page__header">
       <div>
-        <h2 class="client-page__title">页面库</h2>
+        <h2 class="client-page__title">页面列表</h2>
       </div>
       <div class="client-page__actions">
-        <a-button type="primary" @click="handleCreate">新增页面</a-button>
-        <a-button @click="openImportModal">导入 pages.json</a-button>
+        <a-button
+          v-access:code="'SystemClientPageCreate'"
+          type="primary"
+          @click="handleCreate"
+        >
+          新增页面
+        </a-button>
+        <a-button
+          v-access:code="'SystemClientPageImport'"
+          @click="openImportModal"
+        >
+          导入 pages.json
+        </a-button>
         <a-button @click="() => loadData(searchParams)">刷新</a-button>
       </div>
     </div>
@@ -392,8 +476,8 @@ onMounted(() => {
         </a-form-item>
         <a-form-item class="mb-0" label="页面分类">
           <a-select
-            v-model:value="searchParams.category"
-            :options="CATEGORY_OPTIONS"
+            v-model:value="searchParams.category_id"
+            :options="pageCategoryOptions"
             allow-clear
             class="w-full"
             placeholder="请选择"
@@ -481,9 +565,12 @@ onMounted(() => {
             <span v-else>{{ record.path }}</span>
           </template>
 
-          <template v-if="column.dataIndex === 'category'">
-            <a-tag :color="categoryMap[record.category]?.color || 'default'">
-              {{ categoryMap[record.category]?.label || record.category }}
+          <template v-if="column.dataIndex === 'category_id'">
+            <a-tag :color="categoryMap[record.category_id]?.color || 'default'">
+              {{
+                categoryMap[record.category_id]?.label ||
+                `分类 #${record.category_id}`
+              }}
             </a-tag>
           </template>
 
@@ -534,16 +621,24 @@ onMounted(() => {
           </template>
 
           <template v-if="column.dataIndex === 'update_time'">
-            <span v-if="!isCategoryRow(record)">{{ record.update_time }}</span>
+            <span v-if="!isCategoryRow(record)">
+              {{ record.update_time }}
+            </span>
           </template>
 
           <template v-if="column.key === 'action'">
             <span v-if="isCategoryRow(record) || isSystemPage(record)"></span>
             <a-space v-else>
-              <a-button type="link" size="small" @click="handleEdit(record)">
+              <a-button
+                v-access:code="'SystemClientPageUpdate'"
+                type="link"
+                size="small"
+                @click="handleEdit(record)"
+              >
                 编辑
               </a-button>
               <a-button
+                v-access:code="'SystemClientPageDelete'"
                 type="link"
                 danger
                 size="small"
@@ -592,10 +687,10 @@ onMounted(() => {
             placeholder="请选择页面类型"
           />
         </a-form-item>
-        <a-form-item label="页面分类" name="category">
+        <a-form-item label="页面分类" name="category_id">
           <a-select
-            v-model:value="formData.category"
-            :options="CATEGORY_OPTIONS"
+            v-model:value="formData.category_id"
+            :options="enabledPageCategoryOptions"
             placeholder="请选择页面分类"
           />
         </a-form-item>

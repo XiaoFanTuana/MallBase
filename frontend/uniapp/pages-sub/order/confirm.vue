@@ -48,6 +48,13 @@
         <view class="goods-item__info">
           <text class="goods-item__name">{{ item.goods_name || item.name }}</text>
           <text v-if="item.sku_spec" class="goods-item__spec">{{ item.sku_spec }}</text>
+          <text
+            v-for="line in orderItemBenefitLines(item)"
+            :key="line.key"
+            class="goods-item__benefit"
+          >
+            {{ line.text }}
+          </text>
           <view class="goods-item__bottom">
             <mb-price :value="item.unit_price" size="sm" color="var(--color-text-title)" />
             <text class="goods-item__qty">&times;{{ item.quantity }}</text>
@@ -79,6 +86,33 @@
       />
     </view>
 
+    <view
+      v-for="slot in orderExtensionCards"
+      :key="slot.key"
+      class="card points-card"
+      :class="slot.className"
+    >
+      <view class="points-card__main">
+        <view class="points-card__title-row">
+          <text class="points-card__title">{{ slot.title }}</text>
+          <text
+            v-if="slot.amountText"
+            :class="slot.switchable ? 'points-card__discount' : 'points-card__reward'"
+          >
+            {{ slot.amountText }}
+          </text>
+        </view>
+        <text class="points-card__meta">{{ slot.metaText }}</text>
+      </view>
+      <switch
+        v-if="slot.switchable"
+        :checked="slot.checked"
+        :disabled="slot.disabled"
+        color="var(--color-primary, #0d50d5)"
+        @change="onUsePointsChange"
+      />
+    </view>
+
     <!-- 价格明细 -->
     <view class="card summary-card">
       <view class="summary-row">
@@ -91,12 +125,22 @@
         <text v-else-if="isFreeFreight" class="summary-row__free">免运费</text>
         <mb-price v-else :value="displayFreight" size="sm" color="var(--color-text)" />
       </view>
+      <view
+        v-for="row in summaryExtensionRows"
+        :key="row.key"
+        class="summary-row"
+      >
+        <text class="summary-row__label">{{ row.label }}</text>
+        <text class="summary-row__discount">{{ row.amountText }}</text>
+      </view>
       <view class="summary-divider" />
       <view class="summary-row summary-row--total">
         <text class="summary-row__label">合计</text>
         <mb-price :value="displayPayTotal" size="md" color="var(--color-text-title)" />
       </view>
     </view>
+
+    <mb-copyright-footer />
 
     <!-- 底部提交栏 -->
     <view class="submit-bar">
@@ -105,13 +149,13 @@
           <text class="submit-bar__sup">TOTAL AMOUNT</text>
           <mb-price :value="displayPayTotal" size="lg" color="var(--color-primary, #0d50d5)" />
         </view>
-        <view
+        <button
           class="submit-bar__btn"
           :class="{ 'submit-bar__btn--disabled': submitting || !address || !isAddressValid }"
-          @tap="handleSubmit"
+          @click="handleSubmit"
         >
           <text class="submit-bar__btn-text">{{ submitting ? '提交中...' : '提交订单' }}</text>
-        </view>
+        </button>
       </view>
     </view>
 
@@ -138,8 +182,13 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '@/store/cart'
 import { getAddressList } from '@/api/user/address'
 import { createOrder, previewOrder } from '@/api/order/order'
+import { isPointsEnabled as fetchPointsFeatureEnabled } from '@/utils/points-feature'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { isPositivePrice, isZeroPrice, multiplyPrice, normalizePrice, sumPrices } from '@/utils/price'
+import {
+  buildOrderConfirmExtensionState,
+  buildOrderConfirmItemBenefitLines,
+} from '@/utils/extension-slots'
 const decorateStore = useDecorateStore()
 
 const {
@@ -198,8 +247,11 @@ const remark = ref('')
 const submitting = ref(false)
 const idempotencyKey = ref('')
 const orderItems = ref([])
+const selectedCartIds = ref([])
 // 后端订单试算结果（含权威运费），为 null 时回退本地兜底
 const previewResult = ref(null)
+const usePoints = ref(false)
+const pointsFeatureEnabled = ref(false)
 
 /**
  * 生成幂等 key，防止重复提交
@@ -212,6 +264,7 @@ function generateKey() {
 onLoad((query) => {
   source.value = query.source || 'cart'
   idempotencyKey.value = generateKey()
+  refreshPointsFeatureState()
 
   if (source.value === 'sku') {
     skuId.value = query.sku_id || ''
@@ -232,16 +285,19 @@ onLoad((query) => {
     }
   } else {
     // 购物车模式
-    orderItems.value = cartStore.selectedItems.map((item) => ({
+    const selectedItems = cartStore.selectedItems.map((item) => ({
       ...item,
       quantity: item.quantity || 1,
     }))
+    selectedCartIds.value = selectedItems.map((item) => item.id)
+    orderItems.value = selectedItems
   }
 
   fetchDefaultAddress()
 })
 
 onShow(() => {
+  refreshPointsFeatureState()
   // 返回时检查是否有选中的地址
   const selected = uni.getStorageSync('selected_address')
   if (selected) {
@@ -249,6 +305,14 @@ onShow(() => {
     uni.removeStorageSync('selected_address')
   }
 })
+
+async function refreshPointsFeatureState() {
+  const enabled = await fetchPointsFeatureEnabled()
+  pointsFeatureEnabled.value = enabled
+  if (!enabled) {
+    usePoints.value = false
+  }
+}
 
 // 监听地址选择事件（兼容事件模式）
 function onAddressSelected(addr) {
@@ -305,6 +369,30 @@ const displayPayTotal = computed(() =>
 )
 const hasFreight = computed(() => isPositivePrice(displayFreight.value))
 const isFreeFreight = computed(() => previewResult.value && isZeroPrice(displayFreight.value))
+const orderExtensionState = computed(() =>
+  buildOrderConfirmExtensionState({
+    pointsFeatureEnabled: pointsFeatureEnabled.value,
+    previewResult: previewResult.value,
+    usePoints: usePoints.value,
+  }),
+)
+const pointsDeduction = computed(() => orderExtensionState.value.pointsDeduction)
+const canUsePoints = computed(() => orderExtensionState.value.canUsePoints)
+const shouldUsePoints = computed(() => orderExtensionState.value.shouldUsePoints)
+const orderExtensionCards = computed(() => orderExtensionState.value.cards)
+const summaryExtensionRows = computed(() => orderExtensionState.value.summaryRows)
+
+function orderItemBenefitLines(item) {
+  return buildOrderConfirmItemBenefitLines(item)
+}
+
+function onUsePointsChange(event) {
+  if (!canUsePoints.value) {
+    usePoints.value = false
+    return
+  }
+  usePoints.value = !!event.detail.value
+}
 
 /**
  * 调用后端订单试算，获取含运费的权威金额
@@ -319,22 +407,35 @@ async function fetchPreview() {
       ? {
           source: 'sku',
           address_id: address.value.id,
+          use_points: shouldUsePoints.value ? 1 : 0,
           items: [{ sku_id: Number(skuId.value), quantity: Number(quantity.value) || 1 }],
         }
       : {
           source: 'cart',
           address_id: address.value.id,
-          cart_ids: orderItems.value.map((item) => item.id),
+          use_points: shouldUsePoints.value ? 1 : 0,
+          cart_ids: selectedCartIds.value,
         }
   try {
-    previewResult.value = await previewOrder(payload)
+    const result = await previewOrder(payload)
+    previewResult.value = result
+    if (Array.isArray(result?.items) && result.items.length > 0) {
+      orderItems.value = result.items
+    }
+    const deduction = result?.points_deduction
+    if (usePoints.value && (!deduction || Number(deduction.used_points || 0) <= 0)) {
+      usePoints.value = false
+    }
   } catch {
     previewResult.value = null
+    usePoints.value = false
   }
 }
 
 // 收货地址变化（默认地址加载完成 / 用户重新选择）后重新试算
 watch(address, fetchPreview)
+watch(usePoints, fetchPreview)
+watch(pointsFeatureEnabled, fetchPreview)
 
 function maskPhone(phone) {
   if (!phone || phone.length < 7) return phone || ''
@@ -378,13 +479,17 @@ async function handleSubmit() {
           ],
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
+          use_points: shouldUsePoints.value ? 1 : 0,
+          points_used: shouldUsePoints.value ? Number(pointsDeduction.value?.used_points || 0) : 0,
         }
       : {
           source: 'cart',
           address_id: address.value.id,
-          cart_ids: orderItems.value.map((item) => item.id),
+          cart_ids: selectedCartIds.value,
           buyer_remark: remark.value,
           idempotency_key: idempotencyKey.value,
+          use_points: shouldUsePoints.value ? 1 : 0,
+          points_used: shouldUsePoints.value ? Number(pointsDeduction.value?.used_points || 0) : 0,
         }
 
   try {
@@ -611,6 +716,13 @@ async function handleSubmit() {
   margin-top: 8rpx;
 }
 
+.goods-item__benefit {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.35;
+  color: var(--color-primary, #0d50d5);
+}
+
 .goods-item__bottom {
   display: flex;
   align-items: baseline;
@@ -671,6 +783,46 @@ async function handleSubmit() {
 }
 
 .remark-placeholder {
+  color: var(--color-text-tertiary, #737686);
+}
+
+// ---- Points card ----
+.points-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $mb-spacing-md;
+  padding: $mb-spacing-md $mb-spacing-lg;
+}
+
+.points-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.points-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: $mb-spacing-sm;
+  margin-bottom: 6rpx;
+}
+
+.points-card__title {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-text-title, #191b23);
+}
+
+.points-card__discount,
+.points-card__reward,
+.summary-row__discount {
+  font-size: $mb-font-md;
+  font-weight: 600;
+  color: var(--color-primary, #0d50d5);
+}
+
+.points-card__meta {
+  font-size: $mb-font-sm;
   color: var(--color-text-tertiary, #737686);
 }
 
@@ -744,6 +896,7 @@ async function handleSubmit() {
 }
 
 .submit-bar__btn {
+  border: 0;
   height: 88rpx;
   min-width: 260rpx;
   border-radius: $mb-radius-full;
@@ -753,7 +906,13 @@ async function handleSubmit() {
   justify-content: center;
   padding: 0 $mb-spacing-xl;
   box-shadow: none;
+  line-height: 1;
+  margin: 0;
   transition: opacity 0.15s, transform 0.15s;
+
+  &::after {
+    border: 0;
+  }
 
   &:active {
     opacity: 0.85;

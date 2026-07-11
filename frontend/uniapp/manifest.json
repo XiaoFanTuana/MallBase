@@ -64,9 +64,6 @@
         "darkmode" : true,
         "themeLocation" : "theme.json"
     },
-    "mp-alipay" : {
-        "usingComponents" : true
-    },
     "mp-baidu" : {
         "usingComponents" : true
     },

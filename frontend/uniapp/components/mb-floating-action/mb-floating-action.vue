@@ -1,12 +1,13 @@
 <template>
   <view
-    v-if="visible"
+    v-if="visible && positionReady"
     class="mb-floating-action"
     :class="[
       `mb-floating-action--${currentSide}`,
       {
         'mb-floating-action--dragging': dragging,
         'mb-floating-action--open': menuOpened,
+        'mb-floating-action--position-settled': positionSettled,
         'mb-floating-action--single': isSingleMode,
       },
     ]"
@@ -41,7 +42,6 @@
       @touchmove.stop.prevent="handleTouchMove"
       @touchend.stop="handleTouchEnd"
       @touchcancel.stop="handleTouchEnd"
-      @mousedown.stop.prevent="handleMouseStart"
     >
       <template v-if="isSingleMode && mainItem">
         <image
@@ -80,8 +80,12 @@ import {
 import { openCustomerService } from '@/utils/customer-service'
 
 const POSITION_STORAGE_KEY = 'mb_floating_action_position'
-const FLOATING_ICON_BASE = '/static/client/floating'
-const LEGACY_FLOATING_ICON_BASE = '/static/images/floating'
+const FLOATING_ICON_BASE = '/static/decorate/floating'
+const LEGACY_FLOATING_ICON_BASES = [
+  '/static/client/floating',
+  '/static/images/floating',
+]
+const POSITION_SETTLE_DELAY_MS = 32
 
 const decorateStore = useDecorateStore()
 const opened = ref(false)
@@ -91,6 +95,7 @@ const dragging = ref(false)
 const dragMoved = ref(false)
 const ignoreNextTap = ref(false)
 const positionReady = ref(false)
+const positionSettled = ref(false)
 const dragPosition = ref({ x: 0, y: 0 })
 const viewport = ref({ height: 667, safeBottom: 0, width: 375 })
 const touchState = ref({
@@ -99,6 +104,10 @@ const touchState = ref({
   startX: 0,
   startY: 0,
 })
+let dragFrame = 0
+let pendingDragPosition = null
+let positionSettleTimer = 0
+let activePointerId = null
 
 const config = computed(() => decorateStore.floatingConfig || {})
 
@@ -164,8 +173,9 @@ const rootStyle = computed(() => {
   if (positionReady.value) {
     return {
       ...style,
-      left: `${dragPosition.value.x}px`,
-      top: `${dragPosition.value.y}px`,
+      left: '0px',
+      top: '0px',
+      transform: `translate3d(${dragPosition.value.x}px, ${dragPosition.value.y}px, 0)`,
     }
   }
   const side = config.value.position === 'left-bottom' ? 'left' : 'right'
@@ -187,6 +197,9 @@ watch(
   () => {
     if (!visible.value) {
       opened.value = false
+      positionReady.value = false
+      positionSettled.value = false
+      cancelPositionSettle()
       return
     }
     nextTick(() => syncPosition(true))
@@ -205,6 +218,7 @@ onShow(() => {
 onMounted(() => {
   syncCurrentPath()
   syncViewport()
+  addPointerStartListener()
   if (visible.value) syncPosition(true)
 })
 
@@ -218,16 +232,21 @@ function syncViewport() {
   const info = uni.getSystemInfoSync()
   const width = Number(info.windowWidth || info.screenWidth || 375)
   const height = Number(info.windowHeight || info.screenHeight || 667)
-  const safeBottom =
-    Number(info.safeAreaInsets?.bottom || 0) ||
-    Math.max(
+  let safeBottom = Number(info.safeAreaInsets?.bottom || 0)
+  // #ifndef H5
+  if (!safeBottom) {
+    safeBottom = Math.max(
       0,
       Number(info.screenHeight || height) - Number(info.safeArea?.bottom || height),
     )
+  }
+  // #endif
   viewport.value = { height, safeBottom, width }
 }
 
 function syncPosition(preferStorage = true) {
+  cancelPositionSettle()
+  positionSettled.value = false
   syncViewport()
   const stored = preferStorage ? readStoredPosition() : null
   const nextPosition = stored || getDefaultPosition()
@@ -237,6 +256,7 @@ function syncPosition(preferStorage = true) {
       ? 'left'
       : 'right'
   positionReady.value = true
+  schedulePositionSettle()
 }
 
 function getDefaultPosition() {
@@ -381,13 +401,16 @@ function floatingShadowStyle(style) {
 function normalizeFloatingIconPath(value) {
   let normalized = normalizeAssetPath(value)
   if (!normalized) return ''
-  if (normalized.startsWith(LEGACY_FLOATING_ICON_BASE)) {
+  const matchedLegacyBase = LEGACY_FLOATING_ICON_BASES.find((base) =>
+    normalized.startsWith(base),
+  )
+  if (matchedLegacyBase) {
     normalized = normalized
-      .replace(LEGACY_FLOATING_ICON_BASE, FLOATING_ICON_BASE)
+      .replace(matchedLegacyBase, FLOATING_ICON_BASE)
       .replace(/\.svg(?:[?#].*)?$/i, '.png')
   }
   if (
-    normalized.startsWith('/static/client/') &&
+    normalized.startsWith('/static/') &&
     appConfig.baseUrl &&
     !/^(?:https?:)?\/\//.test(normalized)
   ) {
@@ -398,7 +421,7 @@ function normalizeFloatingIconPath(value) {
 
 function isSystemFloatingIcon(value) {
   const normalized = normalizeFloatingIconPath(value)
-  return normalized.includes('/static/client/floating/')
+  return normalized.includes('/static/decorate/floating/')
 }
 
 function getUploadedIcon(item) {
@@ -450,12 +473,14 @@ function getSystemPresetType(item) {
 }
 
 function handleTouchStart(event) {
+  if (activePointerId !== null) return
   const touch = event.touches?.[0]
   if (!touch) return
   startDrag(touch.clientX, touch.clientY)
 }
 
 function handleTouchMove(event) {
+  if (activePointerId !== null) return
   if (!dragging.value) return
   const touch = event.touches?.[0]
   if (!touch) return
@@ -463,31 +488,84 @@ function handleTouchMove(event) {
 }
 
 function handleTouchEnd() {
+  if (activePointerId !== null) return
   endDrag()
 }
 
-function handleMouseStart(event) {
-  if (event.button !== undefined && event.button !== 0) return
-  startDrag(event.clientX, event.clientY)
+function handlePointerStart(event) {
   if (typeof window === 'undefined') return
-  window.addEventListener('mousemove', handleMouseMove, { passive: false })
-  window.addEventListener('mouseup', handleMouseEnd)
+  if (activePointerId !== null || event.isPrimary === false) return
+  if (event.button !== undefined && event.button !== 0) return
+  const dragHandle =
+    event
+      .composedPath?.()
+      .find((node) => node?.matches?.('.mb-floating-action__main')) ||
+    event.target?.closest?.('.mb-floating-action__main')
+  if (!dragHandle) return
+  const pointerId = Number(event.pointerId)
+  const clientX = Number(event.clientX)
+  const clientY = Number(event.clientY)
+  if (
+    !Number.isFinite(pointerId) ||
+    !Number.isFinite(clientX) ||
+    !Number.isFinite(clientY)
+  ) {
+    return
+  }
+  event.preventDefault?.()
+  event.stopPropagation?.()
+  removePointerListeners()
+  activePointerId = pointerId
+  startDrag(clientX, clientY)
+  window.addEventListener('pointermove', handlePointerMove, {
+    capture: true,
+    passive: false,
+  })
+  window.addEventListener('pointerup', handlePointerEnd, true)
+  window.addEventListener('pointercancel', handlePointerEnd, true)
 }
 
-function handleMouseMove(event) {
+function addPointerStartListener() {
+  if (typeof window === 'undefined') return
+  window.addEventListener('pointerdown', handlePointerStart, {
+    capture: true,
+    passive: false,
+  })
+}
+
+function removePointerStartListener() {
+  if (typeof window === 'undefined') return
+  window.removeEventListener('pointerdown', handlePointerStart, true)
+}
+
+function handlePointerMove(event) {
+  if (activePointerId === null) return
+  if (Number(event.pointerId) !== activePointerId) return
   event.preventDefault?.()
+  event.stopPropagation?.()
   moveDrag(event.clientX, event.clientY)
 }
 
-function handleMouseEnd() {
-  removeMouseListeners()
+function handlePointerEnd(event) {
+  if (activePointerId === null) return
+  if (Number(event.pointerId) !== activePointerId) return
+  event.preventDefault?.()
+  event.stopPropagation?.()
+  const wasMoved = dragMoved.value
+  activePointerId = null
+  removePointerListeners()
   endDrag()
+  if (event.type === 'pointerup' && !wasMoved) {
+    ignoreNextTap.value = true
+    activateMainAction()
+  }
 }
 
-function removeMouseListeners() {
+function removePointerListeners() {
   if (typeof window === 'undefined') return
-  window.removeEventListener('mousemove', handleMouseMove)
-  window.removeEventListener('mouseup', handleMouseEnd)
+  window.removeEventListener('pointermove', handlePointerMove, true)
+  window.removeEventListener('pointerup', handlePointerEnd, true)
+  window.removeEventListener('pointercancel', handlePointerEnd, true)
 }
 
 function startDrag(clientX, clientY) {
@@ -510,11 +588,12 @@ function moveDrag(clientX, clientY) {
     dragMoved.value = true
     opened.value = false
   }
-  applyPosition(touchState.value.startX + dx, touchState.value.startY + dy)
+  scheduleDragPosition(touchState.value.startX + dx, touchState.value.startY + dy)
 }
 
 function endDrag() {
   if (!dragging.value) return
+  flushDragPosition()
   dragging.value = false
   if (dragMoved.value) {
     snapToEdge()
@@ -523,14 +602,77 @@ function endDrag() {
 }
 
 onBeforeUnmount(() => {
-  removeMouseListeners()
+  removePointerStartListener()
+  removePointerListeners()
+  activePointerId = null
+  cancelDragFrame()
+  cancelPositionSettle()
 })
+
+function schedulePositionSettle() {
+  nextTick(() => {
+    cancelPositionSettle()
+    positionSettleTimer = setTimeout(() => {
+      positionSettleTimer = 0
+      positionSettled.value = true
+    }, POSITION_SETTLE_DELAY_MS)
+  })
+}
+
+function cancelPositionSettle() {
+  if (!positionSettleTimer) return
+  clearTimeout(positionSettleTimer)
+  positionSettleTimer = 0
+}
+
+function scheduleDragPosition(x, y) {
+  pendingDragPosition = clampPosition(x, y)
+  if (dragFrame) return
+
+  dragFrame = requestDragFrame(() => {
+    dragFrame = 0
+    if (!pendingDragPosition) return
+    dragPosition.value = pendingDragPosition
+    pendingDragPosition = null
+  })
+}
+
+function flushDragPosition() {
+  if (dragFrame) {
+    cancelDragFrame()
+  }
+  if (pendingDragPosition) {
+    dragPosition.value = pendingDragPosition
+    pendingDragPosition = null
+  }
+}
+
+function cancelDragFrame() {
+  if (!dragFrame) return
+  if (typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(dragFrame)
+  } else {
+    clearTimeout(dragFrame)
+  }
+  dragFrame = 0
+}
+
+function requestDragFrame(callback) {
+  if (typeof requestAnimationFrame === 'function') {
+    return requestAnimationFrame(callback)
+  }
+  return setTimeout(callback, 16)
+}
 
 function handleMainTap() {
   if (ignoreNextTap.value) {
     ignoreNextTap.value = false
     return
   }
+  activateMainAction()
+}
+
+function activateMainAction() {
   if (isSingleMode.value) {
     handleItemTap(mainItem.value)
     return
@@ -558,9 +700,12 @@ async function handleItemTap(item) {
   width: var(--mb-floating-size);
   height: var(--mb-floating-size);
   color: var(--mb-floating-color);
-  transition:
-    left 0.2s ease,
-    top 0.2s ease;
+  transition: none;
+  will-change: transform;
+}
+
+.mb-floating-action--position-settled {
+  transition: transform 0.2s ease;
 }
 
 .mb-floating-action--dragging {
@@ -584,6 +729,7 @@ async function handleItemTap(item) {
   overflow: hidden;
   border-radius: var(--mb-floating-radius);
   cursor: grab;
+  touch-action: none;
   user-select: none;
 }
 
@@ -636,6 +782,7 @@ async function handleItemTap(item) {
 .mb-floating-action__icon {
   width: 48%;
   height: 48%;
+  pointer-events: none;
 }
 
 .mb-floating-action__icon--preset {

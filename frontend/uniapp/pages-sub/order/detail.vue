@@ -49,7 +49,7 @@
       </view>
 
       <!-- Logistics preview (when shipped) -->
-      <view v-if="order.status === 20 && order.logistics_info" class="logistics-preview">
+      <view v-if="order.status === 20 && (isVirtualDelivery(order) || order.logistics_info)" class="logistics-preview">
         <view class="logistics-preview__icon">
           <view class="truck-icon">
             <view class="truck-icon__body" />
@@ -59,8 +59,12 @@
           </view>
         </view>
         <view class="logistics-preview__content">
-          <text class="logistics-preview__text">{{ order.logistics_info.latest_desc || '物流信息加载中' }}</text>
-          <text class="logistics-preview__time">{{ order.logistics_info.latest_time || '' }}</text>
+          <text class="logistics-preview__text">
+            {{ isVirtualDelivery(order) ? (order.delivery_note || '虚拟商品已发货') : (order.logistics_info.latest_desc || '物流信息加载中') }}
+          </text>
+          <text class="logistics-preview__time">
+            {{ isVirtualDelivery(order) ? (order.shipped_at || '') : (order.logistics_info.latest_time || '') }}
+          </text>
         </view>
       </view>
 
@@ -208,6 +212,7 @@
       </view>
 
       <!-- Bottom spacer -->
+      <mb-copyright-footer />
       <view class="bottom-spacer" />
     </template>
 
@@ -262,7 +267,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { multiplyPrice, sumPrices } from '@/utils/price'
-import { openCustomerService } from '@/utils/customer-service'
+import { openCustomerService as openCustomerServiceEntry } from '@/utils/customer-service'
 import config from '@/config/index'
 const decorateStore = useDecorateStore()
 
@@ -369,6 +374,21 @@ const statusDesc = computed(() => {
 })
 
 const orderItems = computed(() => getOrderItems(order.value))
+
+async function openCustomerService() {
+  await openCustomerServiceEntry({
+    source: 'order',
+    order: {
+      id: order.value?.id,
+      title: order.value?.sn,
+      url: order.value?.id ? `/pages-sub/order/detail?id=${order.value.id}` : '',
+      summary: order.value?.status_text || order.value?.after_sale_tag_text || '',
+      metadata: {
+        sn: order.value?.sn || '',
+      },
+    },
+  })
+}
 const afterSalePreviewItems = computed(() => getAfterSaleItems(order.value?.after_sale).slice(0, 3))
 const afterSaleMoreCount = computed(() => Math.max(0, getAfterSaleItems(order.value?.after_sale).length - 3))
 
@@ -422,7 +442,9 @@ const actions = computed(() => {
     if (canApplyRefund(order.value)) {
       list.push({ key: 'refund', label: '申请售后', primary: false })
     }
-    list.push({ key: 'logistics', label: '查看物流', primary: false })
+    if (!isVirtualDelivery(order.value)) {
+      list.push({ key: 'logistics', label: '查看物流', primary: false })
+    }
     if (!hasActiveAfterSale(order.value)) {
       list.push({ key: 'confirm', label: '确认收货', primary: true })
     }
@@ -447,6 +469,10 @@ function normalizeImageUrl(url) {
     return `${config.baseUrl}${value}`
   }
   return value
+}
+
+function isVirtualDelivery(order) {
+  return String(order?.delivery_type || '') === 'virtual'
 }
 
 function getOrderItems(source) {

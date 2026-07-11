@@ -14,7 +14,7 @@ class ClientPageValidate extends Validate
         'name' => 'require|max:80',
         'path' => 'require|max:255',
         'page_type' => 'require|in:tab,page,subpackage',
-        'category' => 'in:basic,goods,order,aftersale,user,marketing,other',
+        'category_id' => 'integer|gt:0',
         'package_root' => 'max:120',
         'need_login' => 'in:0,1',
         'source' => 'in:auto,manual,system',
@@ -30,7 +30,8 @@ class ClientPageValidate extends Validate
         'path.max' => '页面路径最多255个字符',
         'page_type.require' => '页面类型不能为空',
         'page_type.in' => '页面类型不正确',
-        'category.in' => '页面分类不正确',
+        'category_id.integer' => '页面分类必须是整数',
+        'category_id.gt' => '请选择页面分类',
         'package_root.max' => '分包 root 最多120个字符',
         'need_login.in' => '登录要求必须是0或1',
         'source.in' => '页面来源不正确',
@@ -41,7 +42,7 @@ class ClientPageValidate extends Validate
     ];
 
     protected $scene = [
-        'create' => ['name', 'path', 'page_type', 'category', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status'],
-        'update' => ['name', 'path', 'page_type', 'category', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status'],
+        'create' => ['name', 'path', 'page_type', 'category_id', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status'],
+        'update' => ['name', 'path', 'page_type', 'category_id', 'package_root', 'need_login', 'source', 'remark', 'sort', 'status'],
     ];
 }

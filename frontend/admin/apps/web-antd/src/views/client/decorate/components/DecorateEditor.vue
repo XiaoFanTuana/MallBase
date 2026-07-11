@@ -532,6 +532,26 @@ const profileTextStyleDefaults: Record<
       textAlign: 'left',
     },
   },
+  memberEntry: {
+    amount: {
+      color: '#191b23',
+      fontSize: 26,
+      fontWeight: '700',
+      textAlign: 'left',
+    },
+    meta: {
+      color: '#434654',
+      fontSize: 20,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    title: {
+      color: '#737686',
+      fontSize: 20,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
   serviceMenu: {
     itemLabel: {
       color: '#191b23',
@@ -573,6 +593,70 @@ const profileTextStyleDefaults: Record<
     },
   },
   walletEntry: {
+    action: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    amount: {
+      color: '#191b23',
+      fontSize: 52,
+      fontWeight: '800',
+      textAlign: 'left',
+    },
+    meta: {
+      color: '#737686',
+      fontSize: 22,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    primaryAction: {
+      color: '#ffffff',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    title: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
+  pointsEntry: {
+    action: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    amount: {
+      color: '#191b23',
+      fontSize: 52,
+      fontWeight: '800',
+      textAlign: 'left',
+    },
+    meta: {
+      color: '#737686',
+      fontSize: 22,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+    primaryAction: {
+      color: '#ffffff',
+      fontSize: 24,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    title: {
+      color: '#434654',
+      fontSize: 24,
+      fontWeight: '400',
+      textAlign: 'left',
+    },
+  },
+  distributionEntry: {
     action: {
       color: '#434654',
       fontSize: 24,
@@ -701,6 +785,11 @@ const profileTextStyleFieldsByType: Record<
     { label: '查看全部', role: 'more' },
     { label: '入口文字', role: 'itemLabel' },
   ],
+  memberEntry: [
+    { label: '卡片标题', role: 'title' },
+    { label: '等级名称', role: 'amount' },
+    { label: '成长说明', role: 'meta' },
+  ],
   serviceMenu: [
     { label: '组件标题', role: 'title' },
     { label: '入口文字', role: 'itemLabel' },
@@ -713,6 +802,20 @@ const profileTextStyleFieldsByType: Record<
   walletEntry: [
     { label: '卡片标题', role: 'title' },
     { label: '金额文字', role: 'amount' },
+    { label: '辅助说明', role: 'meta' },
+    { label: '普通按钮', role: 'action' },
+    { label: '主按钮', role: 'primaryAction' },
+  ],
+  pointsEntry: [
+    { label: '卡片标题', role: 'title' },
+    { label: '积分数字', role: 'amount' },
+    { label: '辅助说明', role: 'meta' },
+    { label: '普通按钮', role: 'action' },
+    { label: '主按钮', role: 'primaryAction' },
+  ],
+  distributionEntry: [
+    { label: '卡片标题', role: 'title' },
+    { label: '佣金金额', role: 'amount' },
     { label: '辅助说明', role: 'meta' },
     { label: '普通按钮', role: 'action' },
     { label: '主按钮', role: 'primaryAction' },
@@ -1072,21 +1175,21 @@ const normalizeUploadImageValue = (value: any, previewUrl?: unknown) => {
   return undefined;
 };
 
-const demoAssetBaseUrl = `${
+const decorateAssetBaseUrl = `${
   new URL(import.meta.env.VITE_GLOB_API_URL || '/', window.location.origin)
     .origin
-}/static/demo/`;
+}/static/decorate/`;
 
-const createDemoAssetFile = (url: string, name: string) => ({
-  full_url: `${demoAssetBaseUrl}${name}`,
+const createDecorateAssetFile = (url: string, name: string) => ({
+  full_url: `${decorateAssetBaseUrl}${name}`,
   name,
   url,
 });
 
 const defaultBannerImageByIndex = [
-  createDemoAssetFile('48', 'decorate-banner-market.png'),
-  createDemoAssetFile('49', 'decorate-banner-member.png'),
-  createDemoAssetFile('50', 'decorate-banner-home.png'),
+  createDecorateAssetFile('1001', 'decorate-banner-market.png'),
+  createDecorateAssetFile('1002', 'decorate-banner-member.png'),
+  createDecorateAssetFile('1003', 'decorate-banner-home.png'),
 ];
 
 const legacyDefaultBannerIds = new Set(['6', '7', '8', '41']);
@@ -1096,12 +1199,12 @@ const defaultNavImageByKey: Record<
   string,
   { full_url: string; name: string; url: string }
 > = {
-  beauty: createDemoAssetFile('52', 'decorate-nav-beauty.png'),
-  food: createDemoAssetFile('55', 'decorate-nav-food.png'),
-  home: createDemoAssetFile('54', 'decorate-nav-home.png'),
-  phone: createDemoAssetFile('51', 'decorate-nav-digital.png'),
-  shirt: createDemoAssetFile('53', 'decorate-nav-fashion.png'),
-  sport: createDemoAssetFile('56', 'decorate-nav-sport.png'),
+  beauty: createDecorateAssetFile('1005', 'decorate-nav-beauty.png'),
+  food: createDecorateAssetFile('1008', 'decorate-nav-food.png'),
+  home: createDecorateAssetFile('1007', 'decorate-nav-home.png'),
+  phone: createDecorateAssetFile('1004', 'decorate-nav-digital.png'),
+  shirt: createDecorateAssetFile('1006', 'decorate-nav-fashion.png'),
+  sport: createDecorateAssetFile('1009', 'decorate-nav-sport.png'),
 };
 
 const getDefaultNavImageValue = (item: any) => {
@@ -1142,35 +1245,35 @@ const getDefaultBannerImageValue = (index: number) =>
   defaultBannerImageByIndex[index % defaultBannerImageByIndex.length];
 
 const defaultProfileOrderImageByIndex = [
-  createDemoAssetFile(
-    'static/demo/profile-order-pay.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-pay.svg',
     'profile-order-pay.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-ship.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-ship.svg',
     'profile-order-ship.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-receive.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-receive.svg',
     'profile-order-receive.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-order-refund.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-order-refund.svg',
     'profile-order-refund.svg',
   ),
 ];
 
 const defaultProfileServiceImageByIndex = [
-  createDemoAssetFile(
-    'static/demo/profile-service-address.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-address.svg',
     'profile-service-address.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-settings.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-settings.svg',
     'profile-service-settings.svg',
   ),
-  createDemoAssetFile(
-    'static/demo/profile-service-support.svg',
+  createDecorateAssetFile(
+    'static/decorate/profile-service-support.svg',
     'profile-service-support.svg',
   ),
 ];
@@ -1868,17 +1971,22 @@ const updateProfileItemImage = (item: any, value: any) => {
   setProfileItemImageRemoved(item, true);
 };
 
+const defaultCubeImageNames = [
+  'decorate-cube-new.png',
+  'decorate-cube-picks.png',
+  'decorate-cube-member.png',
+  'decorate-cube-sale.png',
+];
+
+const defaultCubeAssetIds = ['1010', '1011', '1012', '1013'];
+
 const createCubeItem = (index: number, visible = true) => ({
   id: createLocalId('cube_item'),
   enabled: visible,
-  image: createDemoAssetFile(
-    String(57 + (index % 4)),
-    [
+  image: createDecorateAssetFile(
+    defaultCubeAssetIds[index % defaultCubeAssetIds.length] || '1010',
+    defaultCubeImageNames[index % defaultCubeImageNames.length] ||
       'decorate-cube-new.png',
-      'decorate-cube-picks.png',
-      'decorate-cube-member.png',
-      'decorate-cube-sale.png',
-    ][index % 4] || 'decorate-cube-new.png',
   ),
   path:
     [
@@ -2017,6 +2125,23 @@ const profileTextStyleTargetText = (
     };
     return targets[role] || '当前未显示';
   }
+  if (type === 'memberEntry') {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+      action: '当前未显示',
+      amount: '普通会员',
+      iconText: '当前未显示',
+      itemLabel: '当前未显示',
+      meta:
+        config.show_growth === false && config.show_progress === false
+          ? '当前未显示'
+          : '成长值 0 / 距下一等级还差 0 成长值',
+      more: '当前未显示',
+      primaryAction: '当前未显示',
+      subtitle: '当前未显示',
+      title: String(config.title || '会员等级'),
+    };
+    return targets[role] || '当前未显示';
+  }
   if (type === 'walletEntry') {
     const targets: Partial<Record<ProfileTextStyleRole, string>> = {
       action:
@@ -2033,6 +2158,39 @@ const profileTextStyleTargetText = (
         config.show_view_button === false ? '当前未显示' : '去查看',
       subtitle: '当前未显示',
       title: String(config.title || '我的余额'),
+    };
+    return targets[role] || '当前未显示';
+  }
+  if (type === 'pointsEntry') {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+      action: config.show_records === false ? '当前未显示' : '积分明细',
+      amount: '0',
+      iconText: '当前未显示',
+      itemLabel: '当前未显示',
+      meta: '累计获得 0 / 累计扣减 0',
+      more: '当前未显示',
+      primaryAction:
+        config.show_view_button === false ? '当前未显示' : '去查看',
+      subtitle: '当前未显示',
+      title: String(config.title || '我的积分'),
+    };
+    return targets[role] || '当前未显示';
+  }
+  if (type === 'distributionEntry') {
+    const targets: Partial<Record<ProfileTextStyleRole, string>> = {
+      action: config.show_records === false ? '当前未显示' : '佣金明细',
+      amount: config.show_commission === false ? '当前未显示' : '¥0.00',
+      iconText: '当前未显示',
+      itemLabel: '当前未显示',
+      meta:
+        config.show_team === false && config.show_invite === false
+          ? '当前未显示'
+          : '团队 0 人 / 邀请码 MB0000',
+      more: '当前未显示',
+      primaryAction:
+        config.show_withdraw_button === false ? '当前未显示' : '去提现',
+      subtitle: '当前未显示',
+      title: String(config.title || '分销中心'),
     };
     return targets[role] || '当前未显示';
   }
@@ -4289,7 +4447,11 @@ const updateProfileItemVisible = updateConfigItemVisible;
                       serviceMenu:
                         '默认展示四个常用服务入口，可配置图片、名称和跳转。',
                       userInfo: '登录信息区域，控制手机号与签名展示。',
+                      memberEntry: '会员等级区域，控制折扣、成长值和进度展示。',
                       walletEntry: '钱包信息区域，控制余额、明细和查看入口。',
+                      pointsEntry: '积分信息区域，控制积分、明细和查看入口。',
+                      distributionEntry:
+                        '分销信息区域，控制佣金、团队、邀请码、提现和明细入口。',
                     }[editableProfileType] || '配置当前个人中心组件内容。'
                   }}
                 </div>
@@ -4309,6 +4471,32 @@ const updateProfileItemVisible = updateConfigItemVisible;
                 <a-form-item label="展示手机号">
                   <a-switch
                     v-model:checked="editableModule.config.show_mobile"
+                  />
+                </a-form-item>
+              </div>
+            </template>
+
+            <template v-else-if="editableProfileType === 'memberEntry'">
+              <a-form-item label="卡片标题">
+                <a-input
+                  v-model:value="editableModule.config.title"
+                  placeholder="如：会员等级"
+                />
+              </a-form-item>
+              <div class="profile-config-grid">
+                <a-form-item label="展示折扣">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_discount"
+                  />
+                </a-form-item>
+                <a-form-item label="展示成长值">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_growth"
+                  />
+                </a-form-item>
+                <a-form-item label="展示进度">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_progress"
                   />
                 </a-form-item>
               </div>
@@ -4335,6 +4523,61 @@ const updateProfileItemVisible = updateConfigItemVisible;
                 <a-form-item label="查看按钮">
                   <a-switch
                     v-model:checked="editableModule.config.show_view_button"
+                  />
+                </a-form-item>
+              </div>
+            </template>
+
+            <template v-else-if="editableProfileType === 'pointsEntry'">
+              <a-form-item label="卡片标题">
+                <a-input
+                  v-model:value="editableModule.config.title"
+                  placeholder="如：我的积分"
+                />
+              </a-form-item>
+              <div class="profile-config-grid">
+                <a-form-item label="积分明细">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_records"
+                  />
+                </a-form-item>
+                <a-form-item label="查看按钮">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_view_button"
+                  />
+                </a-form-item>
+              </div>
+            </template>
+
+            <template v-else-if="editableProfileType === 'distributionEntry'">
+              <a-form-item label="卡片标题">
+                <a-input
+                  v-model:value="editableModule.config.title"
+                  placeholder="如：分销中心"
+                />
+              </a-form-item>
+              <div class="profile-config-grid">
+                <a-form-item label="展示佣金">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_commission"
+                  />
+                </a-form-item>
+                <a-form-item label="展示团队">
+                  <a-switch v-model:checked="editableModule.config.show_team" />
+                </a-form-item>
+                <a-form-item label="展示邀请码">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_invite"
+                  />
+                </a-form-item>
+                <a-form-item label="提现按钮">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_withdraw_button"
+                  />
+                </a-form-item>
+                <a-form-item label="佣金明细">
+                  <a-switch
+                    v-model:checked="editableModule.config.show_records"
                   />
                 </a-form-item>
               </div>
