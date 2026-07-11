@@ -63,33 +63,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate Docker Hub configuration
+      - name: Check Docker Hub configuration
+        id: dockerhub
         env:
           DOCKERHUB_LOGIN_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_LOGIN_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [ -z "$DOCKERHUB_NAMESPACE" ]; then
-            echo "DOCKERHUB_NAMESPACE variable or DOCKERHUB_USERNAME secret is required."
-            exit 1
+          if [ -z "$DOCKERHUB_NAMESPACE" ] || [ -z "$DOCKERHUB_LOGIN_USERNAME" ] || [ -z "$DOCKERHUB_LOGIN_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Docker Hub publish skipped. Configure DOCKERHUB_USERNAME and DOCKERHUB_TOKEN repository secrets."
+            exit 0
           fi
-          if [ -z "$DOCKERHUB_LOGIN_USERNAME" ] || [ -z "$DOCKERHUB_LOGIN_TOKEN" ]; then
-            echo "DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets are required."
-            exit 1
-          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
+        if: steps.dockerhub.outputs.configured == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: steps.dockerhub.outputs.configured == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
+        if: steps.dockerhub.outputs.configured == 'true'
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract Docker metadata
+        if: steps.dockerhub.outputs.configured == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -103,6 +106,7 @@ jobs:
             type=sha,format=short
 
       - name: Build and push
+        if: steps.dockerhub.outputs.configured == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .

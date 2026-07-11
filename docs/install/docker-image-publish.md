@@ -10,6 +10,8 @@
 - 推送版本标签，例如 `v1.0.0`
 - 在 GitHub Actions 页面手动运行 `Docker Publish`
 
+如果仓库尚未配置 Docker Hub Secrets，后端验证仍会运行，但镜像构建和上传步骤会显示警告并跳过。
+
 构建平台：
 
 ```text
