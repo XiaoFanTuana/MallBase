@@ -1,0 +1,133 @@
+name: Frontend Release Artifacts
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      weixin_appid:
+        description: WeChat Mini Program AppID; falls back to repository variable UNIAPP_WEIXIN_APPID
+        required: false
+        type: string
+      miniapp_base_url:
+        description: HTTPS backend origin; falls back to repository variable UNIAPP_MINIAPP_BASE_URL
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  admin:
+    name: Build Admin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/admin/.node-version
+          cache: pnpm
+          cache-dependency-path: frontend/admin/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: frontend/admin
+
+      - name: Build Admin
+        run: pnpm run build:antd
+        working-directory: frontend/admin
+
+      - name: Verify Admin artifact
+        run: test -f apps/web-antd/dist/index.html
+        working-directory: frontend/admin
+
+      - name: Upload Admin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mallbase-admin-${{ github.run_number }}
+          path: frontend/admin/apps/web-antd/dist
+          if-no-files-found: error
+          retention-days: 30
+
+  uniapp:
+    name: Build H5 and WeChat Mini Program
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: frontend/uniapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend/uniapp
+
+      - name: Build H5
+        run: npm run build:h5
+        working-directory: frontend/uniapp
+
+      - name: Verify H5 artifact
+        run: test -f dist/build/h5/index.html
+        working-directory: frontend/uniapp
+
+      - name: Upload H5 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mallbase-h5-${{ github.run_number }}
+          path: frontend/uniapp/dist/build/h5
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Validate WeChat Mini Program release configuration
+        run: npm run prepare:mp-weixin-release -- --check-only
+        working-directory: frontend/uniapp
+        env:
+          UNIAPP_WEIXIN_APPID: ${{ inputs.weixin_appid || vars.UNIAPP_WEIXIN_APPID }}
+          VITE_UNIAPP_BASE_URL: ${{ inputs.miniapp_base_url || vars.UNIAPP_MINIAPP_BASE_URL }}
+
+      - name: Build WeChat Mini Program
+        run: npm run build:mp-weixin
+        working-directory: frontend/uniapp
+        env:
+          VITE_UNIAPP_BASE_URL: ${{ inputs.miniapp_base_url || vars.UNIAPP_MINIAPP_BASE_URL }}
+
+      - name: Prepare WeChat Mini Program artifact
+        run: npm run prepare:mp-weixin-release
+        working-directory: frontend/uniapp
+        env:
+          UNIAPP_WEIXIN_APPID: ${{ inputs.weixin_appid || vars.UNIAPP_WEIXIN_APPID }}
+          VITE_UNIAPP_BASE_URL: ${{ inputs.miniapp_base_url || vars.UNIAPP_MINIAPP_BASE_URL }}
+
+      - name: Verify WeChat Mini Program artifact
+        run: |
+          test -f dist/build/mp-weixin/app.json
+          test -f dist/build/mp-weixin/project.config.json
+        working-directory: frontend/uniapp
+
+      - name: Upload WeChat Mini Program artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mallbase-mp-weixin-${{ github.run_number }}
+          path: frontend/uniapp/dist/build/mp-weixin
+          if-no-files-found: error
+          retention-days: 30

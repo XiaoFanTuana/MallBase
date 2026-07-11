@@ -73,6 +73,8 @@ mall-base/
 │   │   ├── docker-backend-only.md  # 方式二：Docker 开发（仅后端）
 │   │   ├── docker-fullstack.md     # 方式三：Docker 开发（全套）
 │   │   ├── docker-production.md    # 方式四：Docker 生产
+│   │   ├── docker-image-publish.md # Docker Hub 多架构后端镜像发布
+│   │   ├── frontend-release-artifacts.md # Admin、H5 与微信小程序发布制品
 │   │   ├── commands.md             # 安装与部署命令导航
 │   │   ├── commands-common.md      # 常用命令速查
 │   │   ├── commands-local.md       # 本地安装与 Swoole 命令
@@ -154,6 +156,7 @@ docker compose restart
 | [方式二：Docker 开发（仅后端）](docs/install/docker-backend-only.md) | 宿主机 MySQL / Redis + 后端容器 |
 | [方式三：Docker 开发（全套）](docs/install/docker-fullstack.md) | 后端 + MySQL + Redis 一键启动，前端打包单独执行 |
 | [方式四：Docker 生产](docs/install/docker-production.md) | 单后端容器 + 宿主机 Nginx |
+| [Docker Hub 多架构镜像发布](docs/install/docker-image-publish.md) | GitHub Actions 自动构建 amd64/arm64 后端镜像并推送到 Docker Hub |
 | [安装与部署命令导航](docs/install/commands.md) | 命令分册入口，按常用、本地、Docker、前端、清理、维护拆分 |
 | [命令行安装 install:auto](docs/install/cli-install.md) | 手动安装或本地安装失败时执行 `php think install:auto` |
 | [安装与部署故障排查](docs/install/troubleshooting.md) | 安装、Docker、前端静态资源与运行时故障处理 |
@@ -179,6 +182,7 @@ docker compose restart
 |------|------|
 | [后台前端（Admin）打包](docs/install/admin-build.md) | 把 `frontend/admin` 打包到 `backend/public/admin`（Docker 一键 / 本地） |
 | [UniApp H5 打包](docs/install/uniapp-build.md) | 把 UniApp H5 打包到 `backend/public/client` |
+| [前端发布制品自动构建](docs/install/frontend-release-artifacts.md) | GitHub Actions 构建 Admin、H5 和微信小程序制品 |
 | [前端静态资源上传脚本](docs/install/upload-frontend.md) | 用 `deploy/upload-frontend.sh` 上传 admin / client 到服务器 |
 | [分级清理脚本](docs/install/cleanup-dev.md) | `deploy/docker/cleanup-dev.sh`：按等级清理基础运行态、前端文件、Docker 开发状态与镜像 |
 

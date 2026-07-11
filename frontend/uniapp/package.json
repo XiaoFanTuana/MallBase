@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev:h5": "UNI_INPUT_DIR=. uni",
-    "dev:mp-weixin": "UNI_INPUT_DIR=. uni -p mp-weixin",
-    "build:h5": "UNI_INPUT_DIR=. uni build",
-    "build:mp-weixin": "UNI_INPUT_DIR=. uni build -p mp-weixin"
+    "dev:h5": "cross-env UNI_INPUT_DIR=. uni",
+    "dev:mp-weixin": "cross-env UNI_INPUT_DIR=. uni -p mp-weixin",
+    "build:h5": "cross-env UNI_INPUT_DIR=. uni build",
+    "build:mp-weixin": "cross-env UNI_INPUT_DIR=. uni build -p mp-weixin",
+    "prepare:mp-weixin-release": "node scripts/prepare-mp-weixin-release.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5000820260420001",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@dcloudio/uni-cli-shared": "3.0.0-alpha-5000820260420001",
     "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5000820260420001",
+    "cross-env": "7.0.3",
     "sass": "^1.99.0",
     "vite": "^5.2.8"
   }

@@ -30,6 +30,8 @@
 | [cli-install.md](./cli-install.md) | 手动安装或本地安装失败时，使用 `php think install:auto` 执行命令行安装 |
 | [troubleshooting.md](./troubleshooting.md) | 安装、Docker、前端静态资源与运行时的故障排查 |
 | [env-files.md](./env-files.md) | 根 `.env`、`backend/.env` 与安装运行时配置职责 |
+| [docker-image-publish.md](./docker-image-publish.md) | GitHub Actions 自动构建 amd64/arm64 后端镜像并推送到 Docker Hub |
+| [frontend-release-artifacts.md](./frontend-release-artifacts.md) | GitHub Actions 自动构建 Admin、H5 和微信小程序发布制品 |
 | [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径的代理与静态托管规则 |
 | [cloud-storage-upload.md](./cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
 | [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题专题记录 |
@@ -51,6 +53,7 @@
 |------|------|
 | [admin-build.md](./admin-build.md) | 后台前端（Vben Admin）打包到 `backend/public/admin`（Docker 一键打包 / 本地打包） |
 | [uniapp-build.md](./uniapp-build.md) | UniApp H5 打包到 `backend/public/client` |
+| [frontend-release-artifacts.md](./frontend-release-artifacts.md) | 自动构建 Admin、H5 和微信小程序发布制品 |
 | [upload-frontend.md](./upload-frontend.md) | 用 `deploy/upload-frontend.sh` 把 `backend/public/admin`（及 `client`）上传到服务器 |
 | [cleanup-dev.md](./cleanup-dev.md) | `deploy/docker/cleanup-dev.sh`：按等级清理基础运行态、前端文件、Docker 开发状态与镜像 |
 

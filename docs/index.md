@@ -16,6 +16,7 @@
 | 新增云存储驱动 | [upload-storage-driver-extension.md](./upload-storage-driver-extension.md) |
 | 查看隐私与平台统计范围 | [privacy.md](./privacy.md) |
 | 做前端构建或上传 | [install/commands-frontend.md](./install/commands-frontend.md) |
+| 自动构建 Docker 镜像和前端制品 | [install/docker-image-publish.md](./install/docker-image-publish.md)、[install/frontend-release-artifacts.md](./install/frontend-release-artifacts.md) |
 | 看测试入口 | [testing/change-trigger-test-matrix.md](./testing/change-trigger-test-matrix.md) |
 
 ## 安装与部署
@@ -30,6 +31,8 @@
 | [install/cli-install.md](./install/cli-install.md) | 本地安装失败后的 `php think install:auto` 命令行安装 |
 | [install/troubleshooting.md](./install/troubleshooting.md) | 安装、Docker、静态资源与运行时排障 |
 | [install/env-files.md](./install/env-files.md) | 根 `.env`、`backend/.env` 与运行时配置职责 |
+| [install/docker-image-publish.md](./install/docker-image-publish.md) | GitHub Actions 自动构建 amd64/arm64 后端镜像并推送到 Docker Hub |
+| [install/frontend-release-artifacts.md](./install/frontend-release-artifacts.md) | GitHub Actions 自动构建 Admin、H5 和微信小程序发布制品 |
 | [install/nginx-reverse-proxy.md](./install/nginx-reverse-proxy.md) | Nginx 反向代理与静态资源路径规则 |
 | [install/cloud-storage-upload.md](./install/cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
 | [install/issues/docker-fullstack-first-run.md](./install/issues/docker-fullstack-first-run.md) | Docker 全套首次启动问题记录 |
@@ -52,6 +55,7 @@
 |------|------|
 | [install/admin-build.md](./install/admin-build.md) | 后台前端 Admin 打包到 `backend/public/admin` |
 | [install/uniapp-build.md](./install/uniapp-build.md) | UniApp H5 打包到 `backend/public/client` |
+| [install/frontend-release-artifacts.md](./install/frontend-release-artifacts.md) | 自动构建 Admin、H5 和微信小程序发布制品 |
 | [install/upload-frontend.md](./install/upload-frontend.md) | 上传 admin / client 静态资源到服务器 |
 | [install/cleanup-dev.md](./install/cleanup-dev.md) | 分级清理基础运行态、前端文件、Docker 开发状态与镜像 |
 
