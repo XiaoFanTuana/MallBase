@@ -323,7 +323,7 @@ final class PlatformReporter
 
     private function disabledByEnv(): bool
     {
-        return filter_var(env('PLATFORM_REPORT_DISABLED', false), FILTER_VALIDATE_BOOLEAN);
+        return filter_var(env('PLATFORM_REPORT_DISABLED', true), FILTER_VALIDATE_BOOLEAN);
     }
 
     private function lockService(): InstallLockService

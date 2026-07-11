@@ -7,6 +7,7 @@ namespace Tests\Unit\Middleware;
 use app\middleware\CorsMiddleware;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use think\facade\Env;
 
 final class CorsMiddlewareTest extends TestCase
 {
@@ -62,6 +63,7 @@ final class CorsMiddlewareTest extends TestCase
 
     private function setEnv(string $key, string $value): void
     {
+        Env::set($key, $value);
         putenv($key . '=' . $value);
         putenv('PHP_' . $key . '=' . $value);
         $_ENV[$key] = $value;
@@ -72,6 +74,7 @@ final class CorsMiddlewareTest extends TestCase
 
     private function unsetEnv(string $key): void
     {
+        Env::set($key, null);
         putenv($key);
         putenv('PHP_' . $key);
         unset($_ENV[$key], $_ENV['PHP_' . $key], $_SERVER[$key], $_SERVER['PHP_' . $key]);

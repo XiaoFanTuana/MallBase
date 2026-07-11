@@ -23,6 +23,7 @@ namespace Tests\Unit\Install {
     use app\service\install\InstallLockService;
     use app\service\install\PlatformReporter;
     use PHPUnit\Framework\TestCase;
+    use think\facade\Env;
 
     final class PlatformReporterTest extends TestCase
     {
@@ -32,7 +33,7 @@ namespace Tests\Unit\Install {
         {
             parent::setUp();
 
-            $this->unsetEnv('PLATFORM_REPORT_DISABLED');
+            $this->setEnv('PLATFORM_REPORT_DISABLED', 'false');
 
             $dir = sys_get_temp_dir() . '/mallbase-platform-report-' . bin2hex(random_bytes(6));
             mkdir($dir, 0755, true);
@@ -199,6 +200,7 @@ namespace Tests\Unit\Install {
 
         private function setEnv(string $key, string $value): void
         {
+            Env::set($key, $value);
             putenv($key . '=' . $value);
             putenv('PHP_' . $key . '=' . $value);
             $_ENV[$key] = $value;
@@ -209,6 +211,7 @@ namespace Tests\Unit\Install {
 
         private function unsetEnv(string $key): void
         {
+            Env::set($key, null);
             putenv($key);
             putenv('PHP_' . $key);
             unset($_ENV[$key], $_ENV['PHP_' . $key], $_SERVER[$key], $_SERVER['PHP_' . $key]);
