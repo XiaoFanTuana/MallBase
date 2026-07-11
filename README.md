@@ -91,7 +91,8 @@ mall-base/
 │   │   ├── member.md               # 会员开发文档
 │   │   ├── points.md               # 积分开发文档
 │   │   ├── wallet.md               # 余额开发文档
-│   │   └── client-diy.md           # 客户端装修开发文档
+│   │   ├── client-diy.md           # 客户端装修开发文档
+│   │   └── customer-service-h5-resource-action.md # UniApp 客服 H5 资源跳转设计
 │   ├── install/                    # 安装与部署（导航入口：install/index.md）
 │   │   ├── index.md                # 安装与部署导航
 │   │   ├── manual.md               # 方式一：手动安装（无 Docker）
@@ -270,6 +271,7 @@ docker compose restart
 | [Swoole 并发配置建议](docs/testing/swoole-concurrency-config-guide.md) | worker、连接数、backlog、连接池与订单高并发调参建议 |
 | [Claude Code 使用指南](docs/claude-code-guide.md) | AI 工具、Skills、MCP、多 Agent 协作 |
 | [客户端装修功能设计方案](docs/superpowers/specs/2026-06-03-client-diy-design.md) | 客户端装修一期范围、后台信息架构和方案库模型 |
+| [UniApp 客服 H5 资源跳转设计](docs/development/customer-service-h5-resource-action.md) | 客服 Widget 的商品与订单 URL 模板及 H5 顶层跳转方案 |
 | [客户端装修基础实施计划](docs/superpowers/plans/2026-06-03-client-diy-foundation-plan.md) | 客户端装修后端基础能力的历史实施计划 |
 
 ## 开发约定

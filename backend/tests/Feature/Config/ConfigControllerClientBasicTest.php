@@ -76,6 +76,7 @@ final class ConfigControllerClientBasicTest extends TestCase
             '/"default_avatar"\s*:/',
             '/"mime_[a-zA-Z_]+"\s*:/',
             '/"local_[a-zA-Z_]+"\s*:/',
+            '/"customer_service_[a-zA-Z_]+"\s*:/',
         ];
 
         foreach ($forbiddenPatterns as $pattern) {

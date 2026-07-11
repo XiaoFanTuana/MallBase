@@ -267,7 +267,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { getOrderDetail, cancelOrder, confirmReceive } from '@/api/order/order'
 import { usePayFlow } from '@/utils/usePayFlow'
 import { multiplyPrice, sumPrices } from '@/utils/price'
-import { openCustomerService } from '@/utils/customer-service'
+import { openCustomerService as openCustomerServiceEntry } from '@/utils/customer-service'
 import config from '@/config/index'
 const decorateStore = useDecorateStore()
 
@@ -374,6 +374,21 @@ const statusDesc = computed(() => {
 })
 
 const orderItems = computed(() => getOrderItems(order.value))
+
+async function openCustomerService() {
+  await openCustomerServiceEntry({
+    source: 'order',
+    order: {
+      id: order.value?.id,
+      title: order.value?.sn,
+      url: order.value?.id ? `/pages-sub/order/detail?id=${order.value.id}` : '',
+      summary: order.value?.status_text || order.value?.after_sale_tag_text || '',
+      metadata: {
+        sn: order.value?.sn || '',
+      },
+    },
+  })
+}
 const afterSalePreviewItems = computed(() => getAfterSaleItems(order.value?.after_sale).slice(0, 3))
 const afterSaleMoreCount = computed(() => Math.max(0, getAfterSaleItems(order.value?.after_sale).length - 3))
 

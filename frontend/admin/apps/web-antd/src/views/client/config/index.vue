@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import type { FileInfo } from '#/components/upload';
 import type { GoodsCategoryApi } from '#/api/goods';
 import type { SettingApi } from '#/api/setting';
+import type { FileInfo } from '#/components/upload';
 
 import {
   computed,
@@ -56,6 +56,8 @@ type GoodsBadgeConfig = {
 
 type QuickFilterValue = 'category' | 'is_hot' | 'is_new' | 'is_recommend';
 
+type CustomerServiceMode = 'phone' | 'system';
+
 type TreeSelectNode = {
   children: TreeSelectNode[];
   title: string;
@@ -98,6 +100,7 @@ const form = reactive({
   client_about_content: '',
   client_after_sale_policy: '',
   client_agreement: '',
+  client_customer_service_mode: 'phone' as CustomerServiceMode,
   client_customer_service_phone: '',
   client_goods_badge_config: cloneGoodsBadgeConfig(),
   client_goods_card_show_badge: true,
@@ -124,6 +127,17 @@ const form = reactive({
   client_site_name: '',
   client_splash_duration: 3000,
   client_splash_enabled: true,
+  customer_service_allowed_ips: '',
+  customer_service_api_base: '',
+  customer_service_connector_enabled: false,
+  customer_service_connector_secret: '',
+  customer_service_context_secret: '',
+  customer_service_context_ttl: 300,
+  customer_service_operator_admin_id: 1,
+  customer_service_platform_code: 'mallbase',
+  customer_service_socket_base: '',
+  customer_service_timestamp_window: 300,
+  customer_service_widget_url: '',
 });
 
 const quickFilterOptions: Array<{
@@ -314,6 +328,31 @@ function settingNumberValue(code: string, fallback: number) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function settingHasValue(code: string) {
+  return Boolean(settingsByCode.value[code]?.has_value);
+}
+
+function generateRandomSecret() {
+  if (!globalThis.crypto?.getRandomValues) {
+    message.error('当前浏览器不支持安全随机数生成');
+    return '';
+  }
+
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function fillRandomSecret(
+  field:
+    | 'customer_service_connector_secret'
+    | 'customer_service_context_secret',
+) {
+  const secret = generateRandomSecret();
+  if (!secret) return;
+  form[field] = secret;
+}
+
 function imageValue(code: string) {
   const item = settingsByCode.value[code];
   if (!item?.value) return undefined;
@@ -395,8 +434,46 @@ function fillFormFromSettings() {
   );
   form.client_share_title = settingValue('client_share_title');
   form.client_share_desc = settingValue('client_share_desc');
+  const customerServiceMode = settingValue(
+    'client_customer_service_mode',
+    'phone',
+  );
+  form.client_customer_service_mode =
+    customerServiceMode === 'system' ? 'system' : 'phone';
   form.client_customer_service_phone = settingValue(
     'client_customer_service_phone',
+  );
+  form.customer_service_allowed_ips = settingValue(
+    'customer_service_allowed_ips',
+  );
+  form.customer_service_api_base = settingValue('customer_service_api_base');
+  form.customer_service_connector_enabled = isSwitchOn(
+    settingValue('customer_service_connector_enabled'),
+    false,
+  );
+  form.customer_service_connector_secret = '';
+  form.customer_service_context_secret = '';
+  form.customer_service_context_ttl = settingNumberValue(
+    'customer_service_context_ttl',
+    300,
+  );
+  form.customer_service_operator_admin_id = settingNumberValue(
+    'customer_service_operator_admin_id',
+    1,
+  );
+  form.customer_service_platform_code = settingValue(
+    'customer_service_platform_code',
+    'mallbase',
+  );
+  form.customer_service_socket_base = settingValue(
+    'customer_service_socket_base',
+  );
+  form.customer_service_timestamp_window = settingNumberValue(
+    'customer_service_timestamp_window',
+    300,
+  );
+  form.customer_service_widget_url = settingValue(
+    'customer_service_widget_url',
   );
   imageValues.client_logo = imageValue('client_logo');
   imageValues.client_launch_image = imageValue('client_launch_image');
@@ -491,6 +568,7 @@ function buildPayload(codes?: string[]) {
     client_about_content: form.client_about_content,
     client_after_sale_policy: form.client_after_sale_policy,
     client_agreement: form.client_agreement,
+    client_customer_service_mode: form.client_customer_service_mode,
     client_customer_service_phone: form.client_customer_service_phone,
     client_goods_badge_config: JSON.stringify(
       normalizeGoodsBadgeConfig(form.client_goods_badge_config),
@@ -533,6 +611,19 @@ function buildPayload(codes?: string[]) {
     client_site_name: form.client_site_name,
     client_splash_duration: form.client_splash_duration,
     client_splash_enabled: form.client_splash_enabled ? 1 : 0,
+    customer_service_allowed_ips: form.customer_service_allowed_ips,
+    customer_service_api_base: form.customer_service_api_base,
+    customer_service_connector_enabled: form.customer_service_connector_enabled
+      ? 1
+      : 0,
+    customer_service_connector_secret: form.customer_service_connector_secret,
+    customer_service_context_secret: form.customer_service_context_secret,
+    customer_service_context_ttl: form.customer_service_context_ttl,
+    customer_service_operator_admin_id: form.customer_service_operator_admin_id,
+    customer_service_platform_code: form.customer_service_platform_code,
+    customer_service_socket_base: form.customer_service_socket_base,
+    customer_service_timestamp_window: form.customer_service_timestamp_window,
+    customer_service_widget_url: form.customer_service_widget_url,
   };
 
   if (!codes) return payload;
@@ -608,12 +699,6 @@ onBeforeUnmount(() => {
                 <a-input
                   v-model:value="form.client_site_name"
                   placeholder="请输入客户端站点名称"
-                />
-              </a-form-item>
-              <a-form-item label="客服手机号">
-                <a-input
-                  v-model:value="form.client_customer_service_phone"
-                  placeholder="请输入客服手机号"
                 />
               </a-form-item>
               <a-form-item label="启用启动页">
@@ -978,6 +1063,193 @@ onBeforeUnmount(() => {
             </div>
           </a-tab-pane>
 
+          <a-tab-pane key="customer-service" tab="客服配置">
+            <div class="setting-block">
+              <div class="setting-block__head">
+                <h3>客服入口</h3>
+                <p>控制客户端“联系客服”入口使用手机号或在线客服系统。</p>
+              </div>
+              <a-form layout="vertical" class="config-form-grid">
+                <a-form-item label="客服方式">
+                  <a-radio-group
+                    v-model:value="form.client_customer_service_mode"
+                    button-style="solid"
+                  >
+                    <a-radio-button value="phone">手机号客服</a-radio-button>
+                    <a-radio-button value="system">
+                      在线客服系统
+                    </a-radio-button>
+                  </a-radio-group>
+                </a-form-item>
+                <a-form-item
+                  v-if="form.client_customer_service_mode === 'phone'"
+                  label="客服手机号"
+                >
+                  <a-input
+                    v-model:value="form.client_customer_service_phone"
+                    placeholder="请输入客服手机号"
+                  />
+                </a-form-item>
+              </a-form>
+            </div>
+
+            <div
+              v-if="form.client_customer_service_mode === 'system'"
+              class="setting-block"
+            >
+              <div class="setting-block__head">
+                <h3>在线客服接入</h3>
+                <p>配置 MallBase 进入客服系统所需的前端地址和上下文签名。</p>
+              </div>
+              <a-form layout="vertical" class="config-form-grid">
+                <a-form-item label="平台标识">
+                  <a-input
+                    v-model:value="form.customer_service_platform_code"
+                    placeholder="mallbase"
+                  />
+                </a-form-item>
+                <a-form-item label="Widget 地址">
+                  <a-input
+                    v-model:value="form.customer_service_widget_url"
+                    placeholder="https://customer.example.com/widget"
+                  />
+                </a-form-item>
+                <a-form-item label="API 地址">
+                  <a-input
+                    v-model:value="form.customer_service_api_base"
+                    placeholder="https://customer.example.com"
+                  />
+                </a-form-item>
+                <a-form-item label="Socket 地址">
+                  <a-input
+                    v-model:value="form.customer_service_socket_base"
+                    placeholder="wss://customer.example.com"
+                  />
+                </a-form-item>
+                <a-form-item label="Token 有效期(秒)">
+                  <a-input-number
+                    v-model:value="form.customer_service_context_ttl"
+                    :min="60"
+                    :max="3600"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item>
+                  <template #label>
+                    上下文签名密钥
+                    <a-tag
+                      :color="
+                        settingHasValue('customer_service_context_secret')
+                          ? 'green'
+                          : 'orange'
+                      "
+                    >
+                      {{
+                        settingHasValue('customer_service_context_secret')
+                          ? '已配置'
+                          : '未配置'
+                      }}
+                    </a-tag>
+                  </template>
+                  <div class="secret-input-row">
+                    <a-input-password
+                      v-model:value="form.customer_service_context_secret"
+                      autocomplete="new-password"
+                      :placeholder="
+                        settingHasValue('customer_service_context_secret')
+                          ? '留空保持不变'
+                          : '请输入不少于 32 位的随机密钥'
+                      "
+                    />
+                    <a-button
+                      class="secret-input-row__action"
+                      @click="
+                        fillRandomSecret('customer_service_context_secret')
+                      "
+                    >
+                      生成
+                    </a-button>
+                  </div>
+                </a-form-item>
+              </a-form>
+            </div>
+
+            <div
+              v-if="form.client_customer_service_mode === 'system'"
+              class="setting-block"
+            >
+              <div class="setting-block__head">
+                <h3>连接器接口</h3>
+                <p>配置客服系统调用 MallBase 后端接口时的服务端签名校验。</p>
+              </div>
+              <a-form layout="vertical" class="config-form-grid">
+                <a-form-item label="启用连接器">
+                  <a-switch
+                    v-model:checked="form.customer_service_connector_enabled"
+                  />
+                </a-form-item>
+                <a-form-item label="签名时间窗口(秒)">
+                  <a-input-number
+                    v-model:value="form.customer_service_timestamp_window"
+                    :min="60"
+                    :max="3600"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item label="允许 IP">
+                  <a-input
+                    v-model:value="form.customer_service_allowed_ips"
+                    placeholder="留空表示不限制，多个 IP 用英文逗号分隔"
+                  />
+                </a-form-item>
+                <a-form-item label="操作管理员 ID">
+                  <a-input-number
+                    v-model:value="form.customer_service_operator_admin_id"
+                    :min="1"
+                    class="w-full"
+                  />
+                </a-form-item>
+                <a-form-item>
+                  <template #label>
+                    连接器签名密钥
+                    <a-tag
+                      :color="
+                        settingHasValue('customer_service_connector_secret')
+                          ? 'green'
+                          : 'orange'
+                      "
+                    >
+                      {{
+                        settingHasValue('customer_service_connector_secret')
+                          ? '已配置'
+                          : '未配置'
+                      }}
+                    </a-tag>
+                  </template>
+                  <div class="secret-input-row">
+                    <a-input-password
+                      v-model:value="form.customer_service_connector_secret"
+                      autocomplete="new-password"
+                      :placeholder="
+                        settingHasValue('customer_service_connector_secret')
+                          ? '留空保持不变'
+                          : '请输入不少于 32 位的随机密钥'
+                      "
+                    />
+                    <a-button
+                      class="secret-input-row__action"
+                      @click="
+                        fillRandomSecret('customer_service_connector_secret')
+                      "
+                    >
+                      生成
+                    </a-button>
+                  </div>
+                </a-form-item>
+              </a-form>
+            </div>
+          </a-tab-pane>
+
           <a-tab-pane key="content" tab="内容页面">
             <div class="content-grid">
               <div
@@ -1196,6 +1468,21 @@ onBeforeUnmount(() => {
   color: hsl(var(--muted-foreground));
   font-size: 12px;
   line-height: 1.5;
+}
+
+.secret-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.secret-input-row :deep(.ant-input-password) {
+  flex: 1;
+  min-width: 0;
+}
+
+.secret-input-row__action {
+  flex-shrink: 0;
 }
 
 .badge-preview-panel {

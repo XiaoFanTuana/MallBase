@@ -51,6 +51,13 @@ class ConfigService extends BaseService
     ];
 
     /**
+     * ClientConfig 内部客服接入字段只允许后台和服务端读取，不随公开启动配置返回。
+     */
+    private const CLIENT_CONFIG_PRIVATE_PREFIXES = [
+        'customer_service_',
+    ];
+
+    /**
      * 获取客户端基础配置
      *
      * @return array<string, mixed>
@@ -61,6 +68,7 @@ class ConfigService extends BaseService
         $settingsService = app()->make(SystemSettingService::class);
         $merged = $settingsService->getSystemSettingGroups(self::PUBLIC_GROUPS);
         unset($merged['client_home_banners']);
+        $merged = $this->removePrivateClientConfigFields($merged);
 
         // SystemBasic 组走字段级白名单
         foreach (self::SYSTEM_BASIC_PUBLIC_FIELDS as $code) {
@@ -101,6 +109,24 @@ class ConfigService extends BaseService
         }
 
         return $merged;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function removePrivateClientConfigFields(array $config): array
+    {
+        foreach (array_keys($config) as $code) {
+            foreach (self::CLIENT_CONFIG_PRIVATE_PREFIXES as $prefix) {
+                if (str_starts_with((string) $code, $prefix)) {
+                    unset($config[$code]);
+                    continue 2;
+                }
+            }
+        }
+
+        return $config;
     }
 
     /**

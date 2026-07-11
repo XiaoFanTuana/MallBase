@@ -1276,7 +1276,15 @@ onShareTimeline(() => {
 })
 
 async function contactService() {
-  await openCustomerService()
+  await openCustomerService({
+    source: 'goods',
+    product: {
+      id: goods.value?.id,
+      title: goods.value?.name,
+      url: goods.value?.id ? `/pages-sub/goods/detail?id=${goods.value.id}` : '',
+      summary: goods.value?.subtitle || '',
+    },
+  })
 }
 
 function goBack() {
