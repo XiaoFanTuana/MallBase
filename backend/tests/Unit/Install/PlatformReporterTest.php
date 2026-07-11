@@ -32,6 +32,8 @@ namespace Tests\Unit\Install {
         {
             parent::setUp();
 
+            $this->unsetEnv('PLATFORM_REPORT_DISABLED');
+
             $dir = sys_get_temp_dir() . '/mallbase-platform-report-' . bin2hex(random_bytes(6));
             mkdir($dir, 0755, true);
             $this->lockPath = $dir . '/install.lock';
@@ -39,6 +41,8 @@ namespace Tests\Unit\Install {
 
         protected function tearDown(): void
         {
+            $this->unsetEnv('PLATFORM_REPORT_DISABLED');
+
             if (is_file($this->lockPath)) {
                 unlink($this->lockPath);
             }
@@ -66,6 +70,25 @@ namespace Tests\Unit\Install {
             $this->assertArrayNotHasKey('instance_id', $state);
             $this->assertGreaterThanOrEqual($before + 300, $state['next_report_after'] ?? 0);
             $this->assertLessThanOrEqual(time() + 300, $state['next_report_after'] ?? 0);
+        }
+
+        public function testDisabledEnvSkipsReport(): void
+        {
+            $this->setEnv('PLATFORM_REPORT_DISABLED', 'true');
+
+            $lock = new InstallLockService($this->lockPath);
+            $lock->writeInstalledLock('2026-06-19 12:00:00');
+            $calls = [];
+
+            $reporter = new PlatformReporter($lock, static function () use (&$calls): array {
+                $calls[] = true;
+
+                return ['_error' => 'should_not_call'];
+            });
+            $reporter->tick('backend_php');
+
+            $this->assertSame([], $calls);
+            $this->assertSame([], $lock->getPlatformState());
         }
 
         public function testActivationSuccessStoresCredentialsAndDailyWindow(): void
@@ -172,6 +195,23 @@ namespace Tests\Unit\Install {
 
             $this->assertGreaterThanOrEqual(2000, $connectTimeout->getValue());
             $this->assertGreaterThanOrEqual(5000, $requestTimeout->getValue());
+        }
+
+        private function setEnv(string $key, string $value): void
+        {
+            putenv($key . '=' . $value);
+            putenv('PHP_' . $key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_ENV['PHP_' . $key] = $value;
+            $_SERVER[$key] = $value;
+            $_SERVER['PHP_' . $key] = $value;
+        }
+
+        private function unsetEnv(string $key): void
+        {
+            putenv($key);
+            putenv('PHP_' . $key);
+            unset($_ENV[$key], $_ENV['PHP_' . $key], $_SERVER[$key], $_SERVER['PHP_' . $key]);
         }
     }
 }

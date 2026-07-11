@@ -743,6 +743,9 @@ class InstallService extends BaseService
                 'JWT_REFRESH_EXPIRE'     => (string) env('JWT_REFRESH_EXPIRE', 2592000),
                 'INSTALL_RUNTIME_MARKER' => $runtimeMarker,
                 'SITE_URL'               => $siteUrl,
+                'CORS_ALLOWED_ORIGINS'     => (string) env('CORS_ALLOWED_ORIGINS', ''),
+                'CORS_ALLOW_CREDENTIALS'   => $this->boolParam(env('CORS_ALLOW_CREDENTIALS', false)) ? 'true' : 'false',
+                'PLATFORM_REPORT_DISABLED' => $this->boolParam(env('PLATFORM_REPORT_DISABLED', true)) ? 'true' : 'false',
             ];
             $this->writeEnvFile($envData);
             $this->writeProjectRootEnvFile($envData);
@@ -1162,6 +1165,9 @@ class InstallService extends BaseService
             'JWT_EXPIRE',
             'JWT_REFRESH_EXPIRE',
             'SITE_URL',
+            'CORS_ALLOWED_ORIGINS',
+            'CORS_ALLOW_CREDENTIALS',
+            'PLATFORM_REPORT_DISABLED',
         ];
 
         foreach ($rootKeys as $key) {

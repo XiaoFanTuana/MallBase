@@ -66,7 +66,15 @@ backend/runtime/install/install.lock
 
 ## 关闭方式
 
-将 `backend/runtime/install/install.lock` 中的 `platform.disabled` 设置为 `true` 后，后端应停止平台实例统计上报。
+优先在项目根 `.env` 或 `backend/.env` 中设置：
+
+```env
+PLATFORM_REPORT_DISABLED=true
+```
+
+Docker 模式下该字段会从项目根 `.env` 同步到 `backend/.env`。私有 fork 默认模板已设为 `true`，不会主动上报平台实例统计。
+
+也可以将 `backend/runtime/install/install.lock` 中的 `platform.disabled` 设置为 `true`，后端同样会停止平台实例统计上报。
 
 ```json
 {
@@ -77,4 +85,4 @@ backend/runtime/install/install.lock
 }
 ```
 
-如果删除整个 `platform` 节点，后续版本可能会在满足上报条件时重新激活实例。需要关闭时应保留 `platform.disabled = true`。
+如果删除整个 `platform` 节点，后续版本可能会在满足上报条件时重新激活实例。需要通过锁文件关闭时应保留 `platform.disabled = true`。

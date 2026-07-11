@@ -32,6 +32,10 @@ final class PlatformReporter
     public function tick(string $componentType = 'backend_php'): void
     {
         try {
+            if ($this->disabledByEnv()) {
+                return;
+            }
+
             $lock = $this->lockService();
             if (!$lock->isInstalled()) {
                 return;
@@ -315,6 +319,11 @@ final class PlatformReporter
             substr($hash, 16, 4),
             substr($hash, 20, 12),
         );
+    }
+
+    private function disabledByEnv(): bool
+    {
+        return filter_var(env('PLATFORM_REPORT_DISABLED', false), FILTER_VALIDATE_BOOLEAN);
     }
 
     private function lockService(): InstallLockService

@@ -267,7 +267,14 @@ curl -i -X OPTIONS 'http://127.0.0.1:8080/' \
   -H 'Access-Control-Request-Method: GET'
 ```
 
-预期返回 `204` 并带有 `Access-Control-Allow-Origin`、`Access-Control-Allow-Credentials`、`Access-Control-Allow-Methods` / `Headers` 等头。CORS 不通过环境变量配置；如需收紧策略，请直接修改 `backend/app/middleware/CorsMiddleware.php`。
+只有 `Origin` 命中 `CORS_ALLOWED_ORIGINS` 时才会返回 CORS 头。生产环境请在项目根 `.env` 或 `backend/.env` 中配置你的前端域名，例如：
+
+```env
+CORS_ALLOWED_ORIGINS=https://mall.example.com,https://admin.example.com
+CORS_ALLOW_CREDENTIALS=false
+```
+
+预期返回 `204` 并带有 `Access-Control-Allow-Origin`、`Access-Control-Allow-Methods` / `Headers` 等头。仅使用 Cookie 鉴权时才需要把 `CORS_ALLOW_CREDENTIALS` 改为 `true`。启用凭据时必须逐个配置可信 Origin，`*` 不会作为通配符生效。
 
 ### Swoole 进程杀不掉
 
