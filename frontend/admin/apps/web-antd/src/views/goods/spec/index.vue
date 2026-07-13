@@ -49,6 +49,12 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
+const handleTableChange = (next: { current?: number; pageSize?: number }) => {
+  pagination.current = next.current ?? 1;
+  pagination.pageSize = next.pageSize ?? pagination.pageSize;
+  loadData(searchParams.value);
+};
+
 /* ---------------- 规格组弹窗 ---------------- */
 const specModalVisible = ref(false);
 const editingItem = ref<GoodsSpecApi.SpecItem | null>(null);
@@ -139,7 +145,7 @@ const columns = [
         checked: record.status === 1,
         checkedChildren: '启用',
         unCheckedChildren: '禁用',
-        onChange: (checked: boolean) => handleStatusChange(record, checked),
+        onChange: (checked) => handleStatusChange(record, Boolean(checked)),
       });
     },
   },
@@ -220,13 +226,7 @@ onMounted(() => {
         :pagination="pagination"
         :scroll="{ x: 1200 }"
         row-key="id"
-        @change="
-          (newPagination) => {
-            pagination.current = newPagination.current;
-            pagination.pageSize = newPagination.pageSize;
-            loadData(searchParams);
-          }
-        "
+        @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action'">

@@ -47,7 +47,10 @@ class RequestClient {
   public isRefreshing = false;
   public postSSE: SSE['postSSE'];
   // 刷新token队列
-  public refreshTokenQueue: ((token: string) => void)[] = [];
+  public refreshTokenQueue: Array<{
+    reject: (error: unknown) => void;
+    resolve: (token: string) => void;
+  }> = [];
   public requestSSE: SSE['requestSSE'];
   public upload: FileUploader['upload'];
 

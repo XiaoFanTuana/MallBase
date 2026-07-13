@@ -144,19 +144,6 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }),
   );
 
-  // 刷新 token 失败后，阻止错误继续传播到业务层
-  // 此时 doReAuthenticate() 已跳转登录页，业务层无需再处理该错误
-  client.addResponseInterceptor({
-    rejected: (error: any) => {
-      if (error?.message === 'REFRESH_TOKEN_FAILED') {
-        // 返回永远 pending 的 Promise，阻止错误传播到 useTableCrud 等业务层
-        // 页面即将跳转到登录页，该 Promise 会被垃圾回收
-        return new Promise(() => {});
-      }
-      return Promise.reject(error);
-    },
-  });
-
   return client;
 }
 

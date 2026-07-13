@@ -198,6 +198,13 @@ const handleSceneCheckedChange = (code: string, checked: boolean) => {
   );
 };
 
+const handleSceneCheckboxChange = (
+  code: string,
+  event: { target?: { checked?: boolean } },
+) => {
+  handleSceneCheckedChange(code, Boolean(event.target?.checked));
+};
+
 const handleCreate = async () => {
   if (providers.value.length === 0) await loadProviders();
   resetSceneCreateState();
@@ -717,11 +724,7 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
                     <a-checkbox
                       :checked="isSceneSelected(scene.scene_code)"
                       @change="
-                        (event) =>
-                          handleSceneCheckedChange(
-                            scene.scene_code,
-                            event.target.checked,
-                          )
+                        handleSceneCheckboxChange(scene.scene_code, $event)
                       "
                     >
                       {{ scene.scene_name }}
@@ -733,7 +736,7 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
                       <a-input
                         v-if="formData.submit_to_platform === 0"
                         v-model:value="
-                          sceneTemplateDrafts[scene.scene_code].template_code
+                          sceneTemplateDrafts[scene.scene_code]!.template_code
                         "
                         class="mb-2"
                         placeholder="本地登记模板编码,如 SMS_xxxxxxxxx"
@@ -741,12 +744,13 @@ if (hasAccessByCodes(['SmsTemplateList'])) {
                       <div class="sms-scene-create-list__label">模板内容</div>
                       <div class="sms-scene-create-list__text">
                         {{
-                          sceneTemplateDrafts[scene.scene_code].template_content
+                          sceneTemplateDrafts[scene.scene_code]!
+                            .template_content
                         }}
                       </div>
                       <div class="sms-scene-create-list__label">申请说明</div>
                       <div class="sms-scene-create-list__text">
-                        {{ sceneTemplateDrafts[scene.scene_code].remark }}
+                        {{ sceneTemplateDrafts[scene.scene_code]!.remark }}
                       </div>
                     </div>
                   </div>

@@ -138,7 +138,7 @@ const handleSave = async () => {
 };
 
 const handleStatus = async (
-  checked: boolean,
+  checked: unknown,
   row: LogisticsApi.CompanyItem,
 ) => {
   const status = checked ? 1 : 0;
@@ -258,7 +258,7 @@ onMounted(async () => {
               :checked="record.status === 1"
               checked-children="启"
               un-checked-children="停"
-              @change="(checked) => handleStatus(Boolean(checked), record)"
+              @change="handleStatus($event, record)"
               v-access:code="'SystemLogisticsCompanyStatus'"
             />
           </template>

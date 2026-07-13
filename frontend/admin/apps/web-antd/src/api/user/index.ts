@@ -99,8 +99,8 @@ export namespace ClientUserApi {
     member?: {
       growth_value: number;
       level_id: number;
-      level_name: string;
       level_lock_until?: null | string;
+      level_name: string;
       level_remark?: string;
       level_source?: 'auto' | 'manual' | string;
       total_growth_value: number;
@@ -134,6 +134,7 @@ export namespace ClientUserApi {
 
   /** 创建参数 */
   export interface CreateParams {
+    avatar?: string;
     mobile?: string;
     email?: string;
     password: string;
@@ -149,9 +150,11 @@ export namespace ClientUserApi {
 
   /** 更新参数 */
   export interface UpdateParams {
+    avatar?: string;
     mobile?: string;
     email?: string;
     nickname?: string;
+    password?: string;
     real_name?: string;
     gender?: number;
     birthday?: string;
@@ -198,12 +201,12 @@ export namespace ClientUserApi {
     user_id: number;
     biz_type: string;
     biz_id: string;
-    direction: 'income' | 'expense';
+    direction: 'expense' | 'income';
     change_amount: string;
     before_amount: string;
     after_amount: string;
     operator_type: number;
-    operator_id?: number | null;
+    operator_id?: null | number;
     remark?: string;
     biz_type_text?: string;
     create_time: string;
@@ -211,7 +214,7 @@ export namespace ClientUserApi {
 
   export interface WalletLogParams {
     user_id?: number;
-    type?: 'income' | 'expense';
+    type?: 'expense' | 'income';
     biz_type?: string;
     page?: number;
     limit?: number;
@@ -219,7 +222,7 @@ export namespace ClientUserApi {
 
   export interface WalletAdjustParams {
     user_id: number;
-    direction: 'income' | 'expense';
+    direction: 'expense' | 'income';
     amount: string;
     remark: string;
   }
@@ -229,12 +232,12 @@ export namespace ClientUserApi {
     user_id: number;
     biz_type: string;
     biz_id: string;
-    direction: 'income' | 'expense';
+    direction: 'expense' | 'income';
     change_points: number;
     before_points: number;
     after_points: number;
     operator_type: number;
-    operator_id?: number | null;
+    operator_id?: null | number;
     remark?: string;
     biz_type_text?: string;
     create_time: string;
@@ -242,7 +245,7 @@ export namespace ClientUserApi {
 
   export interface PointsLogParams {
     user_id?: number;
-    type?: 'income' | 'expense';
+    type?: 'expense' | 'income';
     biz_type?: string;
     page?: number;
     limit?: number;
@@ -250,7 +253,7 @@ export namespace ClientUserApi {
 
   export interface PointsAdjustParams {
     user_id: number;
-    direction: 'income' | 'expense';
+    direction: 'expense' | 'income';
     points: number;
     remark: string;
   }
@@ -443,7 +446,7 @@ export async function changeClientMyPasswordApi(
   return requestClient.put('/client/api/user/my/password', data);
 }
 
+export * from './address';
 // 导出分组和标签 API
 export * from './group';
 export * from './tag';
-export * from './address';

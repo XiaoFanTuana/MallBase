@@ -21,4 +21,13 @@ describe('sanitizeEditorHtml', () => {
     expect(sanitized).toContain('<img src="x">');
     expect(sanitized).toContain('<a>link</a>');
   });
+
+  it('removes svg payloads, inline handlers and unsafe styling', () => {
+    const html =
+      '<svg><a href="javascript:alert(1)">bad</a></svg><p style="position:fixed" onclick="alert(2)">safe text</p>';
+
+    const sanitized = sanitizeEditorHtml(html);
+
+    expect(sanitized).toBe('<p>safe text</p>');
+  });
 });
