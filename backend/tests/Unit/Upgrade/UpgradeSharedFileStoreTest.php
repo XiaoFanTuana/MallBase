@@ -58,6 +58,47 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertArrayNotHasKey('relative_path', $configuration);
     }
 
+    #[DataProvider('invalidNumericAgentEnvironmentProvider')]
+    public function testConfigurationRejectsNonCanonicalOrOutOfRangeNumericEnvironment(
+        string $environmentName,
+        string $value,
+        string $configurationKey,
+    ): void {
+        putenv($environmentName . '=' . $value);
+        try {
+            $configuration = require dirname(__DIR__, 3) . '/config/agent.php';
+        } finally {
+            putenv($environmentName);
+        }
+
+        $this->assertSame(-1, $configuration[$configurationKey]);
+    }
+
+    /** @return iterable<string, array{string, string, string}> */
+    public static function invalidNumericAgentEnvironmentProvider(): iterable
+    {
+        yield 'uid whitespace' => ['MALLBASE_AGENT_UID', ' 10001', 'agent_uid'];
+        yield 'gid suffix' => ['MALLBASE_UPGRADE_SHARED_GID', '10001x', 'expected_gid'];
+        yield 'proof leading zero' => ['MALLBASE_AGENT_ACTIVATION_PROOF_LIFETIME', '0900', 'activation_proof_lifetime'];
+        yield 'report negative' => ['MALLBASE_AGENT_REPORT_INTERVAL', '-1', 'report_interval'];
+        yield 'retry plus sign' => ['MALLBASE_AGENT_RETRY_INTERVAL', '+1', 'retry_interval'];
+        yield 'reservation decimal' => ['MALLBASE_AGENT_RESERVATION_INTERVAL', '1.0', 'reservation_interval'];
+        yield 'component overflow' => ['MALLBASE_AGENT_COMPONENT_SEEN_THROTTLE', '4102444801', 'component_seen_throttle'];
+        yield 'lock timeout overflow' => ['MALLBASE_AGENT_LOCK_TIMEOUT_MS', '60001', 'instance_lock_timeout_milliseconds'];
+    }
+
+    public function testConfigurationRejectsWhitespacePaddedNamespaceInsteadOfTrimmingIt(): void
+    {
+        putenv('MALLBASE_UPGRADE_NAMESPACE_ID= mbs_valid_namespace');
+        try {
+            $configuration = require dirname(__DIR__, 3) . '/config/agent.php';
+        } finally {
+            putenv('MALLBASE_UPGRADE_NAMESPACE_ID');
+        }
+
+        $this->assertSame('', $configuration['upgrade_namespace_id']);
+    }
+
     public function testLogicalPathAllowlistRejectsTraversalAndReadOnlyWrites(): void
     {
         $store = $this->store();
@@ -211,6 +252,32 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertPublicFailure('SHARED_FILE_UNAVAILABLE', fn() => $this->store($operations)->writeJson('instance', (object) ['revision' => 2]));
         $this->assertSame($old, file_get_contents($this->root . '/config/instance.json'));
         $this->assertSame([], glob($this->root . '/config/.instance.*.tmp') ?: []);
+    }
+
+    public function testPreRenameCleanupNeverUnlinksAReplacementAtTheTemporaryName(): void
+    {
+        $replacementPath = '';
+        $operations = $this->statOperations();
+        $operations['fault'] = function (string $checkpoint) use (&$replacementPath): void {
+            if ($checkpoint !== 'after_temp_create') {
+                return;
+            }
+            $matches = glob($this->root . '/config/.instance.*.tmp') ?: [];
+            $this->assertCount(1, $matches);
+            $replacementPath = $matches[0];
+            unlink($replacementPath);
+            file_put_contents($replacementPath, 'replacement-owned-by-another-operation');
+            chmod($replacementPath, 0660);
+            throw new \RuntimeException('private replacement race');
+        };
+
+        $this->assertPublicFailure(
+            'SHARED_FILE_UNAVAILABLE',
+            fn() => $this->store($operations)->writeJson('instance', (object) ['revision' => 1]),
+        );
+        $this->assertNotSame('', $replacementPath);
+        $this->assertFileExists($replacementPath);
+        $this->assertSame('replacement-owned-by-another-operation', file_get_contents($replacementPath));
     }
 
     /**

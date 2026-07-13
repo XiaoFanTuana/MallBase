@@ -2,9 +2,29 @@
 
 declare(strict_types=1);
 
+namespace app\service\install;
+
+final class AgentInstanceConfigStoreLegacyIoHook
+{
+    /** @var callable(string):void|null */
+    public static $beforeOpen = null;
+}
+
+function fopen(string $filename, string $mode)
+{
+    $hook = AgentInstanceConfigStoreLegacyIoHook::$beforeOpen;
+    if (is_callable($hook)) {
+        AgentInstanceConfigStoreLegacyIoHook::$beforeOpen = null;
+        $hook($filename);
+    }
+
+    return \fopen($filename, $mode);
+}
+
 namespace Tests\Unit\Install;
 
 use app\service\install\AgentInstanceConfigStore;
+use app\service\install\AgentInstanceConfigStoreLegacyIoHook;
 use app\service\install\InstallLockService;
 use app\service\upgrade\UpgradeSharedFileStore;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -246,6 +266,27 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $this->assertSame($third['reservation_id'], $store->load()['report']['reservation_id']);
     }
 
+    public function testReportResultAllowsUnrelatedRevisionGrowthAfterReservation(): void
+    {
+        $store = $this->confirmedStore(1000);
+        $reservation = $store->reserveReportWindow('backend_php', 1000, 30);
+        self::assertNotNull($reservation);
+        $this->assertSame(2, $reservation['reservation_revision']);
+
+        $this->assertNull($store->reserveReportWindow('admin_web', 1001, 30));
+        $this->assertSame(3, $store->load()['revision']);
+        $this->assertTrue($store->recordReportResult(
+            $reservation['reservation_id'],
+            $reservation['reservation_revision'],
+            true,
+            1002,
+            60,
+        ));
+        $instance = $store->load();
+        $this->assertSame(4, $instance['revision']);
+        $this->assertSame(1002, $instance['report']['last_success_at']);
+    }
+
     public function testDisabledNotConfirmedAndNotDueReservationsAreNoOps(): void
     {
         $fresh = $this->initialize();
@@ -276,6 +317,22 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $this->assertNull($store->reserveReportWindow('backend_php', 999, 10));
         $this->assertSame($revision, $store->load()['revision']);
         $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
+    }
+
+    public function testComponentSeenThrottleUpdatesAtTheExactEqualityBoundary(): void
+    {
+        $store = $this->confirmedStore(1000);
+        $reservation = $store->reserveReportWindow('backend_php', 1000, 30);
+        self::assertNotNull($reservation);
+        $store->recordReportResult($reservation['reservation_id'], $reservation['reservation_revision'], true, 1001, 10000);
+        $before = file_get_contents($this->root . '/config/instance.json');
+
+        $this->assertNull($store->reserveReportWindow('backend_php', 4599, 30));
+        $this->assertSame($before, file_get_contents($this->root . '/config/instance.json'));
+        $this->assertNull($store->reserveReportWindow('backend_php', 4600, 30));
+        $instance = $store->load();
+        $this->assertSame(4, $instance['revision']);
+        $this->assertSame(4600, $instance['components']['backend_php']);
     }
 
     public function testActivationMovesThroughConfirmingToConfirmedAndClearsProof(): void
@@ -312,6 +369,43 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
         $this->assertStoreFailure('INSTANCE_CAS_MISMATCH', fn() => $store->storeActivationResponse('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 1, self::INSTANCE_ID, 'mbt_token', 1001));
         $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
+    }
+
+    public function testActivationStateFailuresLeaveBytesAndRevisionUnchanged(): void
+    {
+        $store = $this->store();
+        $activating = $this->initialize();
+        $bytes = file_get_contents($this->root . '/config/instance.json');
+        $this->assertStoreFailure('ACTIVATION_STATE_INVALID', fn() => $store->confirmActivation(
+            $activating['activation_generation'],
+            $activating['revision'],
+            1001,
+        ));
+        $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
+        $this->assertSame(1, $store->load()['revision']);
+
+        $this->assertStoreFailure('ACTIVATION_STATE_INVALID', fn() => $store->storeActivationResponse(
+            $activating['activation_generation'],
+            $activating['revision'],
+            $activating['instance_id'],
+            'mbt_token',
+            1900,
+        ));
+        $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
+
+        $this->removeInstance();
+        $confirmedStore = $this->confirmedStore(2000);
+        $confirmed = $confirmedStore->load();
+        $bytes = file_get_contents($this->root . '/config/instance.json');
+        $this->assertStoreFailure('ACTIVATION_STATE_INVALID', fn() => $confirmedStore->storeActivationResponse(
+            $confirmed['activation_generation'],
+            $confirmed['revision'],
+            $confirmed['instance_id'],
+            'replacement_token',
+            2001,
+        ));
+        $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
+        $this->assertSame(1, $confirmedStore->load()['revision']);
     }
 
     public function testExpiredActivatingMovesToRecoveryAtEqualityButConfirmingRemainsConfirmable(): void
@@ -496,6 +590,49 @@ PHP, [$barrierPath]);
         $this->assertSame(2, $store->load()['revision']);
     }
 
+    public function testTwoFirstInitializersPublishOnlyOneRevisionOneLegacyIdentity(): void
+    {
+        $this->assertTrue(function_exists('proc_open'), 'proc_open is required for the initialization contract.');
+        $legacyA = $this->root . '/legacy-a.lock';
+        $legacyB = $this->root . '/legacy-b.lock';
+        file_put_contents($legacyA, json_encode([
+            'platform' => ['instance_id' => self::INSTANCE_ID, 'token' => 'token_a'],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents($legacyB, json_encode([
+            'platform' => ['instance_id' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'token' => 'token_b'],
+        ], JSON_THROW_ON_ERROR));
+        chmod($legacyA, 0660);
+        chmod($legacyB, 0660);
+        $barrierPath = $this->root . '/initialize-barrier';
+        $body = <<<'PHP'
+while (!file_exists($argv[10])) {
+    usleep(1000);
+}
+try {
+    $instance = $store->initializeFromLegacy(new \app\service\install\InstallLockService($argv[9]), 1000);
+    echo json_encode([
+        'revision' => $instance['revision'],
+        'instance_id' => $instance['instance_id'],
+        'token' => $instance['token'],
+    ], JSON_THROW_ON_ERROR);
+} catch (Throwable $exception) {
+    echo $exception->getMessage();
+}
+PHP;
+        $children = [
+            $this->startAgentProcess($body, [$legacyA, $barrierPath], 1000),
+            $this->startAgentProcess($body, [$legacyB, $barrierPath], 1000),
+        ];
+
+        touch($barrierPath);
+        $results = array_map(fn(array $child): string => $this->finishAgentProcess($child), $children);
+        $this->assertSame($results[0], $results[1]);
+        $winner = json_decode($results[0], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(1, $winner['revision']);
+        $this->assertContains($winner['token'], ['token_a', 'token_b']);
+        $this->assertSame($winner, array_intersect_key($this->store()->load(), $winner));
+    }
+
     public function testLegacyReadWaitsForOldExclusiveWriterAndReadsOnlyCompletedJson(): void
     {
         $this->assertTrue(function_exists('proc_open'), 'proc_open is required for the legacy lock contract.');
@@ -523,6 +660,31 @@ PHP, [$this->legacyPath], 500);
         flock($handle, LOCK_UN);
         fclose($handle);
         $this->assertSame('new_token', $this->finishAgentProcess($child));
+    }
+
+    public function testLegacyReadRejectsPathReplacementBetweenInitialStatAndOpen(): void
+    {
+        $this->writeLegacy(['platform' => ['instance_id' => self::INSTANCE_ID, 'token' => 'old_token']]);
+        $movedPath = $this->legacyPath . '.before-open';
+        AgentInstanceConfigStoreLegacyIoHook::$beforeOpen = function (string $filename) use ($movedPath): void {
+            $this->assertSame($this->legacyPath, $filename);
+            rename($this->legacyPath, $movedPath);
+            file_put_contents($this->legacyPath, json_encode([
+                'platform' => ['instance_id' => self::INSTANCE_ID, 'token' => 'new_token'],
+            ], JSON_THROW_ON_ERROR));
+            chmod($this->legacyPath, 0660);
+        };
+
+        try {
+            $this->assertStoreFailure(
+                'LEGACY_PLATFORM_STATE_INVALID',
+                fn() => $this->store()->initializeFromLegacy(new InstallLockService($this->legacyPath), 1000),
+            );
+        } finally {
+            AgentInstanceConfigStoreLegacyIoHook::$beforeOpen = null;
+        }
+        $this->assertFileDoesNotExist($this->root . '/config/instance.json');
+        $this->assertFileExists($movedPath);
     }
 
     public function testPostRenameActivationFailureConvergesFromVisibleRevision(): void

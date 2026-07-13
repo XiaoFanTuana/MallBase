@@ -493,6 +493,15 @@ final class AgentInstanceConfigStore
                 $this->fail('LEGACY_PLATFORM_STATE_INVALID');
             }
 
+            $descriptorStat = @fstat($handle);
+            $lockedNameStat = @lstat($path);
+            if (!$this->validLegacyRegularFileStat($descriptorStat)
+                || !$this->validLegacyRegularFileStat($lockedNameStat)
+                || $descriptorStat['dev'] !== $stat['dev'] || $descriptorStat['ino'] !== $stat['ino']
+                || $descriptorStat['dev'] !== $lockedNameStat['dev'] || $descriptorStat['ino'] !== $lockedNameStat['ino']) {
+                $this->fail('LEGACY_PLATFORM_STATE_INVALID');
+            }
+
             $raw = stream_get_contents($handle, 65537);
             if (!is_string($raw) || $raw === '' || strlen($raw) > 65536 || !mb_check_encoding($raw, 'UTF-8')) {
                 $this->fail('LEGACY_PLATFORM_STATE_INVALID');
@@ -547,6 +556,14 @@ final class AgentInstanceConfigStore
         }
 
         return $identity;
+    }
+
+    private function validLegacyRegularFileStat(mixed $stat): bool
+    {
+        return is_array($stat)
+            && isset($stat['mode'], $stat['nlink'], $stat['dev'], $stat['ino'])
+            && ($stat['mode'] & 0170000) === 0100000
+            && $stat['nlink'] === 1;
     }
 
     private function assertLegacyJsonHasUniqueKeys(string $json): void

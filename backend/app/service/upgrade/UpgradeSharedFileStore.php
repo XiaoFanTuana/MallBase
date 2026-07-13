@@ -105,6 +105,7 @@ final class UpgradeSharedFileStore
         $renamed = false;
         $temporaryPath = '';
         $temporaryHandle = null;
+        $temporaryIdentity = null;
 
         try {
             $this->validateSharedDirectory('config', 02770);
@@ -119,6 +120,15 @@ final class UpgradeSharedFileStore
             if (!is_resource($temporaryHandle) || !@chmod($temporaryPath, 0660)) {
                 throw new RuntimeException('write temp');
             }
+            $createdDescriptorStat = $this->operation('fstat', $temporaryHandle);
+            $createdNameStat = $this->lstat($temporaryPath);
+            if (!is_array($createdDescriptorStat) || $createdNameStat === null) {
+                throw new RuntimeException('stat created temp');
+            }
+            $this->validateRegularFile($createdDescriptorStat, $this->phpEuid, 0660);
+            $this->validateRegularFile($createdNameStat, $this->phpEuid, 0660);
+            $this->assertSameInode($createdDescriptorStat, $createdNameStat);
+            $temporaryIdentity = $createdDescriptorStat;
             $this->checkpoint('after_temp_create');
 
             $offset = 0;
@@ -192,9 +202,7 @@ final class UpgradeSharedFileStore
                 @fclose($temporaryHandle);
             }
             if (!$renamed) {
-                if ($temporaryPath !== '') {
-                    @unlink($temporaryPath);
-                }
+                $this->cleanupOwnedTemporaryPath($temporaryPath, $temporaryIdentity);
                 $this->throwPublic($exception->getMessage() === 'SHARED_FILE_PERMISSION_INVALID'
                     ? 'SHARED_FILE_PERMISSION_INVALID'
                     : 'SHARED_FILE_UNAVAILABLE');
@@ -212,26 +220,42 @@ final class UpgradeSharedFileStore
         try {
             $this->validateSharedDirectory('run', 02770);
             $path = $this->path(self::LOCK_PATH);
-            $nameStat = $this->lstat($path);
-            if ($nameStat === null) {
-                $handle = $this->operation('fopen', $path, 'x+b');
-                if (is_resource($handle)) {
-                    if (!@chmod($path, 0660)) {
-                        throw new RuntimeException('create lock');
+            $deadline = hrtime(true) + $this->lockTimeoutMilliseconds * 1_000_000;
+            do {
+                $nameStat = $this->lstat($path);
+                if ($nameStat === null) {
+                    $handle = $this->operation('fopen', $path, 'x+b');
+                    if (is_resource($handle)) {
+                        if (!@chmod($path, 0660)) {
+                            throw new RuntimeException('create lock');
+                        }
+                        $nameStat = $this->lstat($path);
+                        break;
                     }
-                    $nameStat = $this->lstat($path);
-                } else {
-                    $nameStat = $this->lstat($path);
-                    if ($nameStat === null) {
-                        throw new RuntimeException('create lock');
-                    }
-                    $this->validateRegularFile($nameStat, $this->phpEuid, 0660);
-                    $handle = $this->operation('fopen', $path, 'c+b');
+
+                    usleep(1_000);
+                    continue;
                 }
-            } else {
-                $this->validateRegularFile($nameStat, $this->phpEuid, 0660);
-                $handle = $this->operation('fopen', $path, 'c+b');
-            }
+
+                if (($nameStat['mode'] & 0170000) !== 0100000 || $nameStat['nlink'] !== 1
+                    || $nameStat['uid'] !== $this->phpEuid || $nameStat['gid'] !== $this->expectedGid) {
+                    throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+                }
+                if (($nameStat['mode'] & 07777) !== 0660) {
+                    if (hrtime(true) >= $deadline) {
+                        throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+                    }
+
+                    usleep(1_000);
+                    continue;
+                }
+
+                $handle = $this->operation('fopen', $path, 'r+b');
+                if (!is_resource($handle)) {
+                    usleep(1_000);
+                }
+            } while (!is_resource($handle) && hrtime(true) < $deadline);
+
             if (!is_resource($handle) || $nameStat === null) {
                 throw new RuntimeException('open lock');
             }
@@ -243,7 +267,6 @@ final class UpgradeSharedFileStore
             $this->validateRegularFile($descriptorStat, $this->phpEuid, 0660);
             $this->assertSameInode($descriptorStat, $nameStat);
 
-            $deadline = hrtime(true) + $this->lockTimeoutMilliseconds * 1_000_000;
             do {
                 $acquired = $this->operation('flock', $handle, LOCK_EX | LOCK_NB) === true;
                 if ($acquired) {
@@ -577,6 +600,25 @@ final class UpgradeSharedFileStore
             $this->checkpoint($checkpoint);
         } catch (Throwable) {
         }
+    }
+
+    /** @param array<string|int, int>|null $identity */
+    private function cleanupOwnedTemporaryPath(string $path, ?array $identity): void
+    {
+        if ($path === '' || $identity === null) {
+            return;
+        }
+        try {
+            $current = $this->operation('lstat', $path);
+            if (!is_array($current)) {
+                return;
+            }
+            $this->validateRegularFile($current, $this->phpEuid, 0660);
+            $this->assertSameInode($identity, $current);
+        } catch (Throwable) {
+            return;
+        }
+        @unlink($path);
     }
 
     private function checkpoint(string $name): void
