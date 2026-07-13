@@ -13,6 +13,7 @@ use app\service\distribution\DistributionAccountService;
 use app\service\distribution\DistributionConfigService;
 use app\service\distribution\DistributionEnrollmentService;
 use app\service\distribution\DistributionRelationService;
+use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
 
@@ -387,6 +388,9 @@ class DistributionCenterService extends BaseService
             ->field('id,nickname,mobile,avatar')
             ->select()
             ->toArray();
+        $rows = app()->make(AssetHydrator::class)->hydrateFields($rows, [
+            'avatar' => 'avatar_full_url',
+        ]);
         $map = [];
         foreach ($rows as $row) {
             $map[(int) $row['id']] = [
@@ -394,6 +398,7 @@ class DistributionCenterService extends BaseService
                 'nickname' => (string) ($row['nickname'] ?? ''),
                 'mobile' => (string) ($row['mobile'] ?? ''),
                 'avatar' => $row['avatar'] ?? null,
+                'avatar_full_url' => $row['avatar_full_url'] ?? null,
             ];
         }
         return $map;

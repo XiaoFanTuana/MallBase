@@ -63,6 +63,7 @@ class ArticleService extends BaseService
             ->where('id', (int) $data['category_id'])
             ->value('name');
         $data['category_name'] = $categoryName;
+        $data['content'] = app()->make(RichTextSanitizer::class)->sanitize((string) ($data['content'] ?? ''));
 
         return app()->make(AssetHydrator::class)->hydrateArticleDetail($data);
     }

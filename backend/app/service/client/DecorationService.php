@@ -5,6 +5,7 @@ namespace app\service\client;
 
 use app\model\client\ClientDecorationScheme;
 use app\model\client\ClientTheme;
+use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use think\facade\Db;
@@ -812,6 +813,14 @@ class DecorationService extends BaseService
             }
             $props = $this->stripRuntimePreviewFields($props);
             $type = (string) ($item['type'] ?? $item['component'] ?? '');
+            if ($type === 'richText') {
+                $sanitizer = app()->make(RichTextSanitizer::class);
+                foreach (['content', 'html'] as $field) {
+                    if (isset($props[$field]) && is_string($props[$field])) {
+                        $props[$field] = $sanitizer->sanitize($props[$field]);
+                    }
+                }
+            }
             $props = $this->applyDefaultClientProps($type, $props);
 
             $list[] = [

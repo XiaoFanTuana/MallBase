@@ -69,6 +69,7 @@ class RefundOrderStatusMachine extends BaseService
      * @param int|null    $operatorId    操作方主键（系统触发时可为 null；管理员审核路径必须传）
      * @param string|null $remark        备注（审核意见 / 取消原因），最长 255
      *
+     * @return bool 是否实际发生了状态流转
      * @throws BusinessException 状态非法 / 不允许流转 / 管理员审核缺 operatorId
      */
     public function transit(
@@ -77,15 +78,75 @@ class RefundOrderStatusMachine extends BaseService
         int $operatorType,
         ?int $operatorId = null,
         ?string $remark = null
-    ): void {
+    ): bool {
         if (!RefundOrderStatus::isValid($toStatus)) {
             throw new BusinessException('售后目标状态不合法');
         }
 
+        $isAdminReview = $operatorType === OperatorType::ADMIN
+            && in_array($toStatus, self::ADMIN_REVIEW_STATUSES, true);
+        if ($isAdminReview && $operatorId === null) {
+            throw new BusinessException('管理员审核流转必须传入操作者ID');
+        }
+
+        $refundId = (int) ($refund->id ?? 0);
+        if ($refundId > 0) {
+            return (bool) $this->transaction(function () use (
+                $refund,
+                $refundId,
+                $toStatus,
+                $operatorType,
+                $operatorId,
+                $remark
+            ): bool {
+                /** @var RefundOrder|null $lockedRefund */
+                $lockedRefund = $this->model()
+                    ->where('id', $refundId)
+                    ->whereNull('delete_time')
+                    ->lock(true)
+                    ->find();
+                if ($lockedRefund === null) {
+                    throw new BusinessException('售后单不存在');
+                }
+
+                $changed = $this->transitLoadedRefund(
+                    $lockedRefund,
+                    $toStatus,
+                    $operatorType,
+                    $operatorId,
+                    $remark
+                );
+                $this->syncRefundSnapshot($refund, $lockedRefund);
+                return $changed;
+            });
+        }
+
+        return (bool) $this->transaction(
+            fn (): bool => $this->transitLoadedRefund($refund, $toStatus, $operatorType, $operatorId, $remark)
+        );
+    }
+
+    private function transitLoadedRefund(
+        RefundOrder $refund,
+        int $toStatus,
+        int $operatorType,
+        ?int $operatorId,
+        ?string $remark
+    ): bool {
+        $fromStatus = $this->resolvedFromStatus($refund, $toStatus);
+        if ($fromStatus === null) {
+            return false;
+        }
+
+        $this->persistTransit($refund, $fromStatus, $toStatus, $operatorType, $operatorId, $remark);
+        return true;
+    }
+
+    private function resolvedFromStatus(RefundOrder $refund, int $toStatus): ?int
+    {
         $fromStatus = (int) ($refund->status ?? 0);
         if ($fromStatus === $toStatus) {
-            // 幂等保护：重复流转到同一状态不报错、不落库
-            return;
+            return null;
         }
 
         if (!RefundOrderStatus::canTransit($fromStatus, $toStatus)) {
@@ -96,45 +157,62 @@ class RefundOrderStatusMachine extends BaseService
             ));
         }
 
+        return $fromStatus;
+    }
+
+    private function persistTransit(
+        RefundOrder $refund,
+        int $fromStatus,
+        int $toStatus,
+        int $operatorType,
+        ?int $operatorId,
+        ?string $remark
+    ): void {
         $isAdminReview = $operatorType === OperatorType::ADMIN
             && in_array($toStatus, self::ADMIN_REVIEW_STATUSES, true);
-        if ($isAdminReview && $operatorId === null) {
-            throw new BusinessException('管理员审核流转必须传入操作者ID');
-        }
 
         /** @var OrderEventDispatcher $dispatcher */
         $dispatcher = app()->make(OrderEventDispatcher::class);
 
-        $this->transaction(function () use ($refund, $fromStatus, $toStatus, $isAdminReview, $operatorId, $remark, $dispatcher): void {
-            $refund->status = $toStatus;
+        $refund->status = $toStatus;
 
-            // 1. 对应终态时间戳（与 datetime 格式对齐主订单表）
-            $timestampColumn = self::STATUS_TIMESTAMP[$toStatus] ?? null;
-            if ($timestampColumn !== null) {
-                $refund->{$timestampColumn} = date('Y-m-d H:i:s');
-            }
+        $timestampColumn = self::STATUS_TIMESTAMP[$toStatus] ?? null;
+        if ($timestampColumn !== null) {
+            $refund->{$timestampColumn} = date('Y-m-d H:i:s');
+        }
 
-            // 2. 管理员审核路径同步 reviewed_by / reviewed_at
-            if ($isAdminReview) {
-                $refund->reviewed_at = date('Y-m-d H:i:s');
-                $refund->reviewed_by = $operatorId;
-            }
+        if ($isAdminReview) {
+            $refund->reviewed_at = date('Y-m-d H:i:s');
+            $refund->reviewed_by = $operatorId;
+        }
 
-            // 3. 备注（审核意见 / 取消原因）
-            if ($remark !== null && $remark !== '') {
-                $refund->admin_remark = mb_substr($remark, 0, 255);
-            }
+        if ($remark !== null && $remark !== '') {
+            $refund->admin_remark = mb_substr($remark, 0, 255);
+        }
 
-            $refund->save();
+        $refund->save();
 
-            if ($toStatus === RefundOrderStatus::COMPLETED) {
-                $dispatcher->dispatch(OrderEventContext::forRefund(
-                    OrderEvent::REFUND_COMPLETED,
-                    $refund,
-                    $fromStatus,
-                    $toStatus,
-                ));
-            }
-        });
+        if ($toStatus === RefundOrderStatus::COMPLETED) {
+            $dispatcher->dispatch(OrderEventContext::forRefund(
+                OrderEvent::REFUND_COMPLETED,
+                $refund,
+                $fromStatus,
+                $toStatus,
+            ));
+        }
+    }
+
+    private function syncRefundSnapshot(RefundOrder $target, RefundOrder $source): void
+    {
+        foreach ([
+            'status',
+            'reviewed_at',
+            'reviewed_by',
+            'refunded_at',
+            'canceled_at',
+            'admin_remark',
+        ] as $field) {
+            $target->{$field} = $source->{$field} ?? null;
+        }
     }
 }

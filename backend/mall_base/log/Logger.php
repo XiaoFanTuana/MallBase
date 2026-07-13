@@ -50,7 +50,7 @@ class Logger
 
         // 自动添加类名到上下文（如果提供了类名）
         if ($className !== null) {
-            LogContext::addGlobal('class_name', $className);
+            LogContext::addCoroutine('class_name', $className);
         }
     }
 
