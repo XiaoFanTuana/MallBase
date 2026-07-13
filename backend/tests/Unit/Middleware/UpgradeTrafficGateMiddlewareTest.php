@@ -231,7 +231,7 @@ final class UpgradeTrafficGateMiddlewareTest extends TestCase
     }
 
     #[DataProvider('bypassPathProvider')]
-    public function testUpgradeAndHealthPathsBypassGateAndTracking(string $path): void
+    public function testUpgradeAndHealthPathsBypassGateAndTracking(string $path, string $method = 'GET'): void
     {
         [$middleware, $activity, $gate] = $this->trafficMiddleware(
             UpgradeState::Paused,
@@ -239,7 +239,7 @@ final class UpgradeTrafficGateMiddlewareTest extends TestCase
         );
 
         $response = $middleware->handle(
-            $this->request($path),
+            $this->request($path, $method),
             static fn(): Response => response('bypass', 200),
         );
 
@@ -248,14 +248,48 @@ final class UpgradeTrafficGateMiddlewareTest extends TestCase
         self::assertSame(0, $activity->httpBegins);
     }
 
-    /** @return array<string,array{string}> */
+    /** @return array<string,array{string,string}> */
     public static function bypassPathProvider(): array
     {
         return [
-            'upgrade root' => ['upgrade'],
-            'upgrade child' => ['upgrade/status'],
-            'api health' => ['api/health'],
-            'health' => ['health'],
+            'upgrade root' => ['upgrade', 'GET'],
+            'upgrade status' => ['upgrade/api/status', 'GET'],
+            'recovery takeover' => ['upgrade/api/recovery/takeover', 'POST'],
+            'job action' => ['upgrade/api/jobs/11111111-1111-4111-8111-111111111111/drain', 'POST'],
+            'job control' => ['upgrade/api/jobs/11111111-1111-4111-8111-111111111111/control', 'POST'],
+            'agent state transition' => ['upgrade/api/agent/jobs/11111111-1111-4111-8111-111111111111/state-transition', 'POST'],
+            'agent operation' => ['upgrade/api/agent/jobs/11111111-1111-4111-8111-111111111111/operations/22222222-2222-4222-8222-222222222222', 'GET'],
+            'api health' => ['api/health', 'GET'],
+            'health' => ['health', 'GET'],
+        ];
+    }
+
+    #[DataProvider('nearMissUpgradePathProvider')]
+    public function testNearMissUpgradePathsRemainBlockedDuringMaintenance(string $path, string $method): void
+    {
+        [$middleware, $activity] = $this->trafficMiddleware(UpgradeState::Paused);
+        $nextCalled = false;
+
+        $response = $middleware->handle($this->request($path, $method), static function () use (&$nextCalled): Response {
+            $nextCalled = true;
+
+            return response('unexpected', 200);
+        });
+
+        self::assertSame(503, $response->getCode());
+        self::assertFalse($nextCalled);
+        self::assertSame(0, $activity->httpBegins);
+    }
+
+    /** @return array<string,array{string,string}> */
+    public static function nearMissUpgradePathProvider(): array
+    {
+        return [
+            'unknown child' => ['upgrade/status', 'GET'],
+            'status suffix' => ['upgrade/api/status-extra', 'GET'],
+            'wrong method' => ['upgrade/api/status', 'POST'],
+            'bad job UUID' => ['upgrade/api/jobs/not-a-uuid/drain', 'POST'],
+            'extra action suffix' => ['upgrade/api/jobs/11111111-1111-4111-8111-111111111111/drain/again', 'POST'],
         ];
     }
 

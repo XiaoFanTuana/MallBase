@@ -8,7 +8,16 @@ $readEnvironment = static function (string $name): mixed {
         return $value;
     }
 
-    return function_exists('env') ? env($name, null) : null;
+    if (!function_exists('env')) {
+        return null;
+    }
+    try {
+        return env($name, null);
+    } catch (Throwable) {
+        // Standalone config-contract tests intentionally have no ThinkPHP Env
+        // facade binding; absence remains different from an invalid value.
+        return null;
+    }
 };
 
 $readDecimal = static function (string $name, int $default, int $minimum, int $maximum) use ($readEnvironment): int {

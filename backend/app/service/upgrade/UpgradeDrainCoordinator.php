@@ -7,7 +7,7 @@ namespace app\service\upgrade;
 use Closure;
 use Throwable;
 
-final class UpgradeDrainCoordinator
+final class UpgradeDrainCoordinator implements UpgradeDrainControl
 {
     /** @var Closure():int */
     private readonly Closure $clock;

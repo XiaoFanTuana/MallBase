@@ -8,7 +8,7 @@ use Closure;
 use JsonException;
 use Throwable;
 
-final class RedisUpgradeGateRepository implements UpgradeGateRepository, UpgradeDrainGateRepository
+final class RedisUpgradeGateRepository implements UpgradeGateRepository, UpgradeDrainGateRepository, UpgradePlatformSyncGateRepository, UpgradeRecoveryGateRepository
 {
     private const MIRROR_SCRIPT = <<<'LUA'
 local current = redis.call('GET', KEYS[1])
@@ -118,6 +118,52 @@ LUA;
                 jobId: null,
                 platformSyncPending: $platformSyncPending,
                 failureCode: null,
+                updatedAt: $clock(),
+            );
+        });
+    }
+
+    public function resumeFromFailedMaintenance(
+        int $expectedRevision,
+        UpgradeState $phase,
+        string $jobId,
+    ): UpgradeGateSnapshot {
+        return $this->mutate(function (UpgradeGateSnapshot $current) use ($expectedRevision, $phase, $jobId): UpgradeGateSnapshot {
+            $this->assertExpected($current, $expectedRevision, UpgradeState::FailedMaintenance, $jobId);
+            if (!in_array($phase, [
+                UpgradeState::BackingUp,
+                UpgradeState::Applying,
+                UpgradeState::AwaitingDeployment,
+                UpgradeState::Verifying,
+                UpgradeState::Reconciling,
+            ], true) || $current->uncertain) {
+                throw new UpgradeStateConflict();
+            }
+            $clock = $this->clock;
+
+            return $this->copy(
+                $current,
+                state: $phase,
+                revision: $current->revision + 1,
+                failureCode: null,
+                updatedAt: $clock(),
+            );
+        });
+    }
+
+    public function confirmPlatformSync(int $expectedRevision): UpgradeGateSnapshot
+    {
+        return $this->mutate(function (UpgradeGateSnapshot $current) use ($expectedRevision): UpgradeGateSnapshot {
+            if ($current->revision !== $expectedRevision || $current->state !== UpgradeState::Normal
+                || $current->jobId !== null || !$current->platformSyncPending) {
+                throw new UpgradeStateConflict();
+            }
+            $clock = $this->clock;
+
+            return $this->copy(
+                $current,
+                revision: $current->revision + 1,
+                platformSyncPending: false,
                 updatedAt: $clock(),
             );
         });

@@ -14,7 +14,7 @@ use Throwable;
  *
  * 路径和稳定卷 marker reader 只能由服务端启动代码注入；I/O 替换表仅供单元测试注入故障。
  */
-final class UpgradeRuntimeIdentityLoader
+final class UpgradeRuntimeIdentityLoader implements UpgradeRuntimeIdentityProvider
 {
     private const OPERATION_NAMES = ['lstat', 'fstat', 'fopen', 'fault'];
     private const MARKER_COMMON_FIELDS = [

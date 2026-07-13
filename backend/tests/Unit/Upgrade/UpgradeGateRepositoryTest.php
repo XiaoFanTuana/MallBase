@@ -108,6 +108,15 @@ final class UpgradeGateRepositoryTest extends TestCase
         self::assertSame(UpgradeState::Normal, $normal->state);
         self::assertTrue($normal->platformSyncPending);
         self::assertSame(self::SOURCE_DEPLOYMENT_ID, $normal->requiredDeploymentId);
+
+        $confirmed = $repository->confirmPlatformSync($normal->revision);
+        self::assertSame($normal->revision + 1, $confirmed->revision);
+        self::assertFalse($confirmed->platformSyncPending);
+        try {
+            $repository->confirmPlatformSync($confirmed->revision);
+            self::fail('platform receipt was accepted without a pending outbox');
+        } catch (UpgradeStateConflict) {
+        }
     }
 
     public function testPausedCannotEnterBackingUpThroughTheGenericTransitionBoundary(): void
@@ -142,6 +151,45 @@ final class UpgradeGateRepositoryTest extends TestCase
         $backingUp = $repository->enterBackingUpAfterDrain($snapshot->revision, self::JOB_ID);
         self::assertSame(UpgradeState::BackingUp, $backingUp->state);
         self::assertSame($snapshot->revision + 1, $backingUp->revision);
+    }
+
+    public function testFailedMaintenanceCanResumeOnlyThroughTheExplicitRecoveryBoundary(): void
+    {
+        $repository = $this->repository();
+        $snapshot = $repository->snapshot();
+        foreach ([
+            UpgradeState::Preparing,
+            UpgradeState::ReadyToDrain,
+            UpgradeState::Draining,
+            UpgradeState::Paused,
+            UpgradeState::BackingUp,
+            UpgradeState::Applying,
+            UpgradeState::FailedMaintenance,
+        ] as $next) {
+            $snapshot = $next === UpgradeState::BackingUp
+                ? $repository->enterBackingUpAfterDrain($snapshot->revision, self::JOB_ID)
+                : $repository->compareAndSet($snapshot->revision, $snapshot->state, $next, self::JOB_ID);
+        }
+
+        try {
+            $repository->compareAndSet(
+                $snapshot->revision,
+                UpgradeState::FailedMaintenance,
+                UpgradeState::Applying,
+                self::JOB_ID,
+            );
+            self::fail('generic transition escaped failed maintenance');
+        } catch (UpgradeStateConflict) {
+        }
+
+        $resumed = $repository->resumeFromFailedMaintenance(
+            $snapshot->revision,
+            UpgradeState::Applying,
+            self::JOB_ID,
+        );
+        self::assertSame(UpgradeState::Applying, $resumed->state);
+        self::assertSame($snapshot->revision + 1, $resumed->revision);
+        self::assertNull($resumed->failureCode);
     }
 
     public function testMissingRedisAfterSideEffectsRecoversAsFailedMaintenance(): void

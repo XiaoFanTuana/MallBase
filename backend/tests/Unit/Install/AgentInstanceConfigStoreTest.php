@@ -90,6 +90,7 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $this->assertSame(self::NAMESPACE, $instance['upgrade_namespace_id']);
         $this->assertMatchesRegularExpression($this->uuidPattern(), $instance['instance_id']);
         $this->assertSame('', $instance['token']);
+        $this->assertArrayNotHasKey('session_derivation_key', $instance);
         $this->assertSame('activating', $instance['activation_state']);
         $this->assertSame(1900, $instance['activation_secret_expires_at']);
         $this->assertSame(43, strlen($instance['activation_secret']));
@@ -108,6 +109,115 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $this->assertStringContainsString('"components":{}', $raw);
         $this->assertStringNotContainsString('"components":[]', $raw);
         $this->assertSame($instance, $this->store()->load());
+    }
+
+    public function testLegacySchemaOneInstanceMigratesOnceUnderTheInstanceLock(): void
+    {
+        $instance = $this->initialize();
+        unset($instance['session_derivation_key']);
+        $instance['schema_version'] = 1;
+        $this->files->writeJson('instance', $this->instanceObject($instance));
+
+        $migrated = $this->store()->ensureSessionDerivationKey(1001);
+
+        $this->assertSame(2, $migrated['schema_version']);
+        $this->assertSame(2, $migrated['revision']);
+        $this->assertSame(43, strlen($migrated['session_derivation_key']));
+        $this->assertSame($migrated, $this->store()->ensureSessionDerivationKey(1002));
+    }
+
+    public function testSessionKeyMigrationFailsClosedWhenSessionCheckpointAlreadyExists(): void
+    {
+        $store = $this->store();
+        $instance = $this->initialize();
+        $this->files->writeJson('session_auth', (object) ['schema_version' => 1]);
+        $bytes = file_get_contents($this->root . '/config/instance.json');
+
+        $this->assertStoreFailure('SESSION_KEY_MIGRATION_BLOCKED', fn() => $store->ensureSessionDerivationKey(1001));
+        $this->assertSame($instance, $store->load());
+        $this->assertSame($bytes, file_get_contents($this->root . '/config/instance.json'));
+    }
+
+    public function testEveryVersionTwoWriterPreservesTheSessionDerivationKey(): void
+    {
+        $this->writeLegacy(['platform' => ['instance_id' => self::INSTANCE_ID, 'token' => 'mbt_token']]);
+        $store = $this->store();
+        $store->initializeFromLegacy(new InstallLockService($this->legacyPath), 1000);
+        $instance = $store->ensureSessionDerivationKey(1001);
+        $key = $instance['session_derivation_key'];
+
+        $reservation = $store->reserveReportWindow('backend_php', 1001, 30);
+        self::assertNotNull($reservation);
+        $this->assertSame($key, $reservation['instance']['session_derivation_key']);
+        $this->assertTrue($store->recordReportResult(
+            $reservation['reservation_id'],
+            $reservation['reservation_revision'],
+            true,
+            1002,
+            60,
+        ));
+        $this->assertSame($key, $store->load()['session_derivation_key']);
+        $this->assertNull($store->reserveReportWindow('admin_web', 1003, 30));
+        $this->assertSame($key, $store->load()['session_derivation_key']);
+
+        $this->removeInstance();
+        @unlink($this->legacyPath);
+        $store->initializeFromLegacy(new InstallLockService($this->legacyPath), 2000);
+        $activating = $store->ensureSessionDerivationKey(2001);
+        $key = $activating['session_derivation_key'];
+        $confirming = $store->storeActivationResponse(
+            $activating['activation_generation'],
+            $activating['revision'],
+            $activating['instance_id'],
+            'mbt_token',
+            2002,
+        );
+        $this->assertSame($key, $confirming['session_derivation_key']);
+        $this->assertSame($key, $store->confirmActivation(
+            $confirming['activation_generation'],
+            $confirming['revision'],
+            2003,
+        )['session_derivation_key']);
+
+        $this->removeInstance();
+        $fresh = $store->initializeFromLegacy(new InstallLockService($this->legacyPath), 3000);
+        $fresh = $store->ensureSessionDerivationKey(3001);
+        $key = $fresh['session_derivation_key'];
+        $this->assertSame($key, $store->markExpiredActivationRecoveryRequired(3900)['session_derivation_key']);
+    }
+
+    public function testConcurrentSessionKeyMigrationPublishesOneStableKeyAndRevision(): void
+    {
+        $this->assertTrue(function_exists('proc_open'));
+        $this->initialize();
+        $barrier = $this->root . '/session-key-barrier';
+        $body = <<<'PHP'
+while (!file_exists($argv[9])) {
+    usleep(1000);
+}
+try {
+    $instance = $store->ensureSessionDerivationKey(1001);
+    echo json_encode([
+        'schema_version' => $instance['schema_version'],
+        'revision' => $instance['revision'],
+        'key' => $instance['session_derivation_key'],
+    ], JSON_THROW_ON_ERROR);
+} catch (Throwable $exception) {
+    echo $exception->getMessage();
+}
+PHP;
+        $children = [
+            $this->startAgentProcess($body, [$barrier], 1000),
+            $this->startAgentProcess($body, [$barrier], 1000),
+        ];
+
+        touch($barrier);
+        $results = array_map(fn(array $child): string => $this->finishAgentProcess($child), $children);
+        $this->assertSame($results[0], $results[1]);
+        $winner = json_decode($results[0], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(2, $winner['schema_version']);
+        $this->assertSame(2, $winner['revision']);
+        $this->assertSame(43, strlen($winner['key']));
     }
 
     public function testLegacyConfirmedIdentityMigratesOnceAndNeverOverwritesSharedInstance(): void
@@ -481,9 +591,11 @@ final class AgentInstanceConfigStoreTest extends TestCase
 
     public function testGoSchemaRejectsEveryInvalidFieldFamilyWithoutSecretBearingErrors(): void
     {
-        $valid = $this->initialize();
+        $this->initialize();
+        $valid = $this->store()->ensureSessionDerivationKey(1001);
         $invalid = [];
-        $invalid['future schema'] = array_replace($valid, ['schema_version' => 2]);
+        $invalid['future schema'] = array_replace($valid, ['schema_version' => 3]);
+        $invalid['derivation key size'] = array_replace($valid, ['session_derivation_key' => str_repeat('A', 42)]);
         $invalid['zero revision'] = array_replace($valid, ['revision' => 0]);
         $invalid['missing token'] = $valid;
         unset($invalid['missing token']['token']);

@@ -37,7 +37,7 @@ final readonly class UpgradeTrafficGateMiddleware
             return $next($request);
         }
         $this->ensureRegisteredRuntimeIsSafe();
-        if ($this->isUpgradePath($path)) {
+        if ($this->isUpgradePath($path, strtoupper($request->method()))) {
             return $next($request);
         }
 
@@ -78,9 +78,42 @@ final readonly class UpgradeTrafficGateMiddleware
         }
     }
 
-    private function isUpgradePath(string $path): bool
+    private function isUpgradePath(string $path, string $method): bool
     {
-        return $path === 'upgrade' || str_starts_with($path, 'upgrade/');
+        if (($method === 'GET' || $method === 'HEAD') && in_array($path, [
+            'upgrade',
+            'upgrade/app.js',
+            'upgrade/styles.css',
+            'upgrade/api/maintenance',
+            'upgrade/api/status',
+        ], true)) {
+            return true;
+        }
+        if ($method === 'POST' && in_array($path, [
+            'upgrade/api/recovery/takeover',
+            'upgrade/api/recovery/rotate',
+            'upgrade/api/recovery/confirm',
+            'upgrade/api/platform/bootstrap',
+            'upgrade/api/jobs',
+        ], true)) {
+            return true;
+        }
+
+        $uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+        if ($method === 'POST'
+            && preg_match('#^upgrade/api/jobs/' . $uuid . '/(?:drain|control)$#D', $path) === 1) {
+            return true;
+        }
+        if ($method === 'POST'
+            && preg_match('#^upgrade/api/agent/jobs/' . $uuid . '/(?:backup-database|state-transition|migrations|confirm-paused|runtime-fence|persistent-state-verification|reconciliation)$#D', $path) === 1) {
+            return true;
+        }
+        if (($method === 'GET' || $method === 'HEAD')
+            && preg_match('#^upgrade/api/agent/jobs/' . $uuid . '/(?:health|writable-surface-audit|operations/' . $uuid . ')$#D', $path) === 1) {
+            return true;
+        }
+
+        return false;
     }
 
     private function isHealthPath(string $path): bool

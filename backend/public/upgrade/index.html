@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    />
+    <title>MallBase 系统升级</title>
+    <link rel="stylesheet" href="/upgrade/styles.css" />
+  </head>
+  <body>
+    <main class="shell" data-mallbase-upgrade-shell="v1">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">MALLBASE UPGRADE</p>
+          <h1>系统升级</h1>
+          <p id="summary" class="summary" aria-live="polite">正在读取升级状态…</p>
+        </div>
+        <span id="agent-badge" class="badge">检测 Agent</span>
+      </header>
+
+      <section class="panel" aria-labelledby="agent-title">
+        <div class="panel-heading">
+          <div>
+            <p class="step">01</p>
+            <h2 id="agent-title">启动宿主机 Agent</h2>
+          </div>
+          <button id="refresh" type="button" class="secondary">重新检测</button>
+        </div>
+        <p>Agent 只在升级期间以前台方式运行；升级完成后页面会明确提示可以关闭。</p>
+        <div id="commands" class="commands" aria-label="Agent 启动命令"></div>
+        <p id="agent-detail" class="muted"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="release-title">
+        <div class="panel-heading">
+          <div>
+            <p class="step">02</p>
+            <h2 id="release-title">选择兼容版本</h2>
+          </div>
+        </div>
+        <div id="releases" class="release-list" aria-live="polite">
+          <p class="muted">Agent 就绪后会显示平台发布的兼容版本。</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="progress-title">
+        <div class="panel-heading">
+          <div>
+            <p class="step">03</p>
+            <h2 id="progress-title">升级进度</h2>
+          </div>
+        </div>
+        <ol id="timeline" class="timeline"></ol>
+        <div id="actions" class="actions"></div>
+        <p id="notice" class="notice" role="status"></p>
+      </section>
+
+      <section id="deployment-panel" class="panel deployment-panel" aria-labelledby="deployment-title" hidden>
+        <div class="panel-heading">
+          <div>
+            <p class="step">04</p>
+            <h2 id="deployment-title">用户执行部署</h2>
+          </div>
+          <span class="badge warning">需要宿主机终端</span>
+        </div>
+        <p>升级文件已经准备完成。请按当前部署架构在商城根目录执行下列命令。</p>
+        <p class="deployment-target">目标版本：<strong id="deployment-target"></strong></p>
+        <ol id="deployment-steps" class="deployment-steps"></ol>
+        <div id="deployment-commands" class="commands" aria-label="用户部署命令"></div>
+        <h3 class="risk-title">执行前确认</h3>
+        <ul id="deployment-risks" class="risk-list"></ul>
+        <p id="copy-status" class="muted" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+    <script type="module" src="/upgrade/app.js"></script>
+  </body>
+</html>

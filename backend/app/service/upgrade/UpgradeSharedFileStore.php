@@ -20,7 +20,12 @@ final class UpgradeSharedFileStore
     private const DOCUMENTS = [
         'instance' => ['path' => 'config/instance.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
         'upgrade_gate' => ['path' => 'state/upgrade-gate.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
+        'upgrade_operations' => ['path' => 'state/upgrade-operations.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
+        'migration_registry' => ['path' => 'state/migrations.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
         'agent_status' => ['path' => 'run/agent-status.json', 'owner' => 'agent', 'mode' => 0660, 'directory_mode' => 02770, 'write' => false],
+        'release_catalog' => ['path' => 'run/release-catalog.json', 'owner' => 'agent', 'mode' => 0660, 'directory_mode' => 02770, 'write' => false],
+        'active_job' => ['path' => 'run/active-job.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
+        'session_auth' => ['path' => 'run/session-auth.json', 'owner' => 'shared', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
         'namespace_projection' => ['path' => 'staging/storage-namespace.json', 'owner' => 'agent', 'mode' => 0444, 'directory_mode' => 0750, 'write' => false],
         'runtime_retirement_evidence' => ['path' => 'run/runtime-retirement-evidence.json', 'owner' => 'php', 'mode' => 0660, 'directory_mode' => 02770, 'write' => true],
     ];
@@ -28,6 +33,10 @@ final class UpgradeSharedFileStore
     private const INSTANCE_LOCK_PATH = 'run/instance-config.lock';
     private const UPGRADE_GATE_LOCK_PATH = 'state/upgrade-gate.lock';
     private const RUNTIME_REGISTRY_LOCK_PATH = 'run/runtime-registry.lock';
+    private const SESSION_AUTH_LOCK_PATH = 'run/session-auth.lock';
+    private const UPGRADE_OPERATION_LOCK_PATH = 'state/upgrade-operations.lock';
+    private const MIGRATION_REGISTRY_LOCK_PATH = 'state/migrations.lock';
+    private const JOB_CONTROL_LOCK_PATH = 'jobs/job-control.lock';
 
     private const OPERATION_NAMES = [
         'lstat', 'fstat', 'fopen', 'fwrite', 'fflush', 'fsync', 'rename',
@@ -178,6 +187,147 @@ final class UpgradeSharedFileStore
         $this->writeEncodedDefinition($definition, $bytes);
     }
 
+    public function readJobRequest(string $jobId): ?object
+    {
+        return $this->readJobDocument($this->jobDefinition($jobId, 'request.json', 'php'));
+    }
+
+    public function readJobStatus(string $jobId): ?object
+    {
+        return $this->readJobDocument($this->jobDefinition($jobId, 'status.json', 'agent'));
+    }
+
+    public function readJobControlResult(string $jobId, string $requestId): ?object
+    {
+        $this->requireUuid($requestId);
+
+        return $this->readJobDocument($this->jobDefinition(
+            $jobId,
+            'control-results/' . $requestId . '.json',
+            'agent',
+        ));
+    }
+
+    public function readJobControl(string $jobId, int $expectedRevision, string $requestId): ?object
+    {
+        if ($expectedRevision < 0) {
+            $this->throwPublic('UPGRADE_JOB_ARGUMENT_INVALID');
+        }
+        $this->requireUuid($requestId);
+
+        try {
+            return $this->readJobDocument($this->jobDefinition(
+                $jobId,
+                'controls/' . $expectedRevision . '-' . $requestId . '.json',
+                'php',
+            ));
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() === 'UPGRADE_JOB_UNAVAILABLE') {
+                return null;
+            }
+            throw $exception;
+        }
+    }
+
+    public function publishJobRequest(string $jobId, object $document): void
+    {
+        $bytes = $this->encodeDocument($document);
+        $this->withJobControlLock(function () use ($jobId, $bytes): void {
+            $this->ensureJobDirectory($jobId);
+            $definition = $this->jobDefinition($jobId, 'request.json', 'php');
+            $existing = $this->readRawDefinition($definition);
+            if ($existing !== null) {
+                if (!hash_equals($existing, $bytes)) {
+                    $this->throwPublic('UPGRADE_JOB_CONFLICT');
+                }
+            } else {
+                $this->writeEncodedDefinition($definition, $bytes);
+            }
+            $this->writeEncodedDefinition(self::DOCUMENTS['active_job'], $this->encodeDocument((object) [
+                'schema_version' => 1,
+                'job_id' => $jobId,
+            ]));
+        });
+    }
+
+    /** Atomically publishes one immutable control intent for a gate revision. */
+    public function publishJobControl(
+        string $jobId,
+        int $expectedRevision,
+        string $requestId,
+        object $document,
+    ): void {
+        if ($expectedRevision < 0) {
+            $this->throwPublic('UPGRADE_JOB_ARGUMENT_INVALID');
+        }
+        $this->requireUuid($requestId);
+        $bytes = $this->encodeDocument($document);
+        $this->withJobControlLock(function () use ($jobId, $expectedRevision, $requestId, $bytes): void {
+            $this->ensureJobDirectory($jobId, 'controls');
+            $prefix = $expectedRevision . '-';
+            $directory = $this->path('jobs/' . $jobId . '/controls');
+            $entries = @scandir($directory);
+            if (!is_array($entries) || count($entries) > 10_002) {
+                $this->throwPublic('UPGRADE_JOB_UNAVAILABLE');
+            }
+            $fileName = $prefix . $requestId . '.json';
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..' || !str_starts_with($entry, $prefix)) {
+                    continue;
+                }
+                if ($entry !== $fileName) {
+                    $this->throwPublic('UPGRADE_CONTROL_CONFLICT');
+                }
+            }
+            $definition = $this->jobDefinition($jobId, 'controls/' . $fileName, 'php');
+            $existing = $this->readRawDefinition($definition);
+            if ($existing !== null) {
+                if (!hash_equals($existing, $bytes)) {
+                    $this->throwPublic('UPGRADE_CONTROL_CONFLICT');
+                }
+
+                return;
+            }
+            $this->writeEncodedDefinition($definition, $bytes);
+        });
+    }
+
+    /** @param array<string,mixed> $event */
+    public function appendJobAudit(string $jobId, array $event): void
+    {
+        $this->withJobControlLock(function () use ($jobId, $event): void {
+            $this->ensureJobDirectory($jobId);
+            $definition = $this->jobDefinition($jobId, 'audit.json', 'php');
+            $existing = $this->readRawDefinition($definition);
+            $revision = 0;
+            $events = [];
+            if ($existing !== null) {
+                $raw = get_object_vars($this->decodeStrictObject($existing));
+                if (array_keys($raw) !== ['schema_version', 'revision', 'events']
+                    || $raw['schema_version'] !== 1 || !is_int($raw['revision'])
+                    || $raw['revision'] < 0 || !is_array($raw['events']) || !array_is_list($raw['events'])) {
+                    $this->throwPublic('UPGRADE_JOB_INVALID');
+                }
+                $revision = $raw['revision'];
+                foreach ($raw['events'] as $item) {
+                    if (!$item instanceof stdClass) {
+                        $this->throwPublic('UPGRADE_JOB_INVALID');
+                    }
+                    $events[] = $item;
+                }
+            }
+            if (count($events) >= 1000 || $revision === PHP_INT_MAX) {
+                $this->throwPublic('UPGRADE_JOB_LIMIT_REACHED');
+            }
+            $events[] = $this->toObjectValue($event);
+            $this->writeEncodedDefinition($definition, $this->encodeDocument((object) [
+                'schema_version' => 1,
+                'revision' => $revision + 1,
+                'events' => $events,
+            ]));
+        });
+    }
+
     /** @return list<string> */
     public function listRuntimeInstances(): array
     {
@@ -217,11 +367,11 @@ final class UpgradeSharedFileStore
 
         try {
             $directory = dirname((string) $definition['path']);
-            $this->validateSharedDirectory($directory, (int) $definition['directory_mode']);
+            $this->validateDefinitionDirectory($directory, $definition);
             $targetPath = $this->path((string) $definition['path']);
             $targetStat = $this->lstat($targetPath);
             if ($targetStat !== null) {
-                $this->validateRegularFile($targetStat, $this->phpEuid, 0660);
+                $this->validateDefinitionFile($targetStat, $definition);
             }
 
             $temporaryPath = $this->path($directory . '/.' . basename((string) $definition['path']) . '.' . bin2hex(random_bytes(16)) . '.tmp');
@@ -281,7 +431,7 @@ final class UpgradeSharedFileStore
             if ($publishedStat === null) {
                 throw new RuntimeException('stat published file');
             }
-            $this->validateRegularFile($publishedStat, $this->phpEuid, 0660);
+            $this->validateDefinitionFile($publishedStat, $definition);
             $this->assertSameInode($descriptorStat, $publishedStat);
             $this->checkpoint('after_rename');
             $this->checkpoint('before_parent_fsync');
@@ -296,8 +446,8 @@ final class UpgradeSharedFileStore
                 if (!is_array($directoryDescriptorStat) || $directoryNameStat === null) {
                     throw new RuntimeException('stat parent');
                 }
-                $this->validateDirectoryStat($directoryDescriptorStat, 02770);
-                $this->validateDirectoryStat($directoryNameStat, 02770);
+                $this->validateDefinitionDirectoryStat($directoryDescriptorStat, $definition);
+                $this->validateDefinitionDirectoryStat($directoryNameStat, $definition);
                 $this->assertSameInode($directoryDescriptorStat, $directoryNameStat);
                 if ($this->operation('fsync', $directoryHandle) !== true) {
                     throw new RuntimeException('sync parent');
@@ -337,9 +487,29 @@ final class UpgradeSharedFileStore
         return $this->withLock(self::RUNTIME_REGISTRY_LOCK_PATH, 'RUNTIME_REGISTRY_BUSY', $callback);
     }
 
+    public function withSessionAuthLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::SESSION_AUTH_LOCK_PATH, 'UPGRADE_SESSION_BUSY', $callback, true);
+    }
+
     public function withDrainCheckpointLock(Closure $callback): mixed
     {
         return $this->withLock(self::UPGRADE_GATE_LOCK_PATH, 'UPGRADE_GATE_BUSY', $callback);
+    }
+
+    public function withUpgradeOperationLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::UPGRADE_OPERATION_LOCK_PATH, 'UPGRADE_OPERATION_BUSY', $callback);
+    }
+
+    public function withMigrationRegistryLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::MIGRATION_REGISTRY_LOCK_PATH, 'UPGRADE_MIGRATION_BUSY', $callback);
+    }
+
+    public function withJobControlLock(Closure $callback): mixed
+    {
+        return $this->withLock(self::JOB_CONTROL_LOCK_PATH, 'UPGRADE_JOB_BUSY', $callback);
     }
 
     /** @return array{path:string,owner:string,mode:int,directory_mode:int,write:bool} */
@@ -358,7 +528,140 @@ final class UpgradeSharedFileStore
         ];
     }
 
-    private function withLock(string $relativePath, string $busyCode, Closure $callback): mixed
+    /** @return array{path:string,owner:string,mode:int,directory_mode:int,write:bool,directory_owners:list<int>} */
+    private function jobDefinition(string $jobId, string $relative, string $owner): array
+    {
+        $this->requireUuid($jobId);
+        if (!in_array($owner, ['php', 'agent'], true)
+            || preg_match('#^(?:request|status|audit)\.json$|^(?:controls|control-results)/[0-9A-Za-z_.-]{1,160}\.json$#D', $relative) !== 1
+            || str_contains($relative, '..')) {
+            $this->throwPublic('UPGRADE_JOB_ARGUMENT_INVALID');
+        }
+
+        return [
+            'path' => 'jobs/' . $jobId . '/' . $relative,
+            'owner' => $owner,
+            'mode' => 0660,
+            'directory_mode' => 02770,
+            'write' => $owner === 'php',
+            'directory_owners' => [$this->agentUid, $this->phpEuid],
+        ];
+    }
+
+    /** @param array<string,mixed> $definition */
+    private function readJobDocument(array $definition): ?object
+    {
+        try {
+            if (!$this->jobDocumentDirectoryExists($definition)) {
+                return null;
+            }
+            $raw = $this->readRawDefinition($definition);
+
+            return $raw === null ? null : $this->decodeStrictObject($raw);
+        } catch (Throwable $exception) {
+            if (in_array($exception->getMessage(), [
+                'UPGRADE_JOB_ARGUMENT_INVALID', 'SHARED_FILE_INVALID',
+                'SHARED_FILE_PERMISSION_INVALID',
+            ], true)) {
+                $this->throwPublic($exception->getMessage());
+            }
+            $this->throwPublic('UPGRADE_JOB_UNAVAILABLE');
+        }
+    }
+
+    /** @param array<string,mixed> $definition */
+    private function jobDocumentDirectoryExists(array $definition): bool
+    {
+        $this->validateSharedDirectory('jobs', 02770);
+        $parts = explode('/', dirname((string) $definition['path']));
+        if (($parts[0] ?? '') !== 'jobs' || count($parts) < 2 || count($parts) > 3) {
+            $this->throwPublic('UPGRADE_JOB_ARGUMENT_INVALID');
+        }
+        $relative = 'jobs';
+        for ($index = 1; $index < count($parts); $index++) {
+            $relative .= '/' . $parts[$index];
+            $path = $this->path($relative);
+            $stat = $this->lstat($path);
+            if ($stat === null) {
+                return false;
+            }
+            $this->validateDirectoryStatOwners($stat, [$this->agentUid, $this->phpEuid], 02770);
+            $canonicalRoot = realpath($this->root);
+            $canonicalPath = realpath($path);
+            if (!is_string($canonicalRoot) || $canonicalPath !== $canonicalRoot . substr($path, strlen($this->root))) {
+                $this->throwPublic('SHARED_FILE_PERMISSION_INVALID');
+            }
+        }
+
+        return true;
+    }
+
+    private function encodeDocument(object $document): string
+    {
+        try {
+            $bytes = json_encode(
+                $document,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+            );
+        } catch (JsonException) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+        if (!is_string($bytes) || strlen($bytes) > $this->maxJsonBytes) {
+            $this->throwPublic('SHARED_FILE_INVALID');
+        }
+
+        return $bytes;
+    }
+
+    /** @param array<string,mixed> $value */
+    private function toObjectValue(array $value): object
+    {
+        return json_decode(json_encode($value, JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR);
+    }
+
+    private function ensureJobDirectory(string $jobId, ?string $child = null): void
+    {
+        $this->requireUuid($jobId);
+        $this->validateSharedDirectory('jobs', 02770);
+        $parts = ['jobs/' . $jobId];
+        if ($child !== null) {
+            if (!in_array($child, ['controls', 'control-results'], true)) {
+                $this->throwPublic('UPGRADE_JOB_ARGUMENT_INVALID');
+            }
+            $parts[] = 'jobs/' . $jobId . '/' . $child;
+        }
+        foreach ($parts as $relative) {
+            $path = $this->path($relative);
+            $stat = $this->lstat($path);
+            if ($stat === null) {
+                if (!@mkdir($path, 02770) || !@chmod($path, 02770)) {
+                    $this->throwPublic('UPGRADE_JOB_UNAVAILABLE');
+                }
+                $stat = $this->lstat($path);
+            }
+            if ($stat === null) {
+                $this->throwPublic('UPGRADE_JOB_UNAVAILABLE');
+            }
+            $this->validateDirectoryStatOwners($stat, [$this->agentUid, $this->phpEuid], 02770);
+            $canonicalRoot = realpath($this->root);
+            $canonicalPath = realpath($path);
+            $expectedCanonicalPath = is_string($canonicalRoot)
+                ? $canonicalRoot . substr($path, strlen($this->root))
+                : false;
+            if ($canonicalPath === false || $canonicalPath !== $expectedCanonicalPath) {
+                $this->throwPublic('SHARED_FILE_PERMISSION_INVALID');
+            }
+        }
+    }
+
+    private function requireUuid(string $value): void
+    {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $value) !== 1) {
+            $this->throwPublic('UPGRADE_JOB_ARGUMENT_INVALID');
+        }
+    }
+
+    private function withLock(string $relativePath, string $busyCode, Closure $callback, bool $sharedOwners = false): mixed
     {
         $handle = null;
         $acquired = false;
@@ -375,6 +678,13 @@ final class UpgradeSharedFileStore
                         if (!@chmod($path, 0660)) {
                             throw new RuntimeException('create lock');
                         }
+                        if ($sharedOwners) {
+                            $this->durablyPublishSharedLock($handle, $path, $directory);
+                            @fclose($handle);
+                            $handle = null;
+                            $nameStat = null;
+                            continue;
+                        }
                         $nameStat = $this->lstat($path);
                         break;
                     }
@@ -383,8 +693,10 @@ final class UpgradeSharedFileStore
                     continue;
                 }
 
+                $owners = $sharedOwners ? [$this->phpEuid, $this->agentUid] : [$this->phpEuid];
                 if (($nameStat['mode'] & 0170000) !== 0100000 || $nameStat['nlink'] !== 1
-                    || $nameStat['uid'] !== $this->phpEuid || $nameStat['gid'] !== $this->expectedGid) {
+                    || !in_array($nameStat['uid'], $owners, true)
+                    || $nameStat['gid'] !== $this->expectedGid) {
                     throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
                 }
                 if (($nameStat['mode'] & 07777) !== 0660) {
@@ -410,7 +722,11 @@ final class UpgradeSharedFileStore
             if (!is_array($descriptorStat)) {
                 throw new RuntimeException('stat lock');
             }
-            $this->validateRegularFile($descriptorStat, $this->phpEuid, 0660);
+            $this->validateRegularFileOwners(
+                $descriptorStat,
+                $sharedOwners ? [$this->phpEuid, $this->agentUid] : [$this->phpEuid],
+                0660,
+            );
             $this->assertSameInode($descriptorStat, $nameStat);
 
             do {
@@ -431,8 +747,9 @@ final class UpgradeSharedFileStore
             if (!is_array($descriptorStat) || $lockedNameStat === null) {
                 throw new RuntimeException('restat lock');
             }
-            $this->validateRegularFile($descriptorStat, $this->phpEuid, 0660);
-            $this->validateRegularFile($lockedNameStat, $this->phpEuid, 0660);
+            $owners = $sharedOwners ? [$this->phpEuid, $this->agentUid] : [$this->phpEuid];
+            $this->validateRegularFileOwners($descriptorStat, $owners, 0660);
+            $this->validateRegularFileOwners($lockedNameStat, $owners, 0660);
             $this->assertSameInode($descriptorStat, $lockedNameStat);
         } catch (Throwable $exception) {
             if (is_resource($handle)) {
@@ -461,6 +778,46 @@ final class UpgradeSharedFileStore
         }
     }
 
+    /** @param resource $handle */
+    private function durablyPublishSharedLock($handle, string $path, string $directory): void
+    {
+        $descriptorStat = $this->operation('fstat', $handle);
+        $nameStat = $this->lstat($path);
+        if (!is_array($descriptorStat) || $nameStat === null) {
+            throw new RuntimeException('stat shared lock');
+        }
+        $owners = [$this->phpEuid, $this->agentUid];
+        $this->validateRegularFileOwners($descriptorStat, $owners, 0660);
+        $this->validateRegularFileOwners($nameStat, $owners, 0660);
+        $this->assertSameInode($descriptorStat, $nameStat);
+        if ($this->operation('fflush', $handle) !== true || $this->operation('fsync', $handle) !== true) {
+            throw new RuntimeException('sync shared lock');
+        }
+        $this->checkpoint('after_shared_lock_file_fsync');
+
+        $directoryPath = $this->path($directory);
+        $directoryHandle = $this->operation('open_dir', $directoryPath);
+        if (!is_resource($directoryHandle)) {
+            throw new RuntimeException('open shared lock parent');
+        }
+        try {
+            $directoryDescriptorStat = $this->operation('fstat', $directoryHandle);
+            $directoryNameStat = $this->lstat($directoryPath);
+            if (!is_array($directoryDescriptorStat) || $directoryNameStat === null) {
+                throw new RuntimeException('stat shared lock parent');
+            }
+            $this->validateDirectoryStat($directoryDescriptorStat, 02770);
+            $this->validateDirectoryStat($directoryNameStat, 02770);
+            $this->assertSameInode($directoryDescriptorStat, $directoryNameStat);
+            if ($this->operation('fsync', $directoryHandle) !== true) {
+                throw new RuntimeException('sync shared lock parent');
+            }
+        } finally {
+            $this->operation('close_dir', $directoryHandle);
+        }
+        $this->checkpoint('after_shared_lock_parent_fsync');
+    }
+
     private function readRawDocument(string $logicalName): ?string
     {
         $definition = self::DOCUMENTS[$logicalName] ?? null;
@@ -476,14 +833,14 @@ final class UpgradeSharedFileStore
     {
 
         $directory = dirname((string) $definition['path']);
-        $this->validateSharedDirectory($directory, (int) $definition['directory_mode']);
+        $this->validateDefinitionDirectory($directory, $definition);
         $path = $this->path((string) $definition['path']);
         $nameStat = $this->lstat($path);
         if ($nameStat === null) {
             return null;
         }
-        $expectedOwner = $definition['owner'] === 'agent' ? $this->agentUid : $this->phpEuid;
-        $this->validateRegularFile($nameStat, $expectedOwner, (int) $definition['mode']);
+        $expectedOwners = $this->definitionOwners($definition);
+        $this->validateRegularFileOwners($nameStat, $expectedOwners, (int) $definition['mode']);
 
         $handle = $this->operation('fopen', $path, 'rb');
         if (!is_resource($handle)) {
@@ -494,7 +851,7 @@ final class UpgradeSharedFileStore
             if (!is_array($descriptorStat)) {
                 throw new RuntimeException('stat file');
             }
-            $this->validateRegularFile($descriptorStat, $expectedOwner, (int) $definition['mode']);
+            $this->validateRegularFileOwners($descriptorStat, $expectedOwners, (int) $definition['mode']);
             $this->assertSameInode($descriptorStat, $nameStat);
 
             $raw = '';
@@ -713,21 +1070,73 @@ final class UpgradeSharedFileStore
     /** @param array<string|int, int> $stat */
     private function validateDirectoryStat(array $stat, int $mode): void
     {
+        $this->validateDirectoryStatOwners($stat, [$this->agentUid], $mode);
+    }
+
+    /** @param array<string|int, int> $stat @param list<int> $owners */
+    private function validateDirectoryStatOwners(array $stat, array $owners, int $mode): void
+    {
         if (($stat['mode'] & 0170000) !== 0040000
-            || $stat['uid'] !== $this->agentUid || $stat['gid'] !== $this->expectedGid
+            || !in_array($stat['uid'], $owners, true) || $stat['gid'] !== $this->expectedGid
             || ($stat['mode'] & 07777) !== $mode) {
             throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
         }
     }
 
+    /** @param array<string,mixed> $definition */
+    private function validateDefinitionDirectory(string $relativePath, array $definition): void
+    {
+        $this->validateDirectory($this->root, 0750);
+        if ($relativePath === '') {
+            return;
+        }
+        $stat = $this->lstat($this->path($relativePath));
+        if ($stat === null) {
+            throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+        }
+        $this->validateDefinitionDirectoryStat($stat, $definition);
+    }
+
+    /** @param array<string|int,int> $stat @param array<string,mixed> $definition */
+    private function validateDefinitionDirectoryStat(array $stat, array $definition): void
+    {
+        $owners = $definition['directory_owners'] ?? [$this->agentUid];
+        if (!is_array($owners) || $owners === []) {
+            throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
+        }
+        $this->validateDirectoryStatOwners($stat, $owners, (int) $definition['directory_mode']);
+    }
+
     /** @param array<string|int, int> $stat */
     private function validateRegularFile(array $stat, int $owner, int $mode): void
     {
+        $this->validateRegularFileOwners($stat, [$owner], $mode);
+    }
+
+    /** @param array<string|int, int> $stat @param list<int> $owners */
+    private function validateRegularFileOwners(array $stat, array $owners, int $mode): void
+    {
         if (($stat['mode'] & 0170000) !== 0100000 || $stat['nlink'] !== 1
-            || $stat['uid'] !== $owner || $stat['gid'] !== $this->expectedGid
+            || !in_array($stat['uid'], $owners, true) || $stat['gid'] !== $this->expectedGid
             || ($stat['mode'] & 07777) !== $mode) {
             throw new RuntimeException('SHARED_FILE_PERMISSION_INVALID');
         }
+    }
+
+    /** @param array{path:string,owner:string,mode:int,directory_mode:int,write:bool} $definition */
+    private function validateDefinitionFile(array $stat, array $definition): void
+    {
+        $this->validateRegularFileOwners($stat, $this->definitionOwners($definition), (int) $definition['mode']);
+    }
+
+    /** @param array{path:string,owner:string,mode:int,directory_mode:int,write:bool} $definition @return list<int> */
+    private function definitionOwners(array $definition): array
+    {
+        return match ($definition['owner']) {
+            'agent' => [$this->agentUid],
+            'shared' => [$this->phpEuid, $this->agentUid],
+            default => [$this->phpEuid],
+        };
     }
 
     /**

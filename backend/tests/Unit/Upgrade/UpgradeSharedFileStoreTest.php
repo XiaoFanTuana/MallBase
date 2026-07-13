@@ -24,10 +24,12 @@ final class UpgradeSharedFileStoreTest extends TestCase
         mkdir($this->root, 0750, true);
         mkdir($this->root . '/config', 02770);
         mkdir($this->root . '/run', 02770);
+        mkdir($this->root . '/jobs', 02770);
         mkdir($this->root . '/staging', 0750);
         chmod($this->root, 0750);
         chmod($this->root . '/config', 02770);
         chmod($this->root . '/run', 02770);
+        chmod($this->root . '/jobs', 02770);
         chmod($this->root . '/staging', 0750);
     }
 
@@ -119,6 +121,76 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/state');
     }
 
+    public function testJobRequestAndControlIntentsAreImmutableAndRevisionScoped(): void
+    {
+        $store = $this->store();
+        $jobId = '018f5d35-3f42-7a31-a731-9e45df3356c2';
+        $requestId = '7ce3ca75-0ff2-4d2c-83ec-b14f7b57fa28';
+        $request = (object) ['schema_version' => 1, 'job_id' => $jobId, 'target_version' => '1.2.0'];
+
+        $store->publishJobRequest($jobId, $request);
+        $store->publishJobRequest($jobId, $request);
+        self::assertEquals($request, $store->readJobRequest($jobId));
+        self::assertEquals((object) ['schema_version' => 1, 'job_id' => $jobId], $store->readJson('active_job'));
+        $this->assertPublicFailure(
+            'UPGRADE_JOB_CONFLICT',
+            fn() => $store->publishJobRequest($jobId, (object) [
+                'schema_version' => 1,
+                'job_id' => $jobId,
+                'target_version' => '1.3.0',
+            ]),
+        );
+
+        $intent = (object) [
+            'schema_version' => 1,
+            'job_id' => $jobId,
+            'action' => 'cancel',
+            'requested_at' => 1_783_785_660,
+            'expected_revision' => 3,
+            'request_id' => $requestId,
+        ];
+        $store->publishJobControl($jobId, 3, $requestId, $intent);
+        $store->publishJobControl($jobId, 3, $requestId, $intent);
+        self::assertEquals($intent, $store->readJobControl($jobId, 3, $requestId));
+        $this->assertPublicFailure(
+            'UPGRADE_CONTROL_CONFLICT',
+            fn() => $store->publishJobControl(
+                $jobId,
+                3,
+                '11111111-1111-4111-8111-111111111111',
+                (object) [
+                    'schema_version' => 1,
+                    'job_id' => $jobId,
+                    'action' => 'rollback',
+                    'requested_at' => 1_783_785_661,
+                    'expected_revision' => 3,
+                    'request_id' => '11111111-1111-4111-8111-111111111111',
+                ],
+            ),
+        );
+    }
+
+    public function testJobStatusAndControlResultAreReadOnlyAgentDocuments(): void
+    {
+        $jobId = '018f5d35-3f42-7a31-a731-9e45df3356c2';
+        $requestId = '7ce3ca75-0ff2-4d2c-83ec-b14f7b57fa28';
+        mkdir($this->root . '/jobs/' . $jobId, 02770);
+        mkdir($this->root . '/jobs/' . $jobId . '/control-results', 02770);
+        chmod($this->root . '/jobs/' . $jobId, 02770);
+        chmod($this->root . '/jobs/' . $jobId . '/control-results', 02770);
+        file_put_contents($this->root . '/jobs/' . $jobId . '/status.json', '{"schema_version":1,"revision":4,"state":"paused"}');
+        file_put_contents(
+            $this->root . '/jobs/' . $jobId . '/control-results/' . $requestId . '.json',
+            '{"schema_version":1,"request_id":"' . $requestId . '","status":"accepted"}',
+        );
+        chmod($this->root . '/jobs/' . $jobId . '/status.json', 0660);
+        chmod($this->root . '/jobs/' . $jobId . '/control-results/' . $requestId . '.json', 0660);
+
+        $store = $this->store();
+        self::assertSame('paused', $store->readJobStatus($jobId)?->state);
+        self::assertSame('accepted', $store->readJobControlResult($jobId, $requestId)?->status);
+    }
+
     public function testAgentStatusUsesSharedRunDirectoryModeAndAgentOwnedLeaf(): void
     {
         file_put_contents($this->root . '/run/agent-status.json', '{"schema_version":1,"mode":"serve"}');
@@ -145,6 +217,23 @@ final class UpgradeSharedFileStoreTest extends TestCase
         $this->assertSame('{"schema_version":1,"nested":{},"enabled":true}', file_get_contents($this->root . '/config/instance.json'));
         $this->assertEquals($document, $store->readJson('instance'));
         $this->assertSame(0660, fileperms($this->root . '/config/instance.json') & 07777);
+    }
+
+    public function testSessionAuthDocumentAndLockAcceptAgentOrPhpOwnerButRemainFixedSharedFiles(): void
+    {
+        file_put_contents($this->root . '/run/session-auth.json', '{"schema_version":1,"revision":1}');
+        chmod($this->root . '/run/session-auth.json', 0660);
+        $store = $this->store();
+
+        $this->assertSame(1, $store->readJson('session_auth')->revision);
+        $this->assertSame('locked', $store->withSessionAuthLock(static fn(): string => 'locked'));
+
+        $store->withSessionAuthLock(function () use ($store): void {
+            $store->writeJson('session_auth', (object) ['schema_version' => 1, 'revision' => 2]);
+        });
+        $this->assertSame('{"schema_version":1,"revision":2}', file_get_contents($this->root . '/run/session-auth.json'));
+        $this->assertSame(0660, fileperms($this->root . '/run/session-auth.json') & 07777);
+        $this->assertSame(0660, fileperms($this->root . '/run/session-auth.lock') & 07777);
     }
 
     #[DataProvider('invalidJsonProvider')]
@@ -595,7 +684,12 @@ final class UpgradeSharedFileStoreTest extends TestCase
     private function expectedOwner(string $path, bool $directory): int
     {
         if ($directory || str_ends_with($path, '/staging/storage-namespace.json')
-            || str_ends_with($path, '/run/agent-status.json')) {
+            || str_ends_with($path, '/run/agent-status.json')
+            || str_ends_with($path, '/run/release-catalog.json')
+            || str_ends_with($path, '/run/session-auth.json')
+            || str_ends_with($path, '/run/session-auth.lock')
+            || str_ends_with($path, '/status.json')
+            || str_contains($path, '/control-results/')) {
             return self::AGENT_UID;
         }
 

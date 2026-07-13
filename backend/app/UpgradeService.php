@@ -5,6 +5,14 @@ declare(strict_types=1);
 namespace app;
 
 use app\queue\UpgradeAwareWorker;
+use app\service\admin\upgrade\UpgradeSessionService;
+use app\service\install\AgentHeartbeatClient;
+use app\service\install\AgentHeartbeatPayloadFactory;
+use app\service\install\AgentHeartbeatRunner;
+use app\service\install\AgentInstanceConfigStore;
+use app\service\install\AgentInstanceStateStore;
+use app\service\install\AgentPlatformBootstrapService;
+use app\service\install\InstallLockService;
 use app\service\upgrade\AgentVerifiedMountedStorageIdentityReader;
 use app\service\upgrade\ConfiguredUpgradeRuntimeContext;
 use app\service\upgrade\ConfiguredUpgradeRuntimeDeploymentInventory;
@@ -28,6 +36,7 @@ use app\service\upgrade\UpgradeActivityLedgerInitializer;
 use app\service\upgrade\UpgradeActivityBootstrapper;
 use app\service\upgrade\UpgradeActivityTracker;
 use app\service\upgrade\UpgradeDrainCheckpointRepository;
+use app\service\upgrade\UpgradeDrainControl;
 use app\service\upgrade\UpgradeDrainCoordinator;
 use app\service\upgrade\UpgradeGateRepository;
 use app\service\upgrade\UpgradeMountedStorageIdentityReader;
@@ -47,7 +56,34 @@ use app\service\upgrade\UpgradeRuntimeRegistrationCoordinator;
 use app\service\upgrade\UpgradeRuntimeRegistry;
 use app\service\upgrade\UpgradeRuntimeRetirementEvidenceStore;
 use app\service\upgrade\UpgradeRuntimeRetirementGuard;
+use app\service\upgrade\UpgradeJobControlService;
+use app\service\upgrade\DatabaseBackupService;
+use app\service\upgrade\FileMigrationRegistry;
+use app\service\upgrade\LocalUploadRootPolicy;
+use app\service\upgrade\PersistentStateVerificationService;
+use app\service\upgrade\SchemaMigrationService;
+use app\service\upgrade\UpgradeAgentNonceStore;
+use app\service\upgrade\UpgradeAgentRuntimePolicy;
+use app\service\upgrade\UpgradeMigrationAdvisoryLock;
+use app\service\upgrade\UpgradeMigrationPlanRegistry;
+use app\service\upgrade\UpgradeOperationStore;
+use app\service\upgrade\UpgradePaymentReconciliationService;
+use app\service\upgrade\UpgradePaymentReconciliationStore;
+use app\service\upgrade\UpgradePlatformReceiptService;
+use app\service\upgrade\UpgradeProcessSupervisor;
+use app\service\upgrade\UpgradeRuntimeFenceService;
+use app\service\upgrade\UpgradeWritableSurfaceAuditService;
+use app\service\client\payment\WechatPayClient;
+use app\service\client\payment\WechatPayFactory;
+use app\service\client\payment\WechatPaymentResultService;
+use app\service\admin\order\RefundOrderAdminService;
 use app\service\upgrade\UpgradeSharedFileStore;
+use app\service\upgrade\UpgradeControlRateLimiter;
+use app\service\upgrade\UpgradeRecoveryCapabilityService;
+use app\service\upgrade\UpgradeSameOriginPolicy;
+use app\service\upgrade\UpgradeSessionAuthStore;
+use app\service\upgrade\UpgradeStrictJsonDecoder;
+use app\service\upgrade\UpgradeViewService;
 use app\service\upgrade\VerifiedUpgradeRuntimeRetirementGuard;
 use think\App;
 use think\Cache;
@@ -56,6 +92,7 @@ use think\Queue;
 use think\Service;
 use think\exception\Handle;
 use think\queue\Worker;
+use PDO;
 
 /**
  * 升级运行设施只在配置加载完成且显式启用后进入容器。
@@ -64,6 +101,8 @@ final class UpgradeService extends Service
 {
     public function register(): void
     {
+        $this->bindSessionInfrastructure();
+
         if (!(bool) config('upgrade.enabled', false)) {
             return;
         }
@@ -160,6 +199,116 @@ final class UpgradeService extends Service
                     queues: $app->make(QueueInspector::class),
                     checkpoints: $app->make(UpgradeDrainCheckpointRepository::class),
                     ackTimeoutSeconds: (int) config('upgrade.pause_ack_timeout', 20),
+                );
+            },
+            UpgradeDrainControl::class => UpgradeDrainCoordinator::class,
+            UpgradeJobControlService::class => function (App $app): UpgradeJobControlService {
+                return new UpgradeJobControlService(
+                    files: $app->make(UpgradeSharedFileStore::class),
+                    sessions: $app->make(UpgradeSessionAuthStore::class),
+                    gate: $app->make(UpgradeGateRepository::class),
+                    drain: $app->make(UpgradeDrainControl::class),
+                    callbackBaseUrl: (string) config('upgrade.public_origin', ''),
+                );
+            },
+            UpgradeAgentNonceStore::class => function (App $app): UpgradeAgentNonceStore {
+                return new UpgradeAgentNonceStore(
+                    redis: $app->make(UpgradeRedisConnectionFactory::class),
+                    namespace: (string) config('agent.upgrade_namespace_id', ''),
+                    lifetimeSeconds: (int) config('upgrade.agent_nonce_lifetime', 300),
+                );
+            },
+            UpgradeAgentRuntimePolicy::class => function (App $app): UpgradeAgentRuntimePolicy {
+                return new UpgradeAgentRuntimePolicy(
+                    gate: $app->make(UpgradeGateRepository::class),
+                    identity: $app->make(UpgradeRuntimeIdentityLoader::class),
+                    operations: $app->make(UpgradeOperationStore::class),
+                );
+            },
+            UpgradeOperationStore::class => function (App $app): UpgradeOperationStore {
+                return new UpgradeOperationStore(
+                    files: $app->make(UpgradeSharedFileStore::class),
+                    ownerWindowSeconds: (int) config('upgrade.operation_owner_window', 15),
+                );
+            },
+            UpgradePlatformReceiptService::class => function (App $app): UpgradePlatformReceiptService {
+                return new UpgradePlatformReceiptService(
+                    operations: $app->make(UpgradeOperationStore::class),
+                    gate: $app->make(UpgradeGateRepository::class),
+                );
+            },
+            UpgradeProcessSupervisor::class => function (): UpgradeProcessSupervisor {
+                return new UpgradeProcessSupervisor(
+                    setprivPath: (string) config('upgrade.setpriv_executable', '/usr/bin/setpriv'),
+                    phpPath: PHP_BINARY,
+                );
+            },
+            DatabaseBackupService::class => function (App $app): DatabaseBackupService {
+                $database = $this->databaseConfiguration();
+                $root = rtrim((string) config('agent.upgrade_root', ''), DIRECTORY_SEPARATOR);
+
+                return new DatabaseBackupService(
+                    operations: $app->make(UpgradeOperationStore::class),
+                    processes: $app->make(UpgradeProcessSupervisor::class),
+                    backupRoot: $root . '/backups',
+                    dumpExecutable: (string) config('upgrade.dump_executable', '/usr/bin/mariadb-dump'),
+                    database: $database,
+                );
+            },
+            FileMigrationRegistry::class => function (App $app): FileMigrationRegistry {
+                return new FileMigrationRegistry($app->make(UpgradeSharedFileStore::class));
+            },
+            UpgradeMigrationAdvisoryLock::class => function (): UpgradeMigrationAdvisoryLock {
+                return new UpgradeMigrationAdvisoryLock(
+                    connection: fn(): PDO => $this->databasePdo(),
+                    namespace: (string) config('agent.upgrade_namespace_id', ''),
+                    timeoutSeconds: (int) config('upgrade.migration_lock_timeout', 2),
+                );
+            },
+            SchemaMigrationService::class => function (App $app): SchemaMigrationService {
+                return new SchemaMigrationService(
+                    registry: $app->make(FileMigrationRegistry::class),
+                    advisoryLock: $app->make(UpgradeMigrationAdvisoryLock::class),
+                );
+            },
+            UpgradeMigrationPlanRegistry::class => function (): UpgradeMigrationPlanRegistry {
+                $root = rtrim((string) config('agent.upgrade_root', ''), DIRECTORY_SEPARATOR);
+
+                return new UpgradeMigrationPlanRegistry($root . '/staging');
+            },
+            PersistentStateVerificationService::class => function (App $app): PersistentStateVerificationService {
+                return new PersistentStateVerificationService(
+                    operations: $app->make(UpgradeOperationStore::class),
+                    roots: (array) config('upgrade.persistent_roots', []),
+                );
+            },
+            UpgradeRuntimeFenceService::class => function (App $app): UpgradeRuntimeFenceService {
+                return new UpgradeRuntimeFenceService(
+                    operations: $app->make(UpgradeOperationStore::class),
+                    gate: $app->make(UpgradeGateRepository::class),
+                );
+            },
+            UpgradeWritableSurfaceAuditService::class => function (): UpgradeWritableSurfaceAuditService {
+                return new UpgradeWritableSurfaceAuditService(
+                    policy: new LocalUploadRootPolicy(),
+                    publicRoot: rtrim(public_path(), DIRECTORY_SEPARATOR),
+                    localRootProvider: static fn(): string => (string) getSystemSetting('local_root_path', 'uploads'),
+                );
+            },
+            UpgradePaymentReconciliationStore::class => function (): UpgradePaymentReconciliationStore {
+                $root = rtrim((string) config('agent.upgrade_root', ''), DIRECTORY_SEPARATOR) . '/jobs';
+
+                return new UpgradePaymentReconciliationStore($root);
+            },
+            UpgradePaymentReconciliationService::class => function (App $app): UpgradePaymentReconciliationService {
+                return new UpgradePaymentReconciliationService(
+                    store: $app->make(UpgradePaymentReconciliationStore::class),
+                    activity: $app->make(UpgradeActivityTracker::class),
+                    factory: $app->make(WechatPayFactory::class),
+                    client: $app->make(WechatPayClient::class),
+                    paymentResults: $app->make(WechatPaymentResultService::class),
+                    refundResults: $app->make(RefundOrderAdminService::class),
+                    clock: static fn(): int => time(),
                 );
             },
             FileUpgradeRuntimeRegistry::class => function (App $app): FileUpgradeRuntimeRegistry {
@@ -278,6 +427,100 @@ final class UpgradeService extends Service
         ]);
     }
 
+    private function bindSessionInfrastructure(): void
+    {
+        // The session endpoint is what tells the operator how to start the
+        // foreground Agent, so these bindings must exist before runtime enable.
+        $this->app->bind([
+            UpgradeRedisConnectionFactory::class => function (): UpgradeRedisConnectionFactory {
+                $configuration = (array) config('cache.stores.redis', []);
+                $configuredTimeout = (float) ($configuration['timeout'] ?? 0);
+                $timeout = $configuredTimeout > 0 ? min($configuredTimeout, 60.0) : 2.0;
+
+                return new PhpRedisUpgradeConnectionFactory(
+                    host: (string) ($configuration['host'] ?? ''),
+                    port: (int) ($configuration['port'] ?? 6379),
+                    password: (string) ($configuration['password'] ?? ''),
+                    database: (int) ($configuration['select'] ?? 0),
+                    connectTimeout: $timeout,
+                    readTimeout: $timeout,
+                );
+            },
+            UpgradeSharedFileStore::class => function (): UpgradeSharedFileStore {
+                return new UpgradeSharedFileStore(
+                    root: (string) config('agent.upgrade_root', ''),
+                    agentUid: (int) config('agent.agent_uid', -1),
+                    expectedGid: (int) config('agent.expected_gid', -1),
+                    phpEuid: (int) config('agent.php_euid', -1),
+                    maxJsonBytes: (int) config('agent.max_json_bytes', 65536),
+                    lockTimeoutMilliseconds: (int) config('agent.instance_lock_timeout_milliseconds', 2000),
+                );
+            },
+            InstallLockService::class => static fn(): InstallLockService => new InstallLockService(),
+            AgentInstanceConfigStore::class => function (App $app): AgentInstanceConfigStore {
+                return new AgentInstanceConfigStore(
+                    files: $app->make(UpgradeSharedFileStore::class),
+                    platformOrigin: (string) config('agent.platform_origin', ''),
+                    upgradeNamespaceId: (string) config('agent.upgrade_namespace_id', ''),
+                    activationProofLifetime: (int) config('agent.activation_proof_lifetime', 900),
+                    componentSeenThrottle: (int) config('agent.component_seen_throttle', 3600),
+                    legacyLockTimeoutMilliseconds: (int) config('agent.instance_lock_timeout_milliseconds', 2000),
+                );
+            },
+            AgentInstanceStateStore::class => AgentInstanceConfigStore::class,
+            AgentHeartbeatClient::class => function (): AgentHeartbeatClient {
+                return new AgentHeartbeatRunner(
+                    timeoutMilliseconds: (int) config('agent.heartbeat_timeout_milliseconds', 5000),
+                );
+            },
+            AgentHeartbeatPayloadFactory::class => static fn(): AgentHeartbeatPayloadFactory =>
+                AgentHeartbeatPayloadFactory::fromProjectRoot(),
+            AgentPlatformBootstrapService::class => function (App $app): AgentPlatformBootstrapService {
+                return new AgentPlatformBootstrapService(
+                    instances: $app->make(AgentInstanceStateStore::class),
+                    heartbeat: $app->make(AgentHeartbeatClient::class),
+                    payloads: $app->make(AgentHeartbeatPayloadFactory::class),
+                    legacy: $app->make(InstallLockService::class),
+                );
+            },
+            UpgradeSessionAuthStore::class => function (App $app): UpgradeSessionAuthStore {
+                return new UpgradeSessionAuthStore($app->make(UpgradeSharedFileStore::class));
+            },
+            UpgradeSessionService::class => function (App $app): UpgradeSessionService {
+                return new UpgradeSessionService(
+                    instances: $app->make(AgentInstanceConfigStore::class),
+                    legacy: $app->make(InstallLockService::class),
+                    platform: $app->make(AgentPlatformBootstrapService::class),
+                    sessions: $app->make(UpgradeSessionAuthStore::class),
+                );
+            },
+            UpgradeRecoveryCapabilityService::class => function (App $app): UpgradeRecoveryCapabilityService {
+                return new UpgradeRecoveryCapabilityService(
+                    instances: $app->make(AgentInstanceConfigStore::class),
+                    sessions: $app->make(UpgradeSessionAuthStore::class),
+                );
+            },
+            UpgradeSameOriginPolicy::class => static fn(): UpgradeSameOriginPolicy =>
+                new UpgradeSameOriginPolicy((string) config('upgrade.public_origin', '')),
+            UpgradeStrictJsonDecoder::class => static fn(): UpgradeStrictJsonDecoder => new UpgradeStrictJsonDecoder(8192),
+            UpgradeControlRateLimiter::class => function (App $app): UpgradeControlRateLimiter {
+                return new UpgradeControlRateLimiter(
+                    redis: $app->make(UpgradeRedisConnectionFactory::class),
+                    namespace: (string) config('agent.upgrade_namespace_id', ''),
+                );
+            },
+            UpgradeViewService::class => function (App $app): UpgradeViewService {
+                return new UpgradeViewService(
+                    files: $app->make(UpgradeSharedFileStore::class),
+                    sessions: $app->make(UpgradeSessionAuthStore::class),
+                    jobStatusReader: static fn(string $jobId): ?array => (bool) config('upgrade.enabled', false)
+                        ? $app->make(UpgradeJobControlService::class)->status($jobId)
+                        : null,
+                );
+            },
+        ]);
+    }
+
     public function boot(): void
     {
         if (!(bool) config('upgrade.enabled', false)) {
@@ -289,5 +532,41 @@ final class UpgradeService extends Service
                 || define('MALLBASE_AUTOMATIC_UPGRADE_DISABLED', true);
             fwrite(STDERR, "[MallBase Upgrade] 活动账本初始化失败，已持久化安全闩；商业服务继续运行。\n");
         }
+    }
+
+    /** @return array{host:string,port:int,user:string,password:string,database:string} */
+    private function databaseConfiguration(): array
+    {
+        $configuration = (array) config('database.connections.mysql', []);
+
+        return [
+            'host' => (string) ($configuration['hostname'] ?? ''),
+            'port' => (int) ($configuration['hostport'] ?? 3306),
+            'user' => (string) ($configuration['username'] ?? ''),
+            'password' => (string) ($configuration['password'] ?? ''),
+            'database' => (string) ($configuration['database'] ?? ''),
+        ];
+    }
+
+    private function databasePdo(): PDO
+    {
+        $configuration = $this->databaseConfiguration();
+        $charset = (string) config('database.connections.mysql.charset', 'utf8mb4');
+        if (preg_match('/^[A-Za-z0-9_]{1,32}$/D', $charset) !== 1) {
+            throw new \RuntimeException('UPGRADE_DATABASE_CONFIG_INVALID');
+        }
+        $dsn = sprintf(
+            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+            $configuration['host'],
+            $configuration['port'],
+            $configuration['database'],
+            $charset,
+        );
+
+        return new PDO($dsn, $configuration['user'], $configuration['password'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::ATTR_TIMEOUT => 5,
+        ]);
     }
 }

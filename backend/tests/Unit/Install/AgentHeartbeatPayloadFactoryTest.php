@@ -36,6 +36,7 @@ final class AgentHeartbeatPayloadFactoryTest extends TestCase
             static fn(): array => ['php_version' => '8.2.30', 'os' => 'Linux'],
         );
         $instance = $this->instance();
+        $instance['session_derivation_key'] = 'SESSION_DERIVATION_KEY_CANARY_DO_NOT_EXPORT';
         $instance['components'] = ['backend_php' => 2_000_000, 'cron' => 1, 'unknown' => 2_000_000];
 
         $payload = $factory->create($instance, 'backend_php', 2_000_000);
@@ -48,6 +49,10 @@ final class AgentHeartbeatPayloadFactoryTest extends TestCase
         self::assertSame('mbt_token', $payload['token']);
         self::assertSame('', $payload['activation_secret']);
         self::assertSame([['type' => 'backend_php', 'version' => '1.2.3']], $payload['components']);
+        self::assertStringNotContainsString(
+            'SESSION_DERIVATION_KEY_CANARY_DO_NOT_EXPORT',
+            json_encode($payload, JSON_THROW_ON_ERROR),
+        );
     }
 
     public function testActivationPayloadCarriesPersistedProofButNeverInventsIdentity(): void
