@@ -1,27 +1,18 @@
 import config from '@/config/index'
+import { clearAuthSession, readAuthSession, writeAuthSession } from '@/utils/auth-session'
 
-const TOKEN_KEY = 'mb_access_token'
-const REFRESH_KEY = 'mb_refresh_token'
 const REQUEST_TIMEOUT = 15000
 const REFRESH_URL = '/client/api/user/auth/refreshToken'
 
 let refreshingPromise = null
+let unauthorizedRedirecting = false
 
 function getToken() {
-  return uni.getStorageSync(TOKEN_KEY) || ''
+  return readAuthSession().accessToken
 }
 
 function getRefreshToken() {
-  return uni.getStorageSync(REFRESH_KEY) || ''
-}
-
-function setStoredTokens(accessToken, refreshToken) {
-  if (accessToken) {
-    uni.setStorageSync(TOKEN_KEY, accessToken)
-  }
-  if (refreshToken) {
-    uni.setStorageSync(REFRESH_KEY, refreshToken)
-  }
+  return readAuthSession().refreshToken
 }
 
 function getClientType() {
@@ -62,12 +53,12 @@ function rejectInvalidResponse(reject, context, showErrorToast = true) {
 }
 
 function handleUnauthorized(message = '请重新登录') {
-  uni.removeStorageSync(TOKEN_KEY)
-  uni.removeStorageSync(REFRESH_KEY)
+  clearAuthSession()
   let loginUrl = '/pages-sub/user/login'
   const pages = getCurrentPages()
   const current = pages[pages.length - 1]
   if (current?.route === 'pages-sub/user/login') {
+    unauthorizedRedirecting = false
     return new Error(message)
   }
   if (current && current.route.startsWith('pages-sub/')) {
@@ -77,7 +68,17 @@ function handleUnauthorized(message = '请重新登录') {
     const fullUrl = query ? `/${current.route}?${query}` : `/${current.route}`
     loginUrl += `?redirect=${encodeURIComponent(fullUrl)}`
   }
-  uni.navigateTo({ url: loginUrl })
+  if (!unauthorizedRedirecting) {
+    unauthorizedRedirecting = true
+    uni.navigateTo({
+      url: loginUrl,
+      complete() {
+        setTimeout(() => {
+          unauthorizedRedirecting = false
+        }, 300)
+      },
+    })
+  }
   return new Error(message)
 }
 
@@ -106,7 +107,7 @@ function refreshAccessToken() {
       success(res) {
         const body = parseResponseBody(res.data)
         if (body?.code === 200 && body.data?.access_token) {
-          setStoredTokens(body.data.access_token, body.data.refresh_token)
+          writeAuthSession(body.data.access_token, body.data.refresh_token)
           resolve(body.data.access_token)
           return
         }

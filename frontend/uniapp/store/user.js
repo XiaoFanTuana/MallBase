@@ -1,8 +1,13 @@
 import { defineStore } from 'pinia'
 import { get, post } from '@/api/request'
+import {
+  clearAuthSession,
+  readAuthSession,
+  subscribeAuthSession,
+  writeAuthSession,
+} from '@/utils/auth-session'
 
-const TOKEN_KEY = 'mb_access_token'
-const REFRESH_KEY = 'mb_refresh_token'
+let stopAuthSubscription = null
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -12,25 +17,30 @@ export const useUserStore = defineStore('user', {
     isLoggedIn: false,
   }),
   actions: {
+    applyAuthSession(session) {
+      this.token = session.accessToken
+      this.refreshToken = session.refreshToken
+      this.isLoggedIn = !!session.accessToken
+      if (!session.accessToken) {
+        this.userInfo = null
+      }
+    },
+    startAuthSync() {
+      if (!stopAuthSubscription) {
+        stopAuthSubscription = subscribeAuthSession((session) => {
+          this.applyAuthSession(session)
+        })
+      }
+      this.restoreToken()
+    },
     restoreToken() {
-      this.token = uni.getStorageSync(TOKEN_KEY) || ''
-      this.refreshToken = uni.getStorageSync(REFRESH_KEY) || ''
-      this.isLoggedIn = !!this.token
+      this.applyAuthSession(readAuthSession())
     },
     setToken(accessToken, refreshToken) {
-      this.token = accessToken
-      this.refreshToken = refreshToken
-      this.isLoggedIn = true
-      uni.setStorageSync(TOKEN_KEY, accessToken)
-      uni.setStorageSync(REFRESH_KEY, refreshToken)
+      this.applyAuthSession(writeAuthSession(accessToken, refreshToken))
     },
     clearAuth() {
-      this.token = ''
-      this.refreshToken = ''
-      this.userInfo = null
-      this.isLoggedIn = false
-      uni.removeStorageSync(TOKEN_KEY)
-      uni.removeStorageSync(REFRESH_KEY)
+      this.applyAuthSession(clearAuthSession())
     },
     async fetchUserInfo() {
       if (!this.token) {
@@ -48,7 +58,7 @@ export const useUserStore = defineStore('user', {
         this.isLoggedIn = true
         return data
       } catch (e) {
-        if (!uni.getStorageSync(TOKEN_KEY)) {
+        if (!readAuthSession().accessToken) {
           this.clearAuth()
         }
         throw e

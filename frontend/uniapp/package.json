@@ -7,7 +7,8 @@
     "dev:mp-weixin": "cross-env UNI_INPUT_DIR=. uni -p mp-weixin",
     "build:h5": "cross-env UNI_INPUT_DIR=. uni build",
     "build:mp-weixin": "cross-env UNI_INPUT_DIR=. uni build -p mp-weixin",
-    "prepare:mp-weixin-release": "node scripts/prepare-mp-weixin-release.mjs"
+    "prepare:mp-weixin-release": "node scripts/prepare-mp-weixin-release.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5000820260420001",

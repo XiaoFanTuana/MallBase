@@ -242,25 +242,28 @@ const profilePageStyle = computed(() => {
 
 onShow(async () => {
   userStore.restoreToken();
-  await decorateStore.fetchThemes({ force: true });
-  await decorateStore.fetchMyThemePreference({ force: true });
-  await fetchFeatureState();
-  fetchPayMethodState();
+  await Promise.all([
+    decorateStore.fetchThemes({ force: true }),
+    decorateStore.fetchMyThemePreference({ force: true }),
+    fetchFeatureState(),
+    fetchPayMethodState(),
+  ]);
   if (userStore.isLoggedIn) {
-    userStore.fetchUserInfo();
+    const requests = [userStore.fetchUserInfo()];
     if (pointsEnabled.value) {
-      fetchPoints();
+      requests.push(fetchPoints());
     } else {
       resetPoints();
     }
     if (balancePaymentEnabled.value) {
-      fetchWallet();
+      requests.push(fetchWallet());
     }
     if (distributionEnabled.value) {
-      fetchDistribution();
+      requests.push(fetchDistribution());
     } else {
       resetDistribution();
     }
+    await Promise.all(requests);
   } else {
     resetDistribution();
   }
@@ -293,9 +296,6 @@ async function fetchPayMethodState() {
     balancePaymentEnabled.value =
       Array.isArray(methods) &&
       methods.some((item) => Number(item?.code) === 3);
-    if (userStore.isLoggedIn && balancePaymentEnabled.value) {
-      fetchWallet();
-    }
   } catch {
     balancePaymentEnabled.value = false;
   }

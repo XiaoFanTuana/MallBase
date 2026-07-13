@@ -126,9 +126,9 @@ function avatarText(item) {
         class="team-row"
       >
         <image
-          v-if="item.user?.avatar"
+          v-if="item.user?.avatar_full_url || item.user?.avatar"
           class="team-row__avatar"
-          :src="item.user.avatar"
+          :src="item.user.avatar_full_url || item.user.avatar"
           mode="aspectFill"
         />
         <view v-else class="team-row__avatar team-row__avatar--text">

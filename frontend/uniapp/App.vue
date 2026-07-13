@@ -11,7 +11,7 @@ onLaunch((options) => {
   const decorateStore = useDecorateStore()
   const userStore = useUserStore()
   captureDistributionAttribution(options?.query || {}, options?.path || '')
-  userStore.restoreToken()
+  userStore.startAuthSync()
   decorateStore.init()
   appStore.fetchBasicConfig()
   setupRouterGuard()
