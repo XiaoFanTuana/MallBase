@@ -1,9 +1,14 @@
+import process from 'node:process';
+
 import { defineConfig } from '@vben/vite-config';
 
 export default defineConfig(async () => {
-  const e2e = process.env.VITE_E2E === 'true';
   const backendOrigin =
-    process.env.MALLBASE_E2E_BACKEND_ORIGIN || 'http://127.0.0.1:8080';
+    process.env.MALLBASE_BACKEND_ORIGIN ||
+    process.env.MALLBASE_E2E_BACKEND_ORIGIN ||
+    'http://127.0.0.1:8080';
+  const upgradeOrigin =
+    process.env.MALLBASE_UPGRADE_ORIGIN || 'http://127.0.0.1:18081';
 
   return {
     application: {},
@@ -17,18 +22,14 @@ export default defineConfig(async () => {
             target: 'http://localhost:5320/api',
             ws: true,
           },
-          ...(e2e
-            ? {
-                '/admin/api': {
-                  changeOrigin: true,
-                  target: backendOrigin,
-                },
-                '/upgrade': {
-                  changeOrigin: true,
-                  target: backendOrigin,
-                },
-              }
-            : {}),
+          '/admin/api': {
+            changeOrigin: true,
+            target: backendOrigin,
+          },
+          '/upgrade': {
+            changeOrigin: false,
+            target: upgradeOrigin,
+          },
         },
       },
     },

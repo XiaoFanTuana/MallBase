@@ -42,12 +42,6 @@ $projectRoot = dirname(__DIR__, 2);
 $configuredRootValue = $readEnvironment('MALLBASE_UPGRADE_ROOT');
 $configuredRoot = is_string($configuredRootValue) ? $configuredRootValue : '';
 $platformOrigin = 'https://platform.gosowong.cn';
-$namespaceValue = $readEnvironment('MALLBASE_UPGRADE_NAMESPACE_ID');
-$namespace = is_string($namespaceValue)
-    && strlen($namespaceValue) <= 64
-    && preg_match('/^mbs_[a-z0-9][a-z0-9_-]{0,59}$/D', $namespaceValue) === 1
-        ? $namespaceValue
-        : '';
 
 return [
     'upgrade_root' => $configuredRoot !== '' ? $configuredRoot : $projectRoot . DIRECTORY_SEPARATOR . 'upgrade',
@@ -55,7 +49,6 @@ return [
     'expected_gid' => $readDecimal('MALLBASE_UPGRADE_SHARED_GID', 10001, 0, 4_294_967_294),
     'agent_uid' => $readDecimal('MALLBASE_AGENT_UID', 10001, 0, 4_294_967_294),
     'php_euid' => function_exists('posix_geteuid') ? posix_geteuid() : -1,
-    'upgrade_namespace_id' => $namespace,
     'activation_proof_lifetime' => $readDecimal('MALLBASE_AGENT_ACTIVATION_PROOF_LIFETIME', 900, 1, 4_102_444_800),
     'report_interval' => $readDecimal('MALLBASE_AGENT_REPORT_INTERVAL', 86400, 1, 4_102_444_800),
     'retry_interval' => $readDecimal('MALLBASE_AGENT_RETRY_INTERVAL', 300, 1, 4_102_444_800),

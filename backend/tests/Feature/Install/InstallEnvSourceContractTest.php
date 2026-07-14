@@ -67,7 +67,7 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString('安装完成后请把最终生效值同步回项目根目录 `.env`', $docs);
         $this->assertStringContainsString('不要手动复制或编辑 `backend/.env`', $docs);
         $this->assertStringContainsString('生产 compose 不挂载 `/workspace`', $docs);
-        $this->assertStringContainsString('生产单后端容器不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
+        $this->assertStringContainsString('生产的三个业务角色不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
         $this->assertStringContainsString('`backend_runtime` volume', $docs);
         $this->assertStringContainsString('`backend_uploads` volume', $docs);
     }

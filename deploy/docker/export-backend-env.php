@@ -22,6 +22,7 @@ if (!is_string($content) || strlen($content) !== (int) $stat['size']) {
     exit(1);
 }
 $seenKeys = [];
+$assignmentLines = [];
 foreach (preg_split('/\r\n|\n|\r/', $content) ?: [] as $line) {
     $trimmed = ltrim($line);
     if ($trimmed === '' || $trimmed[0] === '#' || $trimmed[0] === ';') {
@@ -33,9 +34,12 @@ foreach (preg_split('/\r\n|\n|\r/', $content) ?: [] as $line) {
         exit(1);
     }
     $seenKeys[$matches[1]] = true;
+    $assignmentLines[] = $line;
 }
 
-$values = @parse_ini_file($path, false, INI_SCANNER_RAW);
+$values = $assignmentLines === []
+    ? []
+    : @parse_ini_string(implode("\n", $assignmentLines), false, INI_SCANNER_RAW);
 if (!is_array($values) || count($values) !== count($seenKeys)) {
     fwrite(STDERR, "RUNTIME_ENV_EXPORT_PARSE_FAILED\n");
     exit(1);

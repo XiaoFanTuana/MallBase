@@ -1,16 +1,9 @@
 /config/
-/lifetime-locks/
 /run/
-/state/
 /jobs/
 /packages/
 /staging/
 /backups/
-/logs/
-/legacy-import/
-/legacy-results/
-/bootstrap-retention/
-/storage-init-results/
 /agent-private/
 !/bin/
 !/bin/mallbase-agent-linux-amd64

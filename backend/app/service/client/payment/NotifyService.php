@@ -7,9 +7,6 @@ namespace app\service\client\payment;
 use app\common\enum\PayMethod;
 use app\model\order\PaymentLog;
 use app\service\admin\order\RefundOrderAdminService;
-use app\service\upgrade\UpgradeGateRepository;
-use app\service\upgrade\UpgradePaymentReconciliationStore;
-use app\service\upgrade\UpgradeState;
 use EasyWeChat\Kernel\Message as EasyWechatMessage;
 use EasyWeChat\Pay\Application as PayApplication;
 use mall_base\base\BaseService;
@@ -157,7 +154,6 @@ class NotifyService extends BaseService
         try {
             $merchantId = trim((string) getSystemSetting('pay_wechat_mchid', ''));
             $this->paymentResults->applyVerifiedSuccess($attributes, $merchantId, $outTradeNo);
-            $this->recordUpgradeCallback('payment', $transactionId !== '' ? $transactionId : $outTradeNo);
         } catch (Throwable $e) {
             if ($e->getMessage() === 'WECHAT_PAYMENT_PREPAY_NOT_ACTIVE') {
                 Logger::instance()->critical('微信支付回调命中非活跃预支付流水', [
@@ -271,7 +267,6 @@ class NotifyService extends BaseService
             /** @var RefundOrderAdminService $refundService */
             $refundService = app()->make(RefundOrderAdminService::class);
             $refundService->completeWechatRefund($outRefundNo, $refundAmount, $successTime);
-            $this->recordUpgradeCallback('refund', $outRefundNo);
         } catch (Throwable $e) {
             Logger::instance()->critical('微信退款回调落库失败', [
                 'out_refund_no' => $outRefundNo,
@@ -287,19 +282,6 @@ class NotifyService extends BaseService
         }
 
         return $this->respond(200, 'SUCCESS', '成功');
-    }
-
-    private function recordUpgradeCallback(string $kind, string $resourceId): void
-    {
-        if (!(bool) config('upgrade.enabled', false)) {
-            return;
-        }
-        $gate = app()->make(UpgradeGateRepository::class)->snapshot();
-        if ($gate->jobId === null || !in_array($gate->state, [UpgradeState::Draining, UpgradeState::Reconciling], true)) {
-            return;
-        }
-        app()->make(UpgradePaymentReconciliationStore::class)
-            ->recordCallback($gate->jobId, $kind, $resourceId, time());
     }
 
     /**

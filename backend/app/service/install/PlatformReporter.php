@@ -129,7 +129,6 @@ final class PlatformReporter
             $this->instanceStore = new AgentInstanceConfigStore(
                 $this->sharedFiles(),
                 (string) config('agent.platform_origin', ''),
-                (string) config('agent.upgrade_namespace_id', ''),
                 (int) config('agent.activation_proof_lifetime', -1),
                 (int) config('agent.component_seen_throttle', -1),
                 (int) config('agent.instance_lock_timeout_milliseconds', -1),

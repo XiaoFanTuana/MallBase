@@ -1,13 +1,15 @@
 # ==========================================
 # 生产环境：HTTP + Queue + Cron 独立业务角色
 #
-# 生产 Compose 只运行已经构建并校验过的镜像，不在部署阶段重新构建源码。
-# 首次启动前：
-#   1. sh deploy/docker/host-preflight.sh
-#   2. sh deploy/docker/build-sealed-image.sh --release-id <平台发布ID> --tag mallbase-backend:<version>
-#   3. sh deploy/docker/start-sealed-image.sh <上一步返回的 32 位 receipt id>
-# tag 只用于人工识别；启动权威始终是 Agent 收据中的 immutable image ID。
-# Agent 和管理后台都不会执行 Docker，Docker 只由这两个宿主机包装脚本调用。
+# 首次启动或干净检出后：
+#   sh deploy/docker/host-preflight.sh
+#   docker compose up -d --build
+# 升级或回滚修改宿主机源码后：
+#   docker compose up -d --build backend queue cron
+#
+# runtime/uploads 默认使用 mallbase_runtime / mallbase_uploads；需要复用
+# 既有卷时显式配置 MALLBASE_RUNTIME_VOLUME_NAME / MALLBASE_UPLOADS_VOLUME_NAME。
+# 环境配置、证书、演示素材和 public storage 统一位于 data/backend。
 # 需要：外部 MySQL 8.0+ / Redis 6.0+
 # ==========================================
 
@@ -20,10 +22,13 @@ x-mallbase-environment: &mallbase-environment
   MALLBASE_UPGRADE_ROOT: /app/upgrade
 
 x-mallbase-runtime: &mallbase-runtime
-  image: ${MALLBASE_BACKEND_IMAGE_ID:?set MALLBASE_BACKEND_IMAGE_ID}
+  build:
+    context: .
+    dockerfile: deploy/docker/Dockerfile
+  image: ${MALLBASE_BACKEND_IMAGE:-mallbase-backend:latest}
   pull_policy: never
   restart: unless-stopped
-  user: "10000:${MALLBASE_UPGRADE_SHARED_GID:?run host-preflight.sh first}"
+  user: "10000:${MALLBASE_UPGRADE_SHARED_GID:-10000}"
   extra_hosts:
     - "host.docker.internal:host-gateway"
   env_file:
@@ -39,40 +44,12 @@ x-mallbase-runtime: &mallbase-runtime
     - type: volume
       source: backend_runtime
       target: /app/runtime
-      volume:
-        nocopy: true
     - type: volume
       source: backend_uploads
       target: /app/public/uploads
-      volume:
-        nocopy: true
     - type: bind
       source: ./upgrade/bin
       target: /app/upgrade/bin
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ./upgrade/lifetime-locks
-      target: /app/upgrade/lifetime-locks
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ./upgrade/staging
-      target: /app/upgrade/staging
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ./upgrade/staging/storage-ready.pub
-      target: /app/upgrade/staging/storage-ready.pub
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ./upgrade/staging/storage-ready.json
-      target: /app/upgrade/staging/storage-ready.json
       read_only: true
       bind:
         create_host_path: false
@@ -87,11 +64,6 @@ x-mallbase-runtime: &mallbase-runtime
       bind:
         create_host_path: false
     - type: bind
-      source: ./upgrade/state
-      target: /app/upgrade/state
-      bind:
-        create_host_path: false
-    - type: bind
       source: ./upgrade/jobs
       target: /app/upgrade/jobs
       bind:
@@ -101,23 +73,24 @@ x-mallbase-runtime: &mallbase-runtime
       target: /app/upgrade/backups
       bind:
         create_host_path: false
+    # 宿主机持久化的后端业务数据。
     - type: bind
-      source: ./upgrade/bootstrap-retention/env
+      source: ./data/backend/env
       target: /app/.mallbase-env
       bind:
         create_host_path: false
     - type: bind
-      source: ./upgrade/bootstrap-retention/cert
+      source: ./data/backend/cert
       target: /app/storage/cert
       bind:
         create_host_path: false
     - type: bind
-      source: ./upgrade/bootstrap-retention/demo
+      source: ./data/backend/demo
       target: /app/public/static/demo
       bind:
         create_host_path: false
     - type: bind
-      source: ./upgrade/bootstrap-retention/public-storage
+      source: ./data/backend/public-storage
       target: /app/public/storage
       bind:
         create_host_path: false
@@ -155,18 +128,6 @@ services:
 
 volumes:
   backend_runtime:
-    name: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}_runtime"
-    labels:
-      com.mallbase.storage.namespace: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}"
-      com.mallbase.storage.role: runtime
-      com.mallbase.storage.layout-version: "1"
-      com.mallbase.storage.layout-generation: "1"
-      com.mallbase.storage.managed: "true"
+    name: "${MALLBASE_RUNTIME_VOLUME_NAME:-mallbase_runtime}"
   backend_uploads:
-    name: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}_uploads"
-    labels:
-      com.mallbase.storage.namespace: "${MALLBASE_STORAGE_NAMESPACE:?run fresh storage bootstrap first}"
-      com.mallbase.storage.role: uploads
-      com.mallbase.storage.layout-version: "1"
-      com.mallbase.storage.layout-generation: "1"
-      com.mallbase.storage.managed: "true"
+    name: "${MALLBASE_UPLOADS_VOLUME_NAME:-mallbase_uploads}"

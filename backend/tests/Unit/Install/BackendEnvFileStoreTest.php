@@ -174,6 +174,22 @@ final class BackendEnvFileStoreTest extends TestCase
         self::assertFileDoesNotExist($canary);
     }
 
+    public function testExporterIgnoresValidatedHashAndSemicolonComments(): void
+    {
+        $target = $this->root . '/backend.env';
+        file_put_contents($target, "# ====================\n# generated header\n; operator note\nDB_HOST=mysql\n");
+        chmod($target, 0600);
+
+        [$code, $output] = $this->runProcess([
+            PHP_BINARY,
+            dirname(__DIR__, 4) . '/deploy/docker/export-backend-env.php',
+            $target,
+        ]);
+
+        self::assertSame(0, $code, $output);
+        self::assertSame("export DB_HOST='mysql'\n", $output);
+    }
+
     /** @param array<int,string> $command @return array{int,string} */
     private function runProcess(array $command): array
     {

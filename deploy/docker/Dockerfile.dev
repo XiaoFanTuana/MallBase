@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Development-only runtime. Production builds must continue through
-# deploy/docker/Dockerfile and its Agent-sealed attestation gate.
+# Production dependencies are defined by deploy/docker/Dockerfile.
 FROM phpswoole/swoole:php8.2-alpine@sha256:625a200bce9198e8867616e5c0f976ba116976adb70b67c76403aa245baca8d4
 
 WORKDIR /app

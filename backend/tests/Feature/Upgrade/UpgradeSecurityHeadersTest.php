@@ -8,32 +8,43 @@ use PHPUnit\Framework\TestCase;
 
 final class UpgradeSecurityHeadersTest extends TestCase
 {
-    public function testPageDeliveryDefinesStrictHeadersAndNoInlineScriptAllowance(): void
+    public function testAdminEntryUsesHashedTicketAndDoesNotCreatePhpUpgradeCookie(): void
     {
         $controller = (string) file_get_contents(
-            dirname(__DIR__, 3) . '/app/controller/upgrade/UpgradePageController.php',
+            dirname(__DIR__, 3) . '/app/controller/admin/upgrade/UpgradeController.php',
+        );
+        $model = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/app/model/upgrade/UpgradeRecord.php',
+        );
+        $service = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/app/service/admin/upgrade/UpgradeAdminService.php',
         );
 
-        $this->assertStringContainsString("'X-Frame-Options' => 'DENY'", $controller);
-        $this->assertStringContainsString("'X-Content-Type-Options' => 'nosniff'", $controller);
+        $this->assertStringNotContainsString('->cookie(', $controller);
+        $this->assertStringContainsString("hash('sha256', \$ticket)", $service);
+        $this->assertStringContainsString("'ticket_hash' => \$hash", $service);
+        $this->assertStringNotContainsString("'ticket' => \$ticket", $service);
         $this->assertStringContainsString("'Referrer-Policy' => 'no-referrer'", $controller);
-        $this->assertStringContainsString("script-src 'self'", $controller);
-        $this->assertStringContainsString("frame-ancestors 'none'", $controller);
-        $this->assertStringNotContainsString("'unsafe-inline'", $controller);
-        $this->assertStringNotContainsString("'unsafe-eval'", $controller);
+        $this->assertStringContainsString("'access-tickets'", $model);
     }
 
-    public function testUpgradeCookieIsHttpOnlyStrictAndPathScoped(): void
+    public function testAdminEntryControllerLogsOnlyTheMappedDiagnosticCode(): void
     {
-        $controllers = (string) file_get_contents(
+        $controller = (string) file_get_contents(
             dirname(__DIR__, 3) . '/app/controller/admin/upgrade/UpgradeController.php',
-        ) . (string) file_get_contents(
-            dirname(__DIR__, 3) . '/app/controller/upgrade/UpgradeRuntimeController.php',
         );
 
-        $this->assertSame(2, substr_count($controllers, "'path' => '/upgrade/'"));
-        $this->assertSame(2, substr_count($controllers, "'httponly' => true"));
-        $this->assertSame(2, substr_count($controllers, "'samesite' => 'Strict'"));
-        $this->assertStringNotContainsString('Access-Control-Allow-Credentials', $controllers);
+        $this->assertStringContainsString("'upgrade admin request failed: ' . \$reason", $controller);
+        $this->assertStringNotContainsString("'exception' => \$exception", $controller);
+    }
+
+    public function testAdminEntryDoesNotDependOnTheLegacyRuntimeEnableFlag(): void
+    {
+        $controller = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/app/controller/admin/upgrade/UpgradeController.php',
+        );
+        self::assertStringNotContainsString("config('upgrade.enabled', false)", $controller);
+        self::assertStringNotContainsString('UpgradeControlRateLimiter', $controller);
+        self::assertStringContainsString('createEntryTicket', $controller);
     }
 }

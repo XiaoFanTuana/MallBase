@@ -9,7 +9,7 @@
 | 方式一：手动安装（无 Docker） | 低配服务器、需要完全控制 PHP / MySQL / Redis / Nginx | [manual.md](./manual.md) |
 | 方式二：Docker 开发（仅后端） | 本地开发，宿主机已有 MySQL / Redis | [docker-backend-only.md](./docker-backend-only.md) |
 | 方式三：Docker 开发（全套） | 本地一键起后端 + MySQL + Redis，前端打包单独执行 | [docker-fullstack.md](./docker-fullstack.md) |
-| 方式四：Docker 生产 | 单后端容器 + 宿主机 Nginx 的生产部署 | [docker-production.md](./docker-production.md) |
+| 方式四：Docker 生产 | HTTP + Queue + Cron 独立容器 + 宿主机 Nginx | [docker-production.md](./docker-production.md) |
 
 四种方式都配合 [commands.md](./commands.md)（命令导航）和 [troubleshooting.md](./troubleshooting.md)（排障）使用。
 

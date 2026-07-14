@@ -160,7 +160,6 @@ final class PlatformReporterTest extends TestCase
             'schema_version' => 1,
             'revision' => 1,
             'platform_base_url' => 'https://platform.gosowong.cn',
-            'upgrade_namespace_id' => 'mbs_test',
             'instance_id' => ReporterMemoryStore::INSTANCE_ID,
             'token' => '',
             'activation_secret' => 'activation-proof',

@@ -4,44 +4,36 @@ declare(strict_types=1);
 
 namespace app\controller\admin\upgrade;
 
-use app\middleware\upgrade\UpgradeSessionAuthMiddleware;
-use app\model\auth\Admin;
-use app\service\admin\upgrade\UpgradeSessionService;
-use app\service\upgrade\UpgradeControlRateLimiter;
+use app\service\admin\upgrade\UpgradeAdminService;
 use mall_base\base\BaseController;
-use RuntimeException;
+use think\facade\Log;
 use think\Response;
 use Throwable;
 
-/** @extends BaseController<UpgradeSessionService> */
+/**
+ * @extends BaseController<UpgradeAdminService>
+ */
 final class UpgradeController extends BaseController
 {
-    protected string $serviceClass = UpgradeSessionService::class;
+    protected string $serviceClass = UpgradeAdminService::class;
+
+    public function records(): Response
+    {
+        [$page, $limit] = $this->getPagination();
+        try {
+            return $this->success($this->service()->getList($page, $limit), '获取升级记录成功')
+                ->header($this->securityHeaders());
+        } catch (Throwable $exception) {
+            return $this->mapError($exception);
+        }
+    }
 
     public function createSession(): Response
     {
-        $adminId = (int) ($this->request->admin_id ?? 0);
-        if ($adminId !== Admin::SUPER_ADMIN_ID) {
-            return $this->upgradeError(403, 'UPGRADE_SUPER_ADMIN_REQUIRED', '仅超级管理员可以进入系统升级');
-        }
-        $requestId = strtolower(trim((string) $this->request->header('Idempotency-Key', '')));
-
         try {
-            app()->make(UpgradeControlRateLimiter::class)
-                ->consume('session_create', (string) $adminId, 10, 60);
-            $result = $this->service()->createSession($adminId, $requestId);
-            $ownerCookie = (string) ($result['owner_cookie'] ?? '');
-            unset($result['owner_cookie']);
-            $result['recovery_request_id'] = $result['request_id'] ?? $requestId;
+            $result = $this->service()->createEntryTicket((int) ($this->request->admin_id ?? 0));
 
-            return $this->success($result, '升级会话已创建')
-                ->cookie(UpgradeSessionAuthMiddleware::COOKIE_NAME, $ownerCookie, [
-                    'expire' => 86400,
-                    'path' => '/upgrade/',
-                    'secure' => str_starts_with((string) config('upgrade.public_origin', ''), 'https://'),
-                    'httponly' => true,
-                    'samesite' => 'Strict',
-                ])
+            return $this->success($result, '升级入口授权已创建')
                 ->header($this->securityHeaders());
         } catch (Throwable $exception) {
             return $this->mapError($exception);
@@ -50,18 +42,21 @@ final class UpgradeController extends BaseController
 
     private function mapError(Throwable $exception): Response
     {
-        return match ($exception->getMessage()) {
-            'UPGRADE_SUPER_ADMIN_REQUIRED' => $this->upgradeError(403, 'UPGRADE_SUPER_ADMIN_REQUIRED', '仅超级管理员可以进入系统升级'),
-            'UPGRADE_SESSION_ARGUMENT_INVALID' => $this->upgradeError(422, 'UPGRADE_SESSION_ARGUMENT_INVALID', '幂等请求标识无效'),
-            'UPGRADE_SESSION_EXISTS' => $this->upgradeError(409, 'UPGRADE_SESSION_EXISTS', '已有升级会话，请使用恢复凭据接管'),
-            'UPGRADE_RATE_LIMITED' => $this->upgradeError(429, 'UPGRADE_RATE_LIMITED', '请求过于频繁，请稍后再试'),
-            'UPGRADE_RATE_LIMIT_UNAVAILABLE' => $this->upgradeError(503, 'UPGRADE_RATE_LIMIT_UNAVAILABLE', '升级会话暂时不可用'),
-            default => $this->upgradeError(503, 'UPGRADE_SESSION_UNAVAILABLE', '升级会话暂时不可用'),
+        [$status, $reason, $message] = match ($exception->getMessage()) {
+            'UPGRADE_RECORD_ARGUMENT_INVALID', 'UPGRADE_ENTRY_ARGUMENT_INVALID' => [422, $exception->getMessage(), '升级请求参数无效'],
+            'UPGRADE_ENTRY_CONFLICT' => [409, 'UPGRADE_ENTRY_CONFLICT', '升级入口授权冲突，请重试'],
+            'UPGRADE_RECORD_INVALID' => [500, 'UPGRADE_RECORD_INVALID', '升级记录文件损坏，请检查升级日志'],
+            'UPGRADE_ROOT_UNAVAILABLE', 'UPGRADE_RECORD_UNAVAILABLE', 'UPGRADE_ENTRY_UNAVAILABLE' => [503, $exception->getMessage(), '升级服务共享目录暂时不可用'],
+            default => [503, 'UPGRADE_ADMIN_UNAVAILABLE', '升级服务暂时不可用'],
         };
-    }
+        if ($status >= 500) {
+            try {
+                Log::warning('upgrade admin request failed: ' . $reason);
+            } catch (Throwable) {
+                // 日志异常不能覆盖固定的对外错误响应。
+            }
+        }
 
-    private function upgradeError(int $status, string $reason, string $message): Response
-    {
         return json([
             'code' => $status,
             'message' => $message,

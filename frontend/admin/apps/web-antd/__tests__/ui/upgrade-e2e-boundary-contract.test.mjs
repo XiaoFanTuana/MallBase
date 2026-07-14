@@ -11,46 +11,44 @@ const playwrightSource = readFileSync(
   new URL('../../playwright.config.ts', import.meta.url),
   'utf8',
 );
+const developmentEnv = readFileSync(
+  new URL('../../.env.development', import.meta.url),
+  'utf8',
+);
 const upgradeE2eUrl = new URL(
   '../e2e/upgrade-maintenance.spec.ts',
   import.meta.url,
 );
 
-test('upgrade E2E always owns its Vite process and uses the real admin API prefix', () => {
-  assert.match(
-    playwrightSource,
-    /VITE_GLOB_API_URL=\/admin\/api/,
-    'The E2E server must send Admin requests through the dedicated backend proxy.',
-  );
-  assert.match(
-    playwrightSource,
-    /reuseExistingServer:\s*false/,
-    'Reusing an ordinary developer Vite process would silently omit the upgrade proxy.',
-  );
+test('upgrade E2E owns Vite and keeps the real Admin API prefix', () => {
+  assert.match(playwrightSource, /VITE_GLOB_API_URL=\/admin\/api/);
+  assert.match(playwrightSource, /reuseExistingServer:\s*false/);
 });
 
-test('E2E-only Vite proxy keeps Admin and the complete upgrade surface same-origin', () => {
-  assert.match(viteSource, /VITE_E2E/);
-  assert.match(viteSource, /MALLBASE_E2E_BACKEND_ORIGIN/);
+test('Vite sends Admin to PHP and upgrade traffic to the temporary Go server', () => {
+  assert.match(developmentEnv, /^VITE_GLOB_API_URL=\/admin\/api$/m);
+  assert.match(viteSource, /MALLBASE_BACKEND_ORIGIN/);
+  assert.match(viteSource, /MALLBASE_UPGRADE_ORIGIN/);
+  assert.match(viteSource, /http:\/\/127\.0\.0\.1:18081/);
   assert.match(viteSource, /['"]\/admin\/api['"]/);
   assert.match(viteSource, /['"]\/upgrade['"]/);
+  assert.match(
+    viteSource,
+    /['"]\/upgrade['"][\s\S]{0,180}changeOrigin:\s*false[\s\S]{0,180}target:\s*upgradeOrigin/,
+  );
   assert.doesNotMatch(
     viteSource,
     /['"]\/upgrade['"][\s\S]{0,240}\brewrite\s*:/,
-    'The PHP upgrade prefix must be forwarded without rewriting.',
   );
 });
 
-test('real-backend upgrade E2E covers route content types instead of a Vite fallback', () => {
-  assert.equal(
-    existsSync(upgradeE2eUrl),
-    true,
-    'upgrade-maintenance.spec.ts is required by the upgrade UI plan.',
-  );
+test('real-backend E2E separates Admin records from the optional Go shell', () => {
+  assert.equal(existsSync(upgradeE2eUrl), true);
   const e2eSource = readFileSync(upgradeE2eUrl, 'utf8');
+  assert.match(e2eSource, /\/admin\/api\/system\/upgrade\/records/);
   assert.match(e2eSource, /\/admin\/api\/system\/upgrade\/session/);
-  assert.match(e2eSource, /\/upgrade\/api\/maintenance/);
-  assert.match(e2eSource, /text\/html/);
+  assert.match(e2eSource, /\/upgrade\/health/);
+  assert.match(e2eSource, /shell\.status\(\)\)\.toBe\(401\)/);
   assert.match(e2eSource, /application\/json/);
-  assert.match(e2eSource, /data-mallbase-upgrade-shell/);
+  assert.doesNotMatch(e2eSource, /\/upgrade\/api\/maintenance/);
 });

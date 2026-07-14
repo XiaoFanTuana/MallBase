@@ -87,30 +87,6 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ./upgrade/lifetime-locks
-        target: /app/upgrade/lifetime-locks
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/staging
-        target: /app/upgrade/staging
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/staging/storage-ready.pub
-        target: /app/upgrade/staging/storage-ready.pub
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/staging/storage-ready.json
-        target: /app/upgrade/staging/storage-ready.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
         source: ./upgrade/config
         target: /app/upgrade/config
         bind:
@@ -121,11 +97,6 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ./upgrade/state
-        target: /app/upgrade/state
-        bind:
-          create_host_path: false
-      - type: bind
         source: ./upgrade/jobs
         target: /app/upgrade/jobs
         bind:
@@ -133,21 +104,6 @@ services:
       - type: bind
         source: ./upgrade/backups
         target: /app/upgrade/backups
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/bootstrap-retention/cert
-        target: /app/storage/cert
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/bootstrap-retention/demo
-        target: /app/public/static/demo
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/bootstrap-retention/public-storage
-        target: /app/public/storage
         bind:
           create_host_path: false
     command: php think install:auto
@@ -189,30 +145,6 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ./upgrade/lifetime-locks
-        target: /app/upgrade/lifetime-locks
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/staging
-        target: /app/upgrade/staging
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/staging/storage-ready.pub
-        target: /app/upgrade/staging/storage-ready.pub
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/staging/storage-ready.json
-        target: /app/upgrade/staging/storage-ready.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
         source: ./upgrade/config
         target: /app/upgrade/config
         bind:
@@ -223,11 +155,6 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ./upgrade/state
-        target: /app/upgrade/state
-        bind:
-          create_host_path: false
-      - type: bind
         source: ./upgrade/jobs
         target: /app/upgrade/jobs
         bind:
@@ -235,21 +162,6 @@ services:
       - type: bind
         source: ./upgrade/backups
         target: /app/upgrade/backups
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/bootstrap-retention/cert
-        target: /app/storage/cert
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/bootstrap-retention/demo
-        target: /app/public/static/demo
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./upgrade/bootstrap-retention/public-storage
-        target: /app/public/storage
         bind:
           create_host_path: false
     depends_on:

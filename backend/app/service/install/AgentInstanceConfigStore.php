@@ -18,14 +18,21 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
 {
     private const MAX_TIMESTAMP = 4_102_444_800;
 
-    private const TOP_LEVEL_FIELDS_V1 = [
+    private const TOP_LEVEL_FIELDS = [
+        'schema_version', 'revision', 'platform_base_url',
+        'instance_id', 'token', 'activation_secret', 'activation_generation',
+        'activation_secret_expires_at', 'activation_state', 'disabled', 'components',
+        'report', 'updated_at',
+    ];
+
+    private const LEGACY_TOP_LEVEL_FIELDS_V1 = [
         'schema_version', 'revision', 'platform_base_url', 'upgrade_namespace_id',
         'instance_id', 'token', 'activation_secret', 'activation_generation',
         'activation_secret_expires_at', 'activation_state', 'disabled', 'components',
         'report', 'updated_at',
     ];
 
-    private const TOP_LEVEL_FIELDS_V2 = [
+    private const LEGACY_TOP_LEVEL_FIELDS_V2 = [
         'schema_version', 'revision', 'platform_base_url', 'upgrade_namespace_id',
         'instance_id', 'token', 'session_derivation_key', 'activation_secret', 'activation_generation',
         'activation_secret_expires_at', 'activation_state', 'disabled', 'components',
@@ -46,14 +53,12 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
     public function __construct(
         private readonly UpgradeSharedFileStore $files,
         string $platformOrigin,
-        private readonly string $upgradeNamespaceId,
         private readonly int $activationProofLifetime,
         private readonly int $componentSeenThrottle,
         private readonly int $legacyLockTimeoutMilliseconds = 2000,
     ) {
         $normalizedOrigin = $this->normalizeOrigin($platformOrigin);
         if (PHP_INT_SIZE !== 8 || $normalizedOrigin === null
-            || !$this->validNamespace($this->upgradeNamespaceId)
             || $this->activationProofLifetime < 1 || $this->componentSeenThrottle < 1
             || $this->legacyLockTimeoutMilliseconds < 1) {
             $this->fail('INSTANCE_ARGUMENT_INVALID');
@@ -85,7 +90,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
                 return $current;
             }
 
-            $namespace = $this->readNamespaceProjection();
             $legacyState = $this->readLegacyPlatformState($legacy);
             $identity = $this->legacyIdentity($legacyState);
             $components = $this->legacyComponents($legacyState);
@@ -114,7 +118,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
                 'schema_version' => 1,
                 'revision' => 1,
                 'platform_base_url' => $this->platformOrigin,
-                'upgrade_namespace_id' => $namespace,
                 'instance_id' => $instanceId,
                 'token' => $token,
                 'activation_secret' => $secret,
@@ -129,31 +132,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
             $this->writeInstance($instance);
 
             return $instance;
-        });
-    }
-
-    /** @return array<string, mixed> */
-    public function ensureSessionDerivationKey(int $now): array
-    {
-        $this->requireTimestamp($now);
-
-        return $this->files->withInstanceLock(function () use ($now): array {
-            $current = $this->requireInstance();
-            if ($current['schema_version'] === 2) {
-                return $current;
-            }
-            if ($this->files->readJson('session_auth') !== null) {
-                $this->fail('SESSION_KEY_MIGRATION_BLOCKED');
-            }
-
-            $this->incrementRevision($current, $now);
-            $current['schema_version'] = 2;
-            $current = array_slice($current, 0, 6, true)
-                + ['session_derivation_key' => $this->sessionDerivationKey()]
-                + array_slice($current, 6, null, true);
-            $this->writeInstance($current);
-
-            return $current;
         });
     }
 
@@ -380,19 +358,20 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
     {
         $raw = get_object_vars($document);
         $schemaVersion = $raw['schema_version'] ?? null;
-        $expectedFields = $schemaVersion === 1
-            ? self::TOP_LEVEL_FIELDS_V1
-            : ($schemaVersion === 2 ? self::TOP_LEVEL_FIELDS_V2 : []);
-        if ($expectedFields === [] || !$this->hasExactFields($raw, $expectedFields)
+        $currentDocument = $schemaVersion === 1 && $this->hasExactFields($raw, self::TOP_LEVEL_FIELDS);
+        $legacyV1Document = $schemaVersion === 1
+            && $this->hasExactFields($raw, self::LEGACY_TOP_LEVEL_FIELDS_V1);
+        $legacyV2Document = $schemaVersion === 2
+            && $this->hasExactFields($raw, self::LEGACY_TOP_LEVEL_FIELDS_V2);
+        if ((!$currentDocument && !$legacyV1Document && !$legacyV2Document)
             || !is_int($schemaVersion)
             || !is_int($raw['revision']) || $raw['revision'] < 1
             || !is_string($raw['platform_base_url'])
             || $this->normalizeOrigin($raw['platform_base_url']) !== $raw['platform_base_url']
             || $raw['platform_base_url'] !== $this->platformOrigin
-            || !is_string($raw['upgrade_namespace_id']) || !$this->validNamespace($raw['upgrade_namespace_id'])
             || !is_string($raw['instance_id']) || !$this->validUuid($raw['instance_id'])
             || !is_string($raw['token']) || !$this->validToken($raw['token'])
-            || ($schemaVersion === 2
+            || ($legacyV2Document
                 && (!is_string($raw['session_derivation_key'])
                     || !$this->validBase64Url32($raw['session_derivation_key'])))
             || !is_string($raw['activation_secret']) || !$this->validActivationSecret($raw['activation_secret'])
@@ -429,16 +408,12 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         }
 
         $instance = [
-            'schema_version' => $raw['schema_version'],
+            'schema_version' => 1,
             'revision' => $raw['revision'],
             'platform_base_url' => $raw['platform_base_url'],
-            'upgrade_namespace_id' => $raw['upgrade_namespace_id'],
             'instance_id' => $raw['instance_id'],
             'token' => $raw['token'],
         ];
-        if ($schemaVersion === 2) {
-            $instance['session_derivation_key'] = $raw['session_derivation_key'];
-        }
         $instance += [
             'activation_secret' => $raw['activation_secret'],
             'activation_generation' => $raw['activation_generation'],
@@ -463,7 +438,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
             'schema_version' => $instance['schema_version'],
             'revision' => $instance['revision'],
             'platform_base_url' => $instance['platform_base_url'],
-            'upgrade_namespace_id' => $instance['upgrade_namespace_id'],
             'instance_id' => $instance['instance_id'],
             'token' => $instance['token'],
             'activation_secret' => $instance['activation_secret'],
@@ -482,36 +456,7 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
             ],
             'updated_at' => $instance['updated_at'],
         ];
-        if ($instance['schema_version'] === 2) {
-            $document = array_slice($document, 0, 6, true)
-                + ['session_derivation_key' => $instance['session_derivation_key']]
-                + array_slice($document, 6, null, true);
-        }
         $this->files->writeJson('instance', (object) $document);
-    }
-
-    private function readNamespaceProjection(): string
-    {
-        try {
-            $projection = $this->files->readJson('namespace_projection');
-        } catch (Throwable) {
-            $this->fail('NAMESPACE_PROJECTION_UNAVAILABLE');
-        }
-        if (!$projection instanceof stdClass) {
-            $this->fail('NAMESPACE_PROJECTION_UNAVAILABLE');
-        }
-        $raw = get_object_vars($projection);
-        if (!$this->hasExactFields($raw, ['schema_version', 'installation_storage_namespace'])
-            || !is_int($raw['schema_version']) || $raw['schema_version'] !== 1
-            || !is_string($raw['installation_storage_namespace'])
-            || !$this->validNamespace($raw['installation_storage_namespace'])) {
-            $this->fail('NAMESPACE_PROJECTION_UNAVAILABLE');
-        }
-        if (!hash_equals($this->upgradeNamespaceId, $raw['installation_storage_namespace'])) {
-            $this->fail('NAMESPACE_PROJECTION_MISMATCH');
-        }
-
-        return $raw['installation_storage_namespace'];
     }
 
     /** @return array<string, mixed> */
@@ -857,12 +802,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         return $scheme . '://' . $host . ($port === null ? '' : ':' . $port);
     }
 
-    private function validNamespace(string $value): bool
-    {
-        return strlen($value) <= 64
-            && preg_match('/^mbs_[a-z0-9][a-z0-9_-]{0,59}$/D', $value) === 1;
-    }
-
     private function validUuid(string $value): bool
     {
         return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $value) === 1;
@@ -931,11 +870,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
     }
 
     private function activationSecret(): string
-    {
-        return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-    }
-
-    private function sessionDerivationKey(): string
     {
         return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
     }

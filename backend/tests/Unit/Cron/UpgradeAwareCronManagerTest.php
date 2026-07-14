@@ -6,69 +6,72 @@ namespace Tests\Unit\Cron;
 
 use app\cron\CronManager;
 use app\cron\CronTaskInterface;
-use app\service\upgrade\UpgradeActivityLease;
-use app\service\upgrade\UpgradeActivitySnapshot;
-use app\service\upgrade\UpgradeActivityTracker;
-use app\service\upgrade\UpgradeQueueInventory;
-use app\service\upgrade\UpgradeRuntimeContext;
-use app\service\upgrade\UpgradeRuntimeIdentity;
-use app\service\upgrade\UpgradeRuntimeInstance;
-use app\service\upgrade\UpgradeRuntimeOwnerLiveness;
+use app\service\upgrade\SimpleUpgradeGate;
 use mall_base\log\Logger;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 final class UpgradeAwareCronManagerTest extends TestCase
 {
-    public function testCronCallbackRunsInsideLeaseAndAlwaysReleasesIt(): void
+    private string $directory;
+
+    protected function setUp(): void
     {
-        $tracker = new CronTrackerFake();
+        parent::setUp();
+        $this->directory = sys_get_temp_dir() . '/mallbase-cron-gate-' . bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (glob($this->directory . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->directory);
+        parent::tearDown();
+    }
+
+    public function testSimpleGateSuppressesNewCronCallbacksAfterDrain(): void
+    {
+        $gate = new SimpleUpgradeGate($this->directory);
         $task = new CapturingCronTask();
-        $manager = new TestCronManager($tracker, new CronRuntimeContextFake(), $task, true);
+        $manager = new TestCronManager($task, $gate);
         $sandboxCalls = 0;
         $manager->boot(0, static function (callable $callback) use (&$sandboxCalls): void {
             $sandboxCalls++;
             $callback();
         });
 
-        self::assertNotNull($task->callback);
+        ($task->callback)(static function (): void {
+        });
+        $gate->drain();
+        ($task->callback)(static function (): void {
+            self::fail('paused gate allowed a new Cron callback');
+        });
+
+        self::assertSame(1, $sandboxCalls);
+    }
+
+    public function testMissingGateKeepsNormalCronBehavior(): void
+    {
+        $task = new CapturingCronTask();
+        $manager = new TestCronManager($task);
         $bodyCalls = 0;
+        $manager->boot(0, static function (callable $callback): void {
+            $callback();
+        });
+
         ($task->callback)(static function () use (&$bodyCalls): void {
             $bodyCalls++;
         });
 
-        self::assertSame(1, $sandboxCalls);
         self::assertSame(1, $bodyCalls);
-        self::assertSame(1, $tracker->beginCalls);
-        self::assertSame(1, $tracker->releaseCalls);
-        self::assertSame('cron', $tracker->lastOwner?->role);
     }
 
-    public function testDeniedLeaseSuppressesNewCronCallback(): void
+    public function testTaskFailureStillReleasesSimpleLease(): void
     {
-        $tracker = new CronTrackerFake();
-        $tracker->allow = false;
+        $gate = new SimpleUpgradeGate($this->directory);
         $task = new CapturingCronTask();
-        $manager = new TestCronManager($tracker, new CronRuntimeContextFake(), $task, true);
-        $sandboxCalls = 0;
-        $manager->boot(0, static function () use (&$sandboxCalls): void {
-            $sandboxCalls++;
-        });
-
-        ($task->callback)(static function (): void {
-            self::fail('denied Cron callback entered its task body');
-        });
-
-        self::assertSame(0, $sandboxCalls);
-        self::assertSame(1, $tracker->beginCalls);
-        self::assertSame(0, $tracker->releaseCalls);
-    }
-
-    public function testTaskFailureStillReleasesLease(): void
-    {
-        $tracker = new CronTrackerFake();
-        $task = new CapturingCronTask();
-        $manager = new TestCronManager($tracker, new CronRuntimeContextFake(), $task, true);
+        $manager = new TestCronManager($task, $gate);
         $manager->boot(0, static function (callable $callback): void {
             $callback();
         });
@@ -81,37 +84,18 @@ final class UpgradeAwareCronManagerTest extends TestCase
         } catch (RuntimeException $exception) {
             self::assertSame('expected task failure', $exception->getMessage());
         }
-        self::assertSame(1, $tracker->releaseCalls);
-    }
 
-    public function testDisabledUpgradeRuntimeKeepsExistingCronBehavior(): void
-    {
-        $tracker = new CronTrackerFake();
-        $task = new CapturingCronTask();
-        $manager = new TestCronManager($tracker, new CronRuntimeContextFake(), $task, false);
-        $sandboxCalls = 0;
-        $manager->boot(0, static function (callable $callback) use (&$sandboxCalls): void {
-            $sandboxCalls++;
-            $callback();
-        });
-
-        ($task->callback)(static function (): void {
-        });
-
-        self::assertSame(1, $sandboxCalls);
-        self::assertSame(0, $tracker->beginCalls);
+        self::assertSame('paused', $gate->drain());
     }
 }
 
 final class TestCronManager extends CronManager
 {
     public function __construct(
-        UpgradeActivityTracker $tracker,
-        UpgradeRuntimeContext $runtime,
         private readonly CronTaskInterface $task,
-        private readonly bool $upgradeRuntimeEnabled,
+        ?SimpleUpgradeGate $simpleGate = null,
     ) {
-        parent::__construct($tracker, $runtime);
+        parent::__construct($simpleGate);
     }
 
     protected function configuredOnlyWorkerId(): int
@@ -134,11 +118,6 @@ final class TestCronManager extends CronManager
         return true;
     }
 
-    protected function upgradeEnabled(): bool
-    {
-        return $this->upgradeRuntimeEnabled;
-    }
-
     protected function tasks(): array
     {
         return [$this->task];
@@ -158,50 +137,4 @@ final class CapturingCronTask implements CronTaskInterface
     {
         $this->callback = $runInSandbox;
     }
-}
-
-final class CronRuntimeContextFake implements UpgradeRuntimeContext
-{
-    public function owner(string $role): UpgradeRuntimeInstance
-    {
-        return new UpgradeRuntimeInstance(
-            '018f5d35-3f42-7a31-a731-9e45df3356c1',
-            '118f5d35-3f42-7a31-a731-9e45df3356c1',
-            $role,
-            new UpgradeRuntimeIdentity('1.0.0', '218f5d35-3f42-7a31-a731-9e45df3356c1', 0, 1),
-            1,
-        );
-    }
-}
-
-final class CronTrackerFake implements UpgradeActivityTracker
-{
-    public bool $allow = true;
-    public int $beginCalls = 0;
-    public int $releaseCalls = 0;
-    public ?UpgradeRuntimeInstance $lastOwner = null;
-
-    public function tryBeginCron(string $taskId, UpgradeRuntimeInstance $owner): ?UpgradeActivityLease
-    {
-        $this->beginCalls++;
-        $this->lastOwner = $owner;
-        if (!$this->allow) {
-            return null;
-        }
-
-        return new UpgradeActivityLease('cron:test', str_repeat('a', 32), function (): void {
-            $this->releaseCalls++;
-        });
-    }
-
-    public function tryBeginHttp(string $requestId, UpgradeRuntimeInstance $owner): ?UpgradeActivityLease { return null; }
-    public function tryBeginExternalCallback(string $requestId, UpgradeRuntimeInstance $owner): ?UpgradeActivityLease { return null; }
-    public function beginQueuePop(string $workerId, string $connectorType, array $queues, string $executionAttemptId, UpgradeRuntimeInstance $owner): ?UpgradeActivityLease { return null; }
-    public function bindQueueJob(UpgradeActivityLease $popLease, string $connection, string $queue, string $jobId): UpgradeActivityLease { return $popLease; }
-    public function snapshot(): UpgradeActivitySnapshot { return new UpgradeActivitySnapshot(0, 0, 0, 0, 0, false); }
-    public function heartbeatWorker(string $workerId, string $connectorType, array $queues, UpgradeRuntimeInstance $owner, int $ttl): void {}
-    public function ackPaused(string $workerId, UpgradeRuntimeInstance $owner, int $revision, int $ttl): void {}
-    public function liveWorkers(): array { return []; }
-    public function reconcileQueueLeases(UpgradeQueueInventory $inventory, UpgradeRuntimeOwnerLiveness $owners): void {}
-    public function reconcileOrphanActivityLeases(UpgradeRuntimeOwnerLiveness $owners): void {}
 }

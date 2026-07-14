@@ -28,33 +28,6 @@ RUNTIME_TO_BACKEND_KEYS="APP_DEBUG QUEUE_CONNECTION QUEUE_REDIS_QUEUE QUEUE_REDI
 
 rand64() { LC_ALL=C od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
 
-verify_storage_ready() {
-    case "$(uname -m)" in
-        x86_64|amd64) agent_arch=amd64 ;;
-        aarch64|arm64) agent_arch=arm64 ;;
-        *)
-            echo "AGENT_ARCHITECTURE_UNSUPPORTED" >&2
-            exit 1
-            ;;
-    esac
-    agent_binary=/app/upgrade/bin/mallbase-agent-linux-$agent_arch
-    agent_manifest=/app/upgrade/bin/checksums.sha256
-    [ -x "$agent_binary" ] && [ -f "$agent_manifest" ] || {
-        echo "AGENT_BINARY_UNAVAILABLE" >&2
-        exit 1
-    }
-    expected_digest=$(awk -v name="$(basename "$agent_binary")" '$2 == name { print $1 }' "$agent_manifest")
-    actual_digest=$(sha256sum "$agent_binary" | awk '{print $1}')
-    if [ -z "$expected_digest" ] || [ "$expected_digest" != "$actual_digest" ]; then
-        echo "AGENT_BINARY_CHECKSUM_INVALID" >&2
-        exit 1
-    fi
-    if ! "$agent_binary" storage verify-ready-projection >/dev/null 2>&1; then
-        echo "STORAGE_LAYOUT_NOT_READY" >&2
-        exit 1
-    fi
-}
-
 has_key() {
     file=$1
     key=$2
@@ -239,10 +212,6 @@ ensure_backend_env() {
 }
 
 if [ "$MALLBASE_RUNTIME_MODE" = "production" ]; then
-    if [ "${MALLBASE_STORAGE_LAYOUT:-}" = "granular" ]; then
-        /usr/local/bin/runtime-init.sh
-    fi
-    verify_storage_ready
     for writable_path in /app/runtime /app/public/uploads "$(dirname "$BACKEND_ENV")"; do
         if [ ! -d "$writable_path" ] || [ ! -w "$writable_path" ]; then
             echo "RUNTIME_WRITABLE_PATH_INVALID: $writable_path" >&2
@@ -280,36 +249,5 @@ if [ ! -f /app/vendor/autoload.php ] && [ -f /app/composer.json ]; then
     echo ">>> 开发环境未找到 /app/vendor/autoload.php，正在执行 composer install"
     composer install --working-dir /app --no-interaction
 fi
-
-# runtime_instance_id 由容器 hostname 稳定派生，同一容器重启保持不变；
-# boot_id 每次 entrypoint 执行重新生成，旧进程和新启动不会共享 boot 身份。
-container_identity_seed=$(cat /etc/hostname 2>/dev/null || true)
-if [ -z "$container_identity_seed" ]; then
-    echo ">>> 无法确定容器运行身份，拒绝启动" >&2
-    exit 1
-fi
-
-MALLBASE_RUNTIME_INSTANCE_ID=$(php -r '
-$bytes = hash("sha256", $argv[1], true);
-$bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
-$bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
-$hex = bin2hex(substr($bytes, 0, 16));
-printf("%s-%s-%s-%s-%s", substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
-' "$container_identity_seed")
-MALLBASE_RUNTIME_BOOT_ID=$(php -r '
-$bytes = random_bytes(16);
-$bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
-$bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
-$hex = bin2hex($bytes);
-printf("%s-%s-%s-%s-%s", substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
-')
-if ! printf '%s\n' "$MALLBASE_RUNTIME_INSTANCE_ID" \
-    | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' \
-    || ! printf '%s\n' "$MALLBASE_RUNTIME_BOOT_ID" \
-    | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'; then
-    echo ">>> 生成容器运行身份失败，拒绝启动" >&2
-    exit 1
-fi
-export MALLBASE_RUNTIME_INSTANCE_ID MALLBASE_RUNTIME_BOOT_ID
 
 exec "$@"

@@ -44,7 +44,9 @@ final readonly class UpgradeStrictJsonDecoder
         } catch (Throwable) {
             $this->fail();
         }
-        if (!is_array($decoded) || array_is_list($decoded) || count($decoded) !== count($expectedFields)
+        $emptyObject = $expectedFields === [] && $decoded === [] && str_starts_with(ltrim($raw), '{');
+        if (!is_array($decoded) || array_is_list($decoded) && !$emptyObject
+            || count($decoded) !== count($expectedFields)
             || array_diff(array_keys($decoded), $expectedFields) !== []
             || array_diff($expectedFields, array_keys($decoded)) !== []) {
             $this->fail();

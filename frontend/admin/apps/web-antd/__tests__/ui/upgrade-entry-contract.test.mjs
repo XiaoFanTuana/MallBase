@@ -7,7 +7,7 @@ const apiSource = readFileSync(
   new URL('../../src/api/system/upgrade.ts', import.meta.url),
   'utf8',
 );
-const bridgeSource = readFileSync(
+const adminSource = readFileSync(
   new URL('../../src/views/system/upgrade/index.vue', import.meta.url),
   'utf8',
 );
@@ -28,38 +28,43 @@ const routesSource = readFileSync(
   'utf8',
 );
 
-test('upgrade API keeps admin creation separate from cookie-scoped recovery', () => {
-  assert.match(apiSource, /createUpgradeSessionApi/);
+test('Admin API is read-only except for issuing a one-time Go entry ticket', () => {
+  assert.match(apiSource, /getUpgradeRecordsApi/);
+  assert.match(apiSource, /\/system\/upgrade\/records/);
+  assert.match(apiSource, /createUpgradeEntryApi/);
   assert.match(apiSource, /\/system\/upgrade\/session/);
-  assert.match(apiSource, /Idempotency-Key/);
-  assert.match(apiSource, /takeoverUpgradeSessionApi/);
-  assert.match(
-    apiSource,
-    /takeoverUpgradeSessionApi[\s\S]{0,240}deriveTakeoverRequestId/,
-  );
-  assert.match(
-    apiSource,
-    /\/upgrade\/api\/recovery\/takeover[\s\S]{0,240}Idempotency-Key/,
-  );
-  assert.match(apiSource, /confirmRecoveryApi/);
-  assert.match(apiSource, /\/upgrade\/api\/recovery\/confirm/);
-  assert.match(apiSource, /rotateRecoveryApi/);
-  assert.match(apiSource, /\/upgrade\/api\/recovery\/rotate/);
+  assert.match(apiSource, /probeUpgradeAgentApi/);
+  assert.match(apiSource, /\/upgrade\/health/);
+  assert.doesNotMatch(apiSource, /takeover|rotateRecovery|confirmRecovery/);
 });
 
-test('admin bridge persists only retry-safe identifiers and confirms copied recovery data', () => {
-  assert.match(bridgeSource, /sessionStorage/);
-  assert.match(bridgeSource, /createUpgradeSessionApi/);
-  assert.match(bridgeSource, /confirmRecoveryApi/);
-  assert.match(bridgeSource, /navigator\.clipboard\.writeText/);
-  assert.match(bridgeSource, /copyAcknowledged/);
-  assert.match(bridgeSource, /\/upgrade\/api\/maintenance/);
-  assert.match(bridgeSource, /window\.location\.replace\(['"]\/upgrade\/#\/upgrade['"]\)/);
+test('Admin page shows records and gates the Go page button by backend permission', () => {
+  assert.match(adminSource, /getUpgradeRecordsApi/);
+  assert.match(adminSource, /SystemUpgradeSessionCreate/);
+  assert.match(adminSource, /v-access:code/);
+  assert.match(adminSource, /backup_path/);
+  assert.match(adminSource, /package_path/);
+  assert.match(adminSource, /log_path/);
+  assert.match(adminSource, /Go 升级程序未启动/);
+  assert.match(adminSource, /等待手动部署 PHP 代码/);
+  assert.match(adminSource, /window\.location\.assign\(entry\.upgrade_url\)/);
   assert.doesNotMatch(
-    bridgeSource,
-    /(?:localStorage|sessionStorage)\.setItem\([^\n]*recovery_credential/,
+    adminSource,
+    /recovery_credential|sessionStorage|clipboard/,
   );
-  assert.doesNotMatch(bridgeSource, /console\.(?:debug|info|log|warn)\([^\n]*recovery/i);
+});
+
+test('maintenance page points to the independent Go process without recovery credentials', () => {
+  assert.match(maintenanceSource, /probeUpgradeAgentApi/);
+  assert.match(maintenanceSource, /window\.location\.assign\('\/upgrade\/'\)/);
+  assert.match(maintenanceSource, /PHP 代码部署由管理员手动完成/);
+  assert.match(maintenanceSource, /Docker 部署.*重新构建镜像/);
+  assert.match(maintenanceSource, /非 Docker 部署.*先重启 Queue\/Cron/);
+  assert.match(maintenanceSource, /不会执行 Docker、systemctl 或服务重启命令/);
+  assert.doesNotMatch(
+    maintenanceSource,
+    /recovery_credential|恢复凭据|takeover|confirmRecovery/,
+  );
 });
 
 test('maintenance response redirects once before generic request error handling', () => {
@@ -71,26 +76,10 @@ test('maintenance response redirects once before generic request error handling'
     requestSource.indexOf('handleMaintenanceResponse') <
       requestSource.indexOf('defaultResponseInterceptor({'),
   );
-  assert.doesNotMatch(redirectSource, /setAccessToken|setRefreshToken|logout/);
 });
 
-test('maintenance is a standalone core route and uses only public recovery authority', () => {
+test('maintenance remains a standalone core route', () => {
   assert.match(routesSource, /name: 'Maintenance'/);
   assert.match(routesSource, /path: '\/maintenance'/);
   assert.match(routesSource, /views\/_core\/maintenance\/index\.vue/);
-  assert.match(maintenanceSource, /\/upgrade\/api\/maintenance/);
-  assert.match(maintenanceSource, /takeoverUpgradeSessionApi/);
-  assert.match(maintenanceSource, /confirmRecoveryApi/);
-  assert.match(maintenanceSource, /mallbase-agent recovery issue/);
-  assert.doesNotMatch(maintenanceSource, /useAccessStore|accessToken|refreshToken/);
-});
-
-test('takeover confirmation survives response loss without storing recovery secrets', () => {
-  assert.match(maintenanceSource, /sessionStorage/);
-  assert.match(maintenanceSource, /PENDING_TAKEOVER_CONFIRMATION_KEY/);
-  assert.match(maintenanceSource, /confirmRecoveryApi/);
-  assert.doesNotMatch(
-    maintenanceSource,
-    /sessionStorage\.setItem\([^\n]*recovery_credential/,
-  );
 });

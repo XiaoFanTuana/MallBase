@@ -16,10 +16,10 @@ backend/install/install.lock
 backend/storage/cert
 backend/public/storage
 backend/public/uploads
+/data/
 
 # Host-only Agent state and deployment credentials never enter a Docker build
-# context. Production builds consume the Agent-sealed tar and a one-time
-# BuildKit secret through deploy/docker/build-sealed-image.sh.
+# context.
 upgrade
 .env
 .env.*
