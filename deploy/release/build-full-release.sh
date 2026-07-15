@@ -164,6 +164,34 @@ done
 find "$SOURCE_TREE" -type f \( -name .env -o -name '.env.*' \) ! -name .env.example \
     -exec rm -f -- {} +
 
+# 回执必须绑定最终会发布的前端源码树；先清除运行时保留路径和前端构建残留。
+python3 - "$SOURCE_TREE" <<'PY'
+import shutil
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for relative in ["backend/public/static/demo", "upgrade/.gitignore"]:
+    path = root / relative
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+for path in sorted(root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+    if path.is_dir() and (
+        path.name in {"node_modules", ".pnpm-store", ".turbo", ".cache"}
+        or ("frontend" in path.parts and path.name == "dist")
+    ):
+        shutil.rmtree(path)
+
+for path in list(root.rglob("*")):
+    if path.is_file() and "frontend" in path.parts and path.name in {
+        "dist.zip", "dist.tar", "dist.tar.gz", "dist.tgz",
+    }:
+        path.unlink()
+PY
+
 # 回执格式与内容哈希由 Platform 的 release-packager 唯一生成，MallBase 只消费固定命令边界。
 "$RELEASE_PACKAGER_BIN" frontend-receipt -root "$SOURCE_TREE" -artifact admin \
     || fail RELEASE_ADMIN_RECEIPT_FAILED
@@ -214,7 +242,8 @@ agent_version = sys.argv[5]
 excluded = [
     ".git", ".github", ".gitee", ".codex/work", "output", "data",
     "backend/vendor", "backend/runtime", "backend/public/uploads",
-    "backend/public/storage", "backend/storage/cert",
+    "backend/public/storage", "backend/public/static/demo", "backend/storage/cert",
+    "upgrade/.gitignore",
     "upgrade/config", "upgrade/run", "upgrade/jobs", "upgrade/packages",
     "upgrade/staging", "upgrade/backups", "upgrade/agent-private", "upgrade/bin/active",
     "frontend/admin/node_modules", "frontend/admin/.pnpm-store", "frontend/admin/.turbo",

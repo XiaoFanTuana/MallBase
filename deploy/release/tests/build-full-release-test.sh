@@ -17,11 +17,16 @@ mkdir -p \
     "$SOURCE/backend/app" \
     "$SOURCE/backend/public/admin" \
     "$SOURCE/backend/public/client" \
+    "$SOURCE/backend/public/static/demo" \
     "$SOURCE/backend/runtime/cache" \
     "$SOURCE/backend/public/uploads" \
     "$SOURCE/frontend/admin/node_modules" \
+    "$SOURCE/frontend/admin/.pnpm-store" \
+    "$SOURCE/frontend/admin/.turbo" \
+    "$SOURCE/frontend/admin/.cache" \
     "$SOURCE/frontend/admin/apps/web-antd/dist" \
     "$SOURCE/frontend/uniapp/node_modules" \
+    "$SOURCE/frontend/uniapp/.cache" \
     "$SOURCE/frontend/uniapp/dist/build/h5" \
     "$SOURCE/data/mysql" \
     "$SOURCE/upgrade/backups" \
@@ -38,15 +43,24 @@ printf '%s\n' 'EXAMPLE=true' > "$SOURCE/.env.example"
 printf '%s\n' 'SECRET=must-not-ship' > "$SOURCE/frontend/admin/.env.production"
 printf '%s\n' stale > "$SOURCE/backend/public/admin/stale.js"
 printf '%s\n' stale > "$SOURCE/backend/public/client/stale.js"
+printf '%s\n' demo-runtime-data > "$SOURCE/backend/public/static/demo/README.md"
 printf '%s\n' runtime > "$SOURCE/backend/runtime/cache/state"
 printf '%s\n' upload > "$SOURCE/backend/public/uploads/file"
 printf '%s\n' dependency > "$SOURCE/frontend/admin/node_modules/dependency"
+printf '%s\n' pnpm-cache > "$SOURCE/frontend/admin/.pnpm-store/state"
+printf '%s\n' turbo-cache > "$SOURCE/frontend/admin/.turbo/state"
+printf '%s\n' generic-cache > "$SOURCE/frontend/admin/.cache/state"
 printf '%s\n' old-dist > "$SOURCE/frontend/admin/apps/web-antd/dist/old.js"
 printf '%s\n' old-dist-archive > "$SOURCE/frontend/admin/apps/web-antd/dist.zip"
+printf '%s\n' old-dist-archive > "$SOURCE/frontend/admin/apps/web-antd/dist.tar"
+printf '%s\n' old-dist-archive > "$SOURCE/frontend/admin/apps/web-antd/dist.tar.gz"
+printf '%s\n' old-dist-archive > "$SOURCE/frontend/admin/apps/web-antd/dist.tgz"
 printf '%s\n' dependency > "$SOURCE/frontend/uniapp/node_modules/dependency"
+printf '%s\n' generic-cache > "$SOURCE/frontend/uniapp/.cache/state"
 printf '%s\n' old-dist > "$SOURCE/frontend/uniapp/dist/build/h5/old.js"
 printf '%s\n' database > "$SOURCE/data/mysql/state"
 printf '%s\n' backup > "$SOURCE/upgrade/backups/state"
+printf '%s\n' runtime-control-file > "$SOURCE/upgrade/.gitignore"
 cp "$PROJECT_ROOT/deploy/docker/host-preflight.sh" "$SOURCE/deploy/docker/host-preflight.sh"
 chmod 0775 "$SOURCE/deploy/docker/host-preflight.sh"
 chmod 0775 "$SOURCE/backend" "$SOURCE/backend/app"
@@ -127,6 +141,23 @@ if find "$root" -type f \( -name .env -o -name '.env.*' \) ! -name .env.example 
     exit 3
 fi
 [ -f "$root/.env.example" ] || exit 3
+if [ -e "$root/backend/public/static/demo" ] || [ -e "$root/upgrade/.gitignore" ]; then
+    printf '%s\n' FRONTEND_RECEIPT_RESERVED_PATH_NOT_CLEAN >&2
+    exit 3
+fi
+if find "$root/frontend" -type d \( \
+    -name node_modules -o -name .pnpm-store -o -name .turbo -o \
+    -name .cache -o -name dist \
+\) -print | grep -q .; then
+    printf '%s\n' FRONTEND_RECEIPT_BUILD_DIRECTORY_NOT_CLEAN >&2
+    exit 3
+fi
+if find "$root/frontend" -type f \( \
+    -name dist.zip -o -name dist.tar -o -name dist.tar.gz -o -name dist.tgz \
+\) -print | grep -q .; then
+    printf '%s\n' FRONTEND_RECEIPT_BUILD_ARCHIVE_NOT_CLEAN >&2
+    exit 3
+fi
 case "$artifact" in
     admin) receipt=$root/backend/public/admin/.mallbase-build-receipt.json ;;
     h5) receipt=$root/backend/public/client/.mallbase-build-receipt.json ;;
@@ -203,9 +234,16 @@ for required in \
 done
 for forbidden in \
     stale.js .env.production backend/runtime backend/public/uploads \
+    backend/public/static/demo upgrade/.gitignore \
     node_modules frontend/admin/apps/web-antd/dist frontend/uniapp/dist \
     data/mysql upgrade/backups deploy/release; do
     ! grep -F "$forbidden" "$LIST" >/dev/null
+done
+for reserved_path in backend/public/static/demo upgrade/.gitignore; do
+    if grep -F "$reserved_path" "$LIST" >/dev/null; then
+        printf '%s\n' "RESERVED_RELEASE_PATH_MUST_NOT_BE_ARCHIVED:$reserved_path" >&2
+        exit 1
+    fi
 done
 grep -Fx 'mallbase-v1.0.0/.env.example' "$LIST" >/dev/null
 ! grep -Fx 'mallbase-v1.0.0/.env' "$LIST" >/dev/null
@@ -233,6 +271,13 @@ assert mode("upgrade/bin/checksums.sha256") == 0o644
 assert not (root / "upgrade/bin/active").exists()
 PY
 (cd "$EXTRACTED/mallbase-v1.0.0" && shasum -a 256 -c release-files.sha256)
+for reserved_path in backend/public/static/demo upgrade/.gitignore; do
+    if grep -F "$reserved_path" \
+        "$EXTRACTED/mallbase-v1.0.0/release-files.sha256" >/dev/null; then
+        printf '%s\n' "RESERVED_RELEASE_PATH_MUST_NOT_BE_CHECKSUMMED:$reserved_path" >&2
+        exit 1
+    fi
+done
 grep -F '"source_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
     "$EXTRACTED/mallbase-v1.0.0/release-manifest.json" >/dev/null
 python3 - "$EXTRACTED/mallbase-v1.0.0/release-manifest.json" <<'PY'
