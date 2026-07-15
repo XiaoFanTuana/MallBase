@@ -141,6 +141,48 @@ final class AgentDeploymentContractTest extends TestCase
         self::assertStringContainsString('MALLBASE_AGENT_USER', $preflight);
     }
 
+    public function testHostPreflightAssignsOnlyTheReleaseInventoryToTheAgentUser(): void
+    {
+        $preflight = $this->read('deploy/docker/host-preflight.sh');
+
+        self::assertStringContainsString(
+            'MANAGED_RELEASE_FILES=$PROJECT_ROOT/release-files.sha256',
+            $preflight,
+        );
+        self::assertStringContainsString('prepare_managed_release_tree', $preflight);
+        self::assertStringContainsString('HOST_PREFLIGHT_RELEASE_INVENTORY_MISSING', $preflight);
+        self::assertStringContainsString('HOST_PREFLIGHT_RELEASE_INVENTORY_INVALID', $preflight);
+        self::assertStringNotContainsString('HOST_UID=$(id -u)', $preflight);
+        self::assertStringNotContainsString('chown "$HOST_UID:', $preflight);
+        self::assertDoesNotMatchRegularExpression(
+            '/\bchown\s+(?:-[^\s]+\s+)*-R\b|\bchown\s+--recursive\b/',
+            $preflight,
+        );
+        foreach (['PROJECT_ROOT', 'UPGRADE_ROOT', 'BIN_ROOT', 'MANIFEST'] as $variable) {
+            self::assertStringContainsString(
+                '"$(uid_of "$' . $variable . '")" = "$AGENT_UID"',
+                $preflight,
+            );
+        }
+        self::assertStringContainsString('chmod 0755 "$PROJECT_ROOT"', $preflight);
+        self::assertStringNotContainsString('chmod u+rwx "$path"', $preflight);
+        self::assertStringContainsString('chmod 0750 "$UPGRADE_ROOT"', $preflight);
+        self::assertStringContainsString('chmod 0750 "$BIN_ROOT"', $preflight);
+        self::assertStringContainsString('"$(mode_of "$BIN_ROOT")" = 750', $preflight);
+        self::assertStringContainsString('"$(uid_of "$binary")" = "$AGENT_UID"', $preflight);
+
+        $documentation = $this->read('docs/install/upgrade-agent.md');
+        self::assertStringContainsString('`release-files.sha256`', $documentation);
+        self::assertStringContainsString('完整发布包', $documentation);
+        self::assertStringContainsString('刚完整解压、尚未在线升级', $documentation);
+        self::assertStringContainsString('不能作为已运行实例的重复 health check', $documentation);
+        self::assertStringContainsString('bootstrap-only', $documentation);
+        self::assertStringContainsString('完整解压到空的新目录', $documentation);
+        self::assertStringContainsString('不允许运行时刷新这张表或维护第二套 inventory', $documentation);
+        self::assertStringContainsString('Agent 和 systemd', $documentation);
+        self::assertStringContainsString('TOCTOU', $documentation);
+    }
+
     public function testSystemdStartsOneAgentProcessForEachQueuedJob(): void
     {
         $pathUnit = $this->read('deploy/systemd/mallbase-agent@.path');
@@ -148,9 +190,21 @@ final class AgentDeploymentContractTest extends TestCase
 
         self::assertStringContainsString('PathExistsGlob=%f/upgrade/run/requests/*.json', $pathUnit);
         self::assertStringContainsString('Unit=mallbase-agent@%i.service', $pathUnit);
-        self::assertStringContainsString('ExecStart=%f/upgrade/bin/mallbase-agent run-job', $serviceUnit);
+        self::assertStringContainsString('ExecStart=%f/upgrade/bin/active/mallbase-agent run-job', $serviceUnit);
         self::assertStringContainsString('User=mallbase-agent', $serviceUnit);
         self::assertStringContainsString('Group=mallbase-upgrade', $serviceUnit);
+        self::assertStringNotContainsString('MALLBASE_PHP_BASE_URL', $serviceUnit);
+        self::assertStringNotContainsString("ReadWritePaths=/\n", $serviceUnit);
+        $pathPolicy = array_values(array_filter(
+            preg_split('/\R/', trim($serviceUnit)) ?: [],
+            static fn(string $line): bool => str_starts_with($line, 'ReadWritePaths=')
+                || str_starts_with($line, 'ReadOnlyPaths='),
+        ));
+        self::assertSame([
+            'ReadWritePaths=%f',
+            'ReadOnlyPaths=%f/upgrade/bin',
+            'ReadWritePaths=%f/upgrade/bin/active',
+        ], $pathPolicy);
         self::assertStringNotContainsString(' serve', $pathUnit . $serviceUnit);
     }
 
@@ -219,7 +273,7 @@ final class AgentDeploymentContractTest extends TestCase
         $bin = $this->projectRoot . '/upgrade/bin';
         $checksums = $bin . '/checksums.sha256';
         self::assertFileExists($checksums);
-        self::assertSame(0444, fileperms($checksums) & 0777);
+        self::assertSame(0644, fileperms($checksums) & 0777);
 
         $expected = [];
         foreach (file($checksums, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
@@ -232,8 +286,56 @@ final class AgentDeploymentContractTest extends TestCase
         foreach ($expected as $name => $digest) {
             $path = $bin . '/' . $name;
             self::assertFileExists($path);
-            self::assertSame(0555, fileperms($path) & 0777);
+            self::assertSame(0755, fileperms($path) & 0777);
             self::assertSame($digest, hash_file('sha256', $path));
+        }
+    }
+
+    public function testActiveAgentIsTheOnlySelfWritableBinarySurface(): void
+    {
+        $ignore = $this->read('upgrade/.gitignore');
+        $preflight = $this->read('deploy/docker/host-preflight.sh');
+
+        self::assertStringContainsString('/bin/active/', $ignore);
+        self::assertStringNotContainsString('agent-manifest.json', $ignore . $preflight);
+        self::assertStringContainsString('ACTIVE_BIN_ROOT=$BIN_ROOT/active', $preflight);
+        self::assertStringContainsString('AGENT_LAUNCHER=$ACTIVE_BIN_ROOT/mallbase-agent', $preflight);
+        self::assertStringNotContainsString('ln -s', $preflight);
+        self::assertStringContainsString('prepare_active_binary', $preflight);
+        self::assertStringContainsString('chmod 0750 "$BIN_ROOT"', $preflight);
+        self::assertStringContainsString('chmod 0750 "$ACTIVE_BIN_ROOT"', $preflight);
+        self::assertStringContainsString('chmod 0755 "$temporary"', $preflight);
+        self::assertStringContainsString('"$(mode_of "$AGENT_LAUNCHER")" = 755', $preflight);
+
+        $documentation = $this->read('docs/install/upgrade-agent.md');
+        self::assertStringContainsString('runtime.GOARCH', $documentation);
+        self::assertStringContainsString('`manifest.files[]`', $documentation);
+        self::assertStringContainsString('`path`、`sha256`、`size`、`mode`', $documentation);
+        self::assertStringContainsString('upgrade/bin/mallbase-agent-linux-amd64', $documentation);
+        self::assertStringContainsString('upgrade/bin/mallbase-agent-linux-arm64', $documentation);
+        self::assertStringContainsString('Agent 运行时不读取 `agent.artifacts[]`', $documentation);
+        self::assertStringContainsString('不包含 `upgrade/bin/active/`', $documentation);
+        self::assertStringContainsString('一次性离线引导', $documentation);
+        self::assertStringContainsString('旧 Agent', $documentation);
+        self::assertStringContainsString('拒绝 `upgrade/**`', $documentation);
+        self::assertStringContainsString('没有 Agent 自更新步骤', $documentation);
+        self::assertStringContainsString('不能作为 bridge', $documentation);
+        self::assertStringContainsString('当前进程继续完成任务并退出', $documentation);
+        self::assertStringContainsString('下一次 systemd 任务', $documentation);
+        self::assertStringContainsString(
+            '完整 ZIP 归档态中，两个 Agent 候选固定为 `0755`，`checksums.sha256` 固定为 `0644`',
+            $documentation,
+        );
+        self::assertStringContainsString(
+            'host-preflight 在宿主机离线安装阶段将候选收紧为 `0555`，将 `checksums.sha256` 收紧为 `0444`',
+            $documentation,
+        );
+        self::assertStringContainsString('Platform 不在 MallBase 宿主机执行 `chmod`', $documentation);
+        foreach ([
+            '`VERSION`', '`SOURCE_COMMIT`', 'release key', '`build-release.sh`',
+            '`dist/agent-manifest.json`', '不进入 Agent 运行时包',
+        ] as $releaseContract) {
+            self::assertStringContainsString($releaseContract, $documentation);
         }
     }
 

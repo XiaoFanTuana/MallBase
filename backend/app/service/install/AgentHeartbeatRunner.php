@@ -58,13 +58,14 @@ final class AgentHeartbeatRunner implements AgentHeartbeatClient
         }
 
         try {
-            if ($this->executor !== null) {
-                $executor = $this->executor;
-                $process = $executor([$binary, 'heartbeat'], $stdin, $this->timeoutMilliseconds);
-            } else {
-                ($this->trustValidator ?? AgentBinaryTrustValidator::fromConfig())->validate($binary);
-                $process = $this->executeNative([$binary, 'heartbeat'], $stdin, $this->timeoutMilliseconds);
-            }
+            $process = (new AgentProcessRunner($this->executor, $this->trustValidator))->run(
+                $binary,
+                'heartbeat',
+                $stdin,
+                $this->timeoutMilliseconds,
+                self::MAX_STDOUT_BYTES,
+                self::MAX_STDERR_BYTES,
+            );
         } catch (Throwable) {
             return AgentHeartbeatResult::failure('AGENT_EXECUTION_FAILED');
         }
@@ -156,122 +157,13 @@ final class AgentHeartbeatRunner implements AgentHeartbeatClient
 
     private function defaultBinaryPath(): ?string
     {
-        $arch = strtolower((string) php_uname('m'));
-        $suffix = match ($arch) {
-            'x86_64', 'amd64' => 'amd64',
-            'aarch64', 'arm64' => 'arm64',
-            default => null,
-        };
-        if ($suffix === null) {
-            return null;
-        }
         $root = (string) config('agent.upgrade_root', '');
         if ($root === '') {
             return null;
         }
 
         return rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'bin'
-            . DIRECTORY_SEPARATOR . 'mallbase-agent-linux-' . $suffix;
+            . DIRECTORY_SEPARATOR . 'active' . DIRECTORY_SEPARATOR . 'mallbase-agent';
     }
 
-    /**
-     * @param array<int, string> $command
-     * @return array{exit_code:int,stdout:string,stderr:string,timed_out:bool}
-     */
-    private function executeNative(array $command, string $stdin, int $timeoutMilliseconds): array
-    {
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        $deadline = hrtime(true) + ($timeoutMilliseconds * 1_000_000);
-        $pipes = [];
-        $process = proc_open($command, $descriptors, $pipes, null, [], ['bypass_shell' => true]);
-        if (!is_resource($process) || count($pipes) !== 3) {
-            throw new \RuntimeException('process unavailable');
-        }
-
-        $stdout = '';
-        $stderr = '';
-        $timedOut = false;
-        $observedExitCode = null;
-        $stdinOffset = 0;
-        $stdinOpen = true;
-        try {
-            foreach ($pipes as $pipe) {
-                if (!stream_set_blocking($pipe, false)) {
-                    throw new \RuntimeException('nonblocking pipe unavailable');
-                }
-            }
-
-            while (true) {
-                if ($stdinOpen && $stdinOffset < strlen($stdin)) {
-                    $count = @fwrite($pipes[0], substr($stdin, $stdinOffset, 8192));
-                    if ($count === false) {
-                        throw new \RuntimeException('stdin write failed');
-                    }
-                    $stdinOffset += $count;
-                }
-                if ($stdinOpen && $stdinOffset === strlen($stdin)) {
-                    fclose($pipes[0]);
-                    unset($pipes[0]);
-                    $stdinOpen = false;
-                }
-
-                $stdoutChunk = stream_get_contents($pipes[1]);
-                $stderrChunk = stream_get_contents($pipes[2]);
-                if (!is_string($stdoutChunk) || !is_string($stderrChunk)) {
-                    throw new \RuntimeException('process output read failed');
-                }
-                $stdout .= $stdoutChunk;
-                $stderr .= $stderrChunk;
-                if (strlen($stdout) > self::MAX_STDOUT_BYTES || strlen($stderr) > self::MAX_STDERR_BYTES) {
-                    proc_terminate($process, 9);
-                    break;
-                }
-
-                $status = proc_get_status($process);
-                if (!is_array($status)) {
-                    throw new \RuntimeException('process status failed');
-                }
-                if (($status['running'] ?? false) !== true) {
-                    if (is_int($status['exitcode'] ?? null) && $status['exitcode'] >= 0) {
-                        $observedExitCode = $status['exitcode'];
-                    }
-                    break;
-                }
-                if (hrtime(true) >= $deadline) {
-                    $timedOut = true;
-                    proc_terminate($process, 15);
-                    usleep(20_000);
-                    $status = proc_get_status($process);
-                    if (is_array($status) && ($status['running'] ?? false) === true) {
-                        proc_terminate($process, 9);
-                    }
-                    break;
-                }
-                usleep(1_000);
-            }
-            $stdout .= (string) stream_get_contents($pipes[1]);
-            $stderr .= (string) stream_get_contents($pipes[2]);
-        } finally {
-            foreach ($pipes as $pipe) {
-                if (is_resource($pipe)) {
-                    fclose($pipe);
-                }
-            }
-        }
-        $exitCode = proc_close($process);
-        if ((!is_int($exitCode) || $exitCode < 0) && is_int($observedExitCode)) {
-            $exitCode = $observedExitCode;
-        }
-
-        return [
-            'exit_code' => is_int($exitCode) ? $exitCode : -1,
-            'stdout' => $stdout,
-            'stderr' => $stderr,
-            'timed_out' => $timedOut,
-        ];
-    }
 }

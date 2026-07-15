@@ -7,7 +7,6 @@ namespace Tests\Unit\Upgrade;
 use app\cron\CronManager;
 use app\middleware\admin\UpgradeAdminGateMiddleware;
 use app\middleware\UpgradeTrafficGateMiddleware;
-use app\middleware\upgrade\SimpleUpgradeAuthMiddleware;
 use app\queue\UpgradeAwareWorker;
 use app\service\upgrade\SimpleDatabaseSnapshotService;
 use app\service\upgrade\SimpleSqlMigrationService;
@@ -76,7 +75,7 @@ final class SimpleUpgradeBootstrapTest extends TestCase
         self::assertTrue($app->bound(UpgradeTrafficGateMiddleware::class));
         self::assertTrue($app->bound(UpgradeAdminGateMiddleware::class));
         self::assertTrue($app->bound(CronManager::class));
-        self::assertTrue($app->bound(SimpleUpgradeAuthMiddleware::class));
+        self::assertFalse($app->bound('app\\middleware\\upgrade\\SimpleUpgradeAuthMiddleware'));
         self::assertTrue($app->bound(SimpleDatabaseSnapshotService::class));
         self::assertTrue($app->bound(SimpleSqlMigrationService::class));
         self::assertTrue($app->bound(SimpleUpgradeRuntimeService::class));

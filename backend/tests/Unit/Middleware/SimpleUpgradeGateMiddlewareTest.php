@@ -68,38 +68,6 @@ final class SimpleUpgradeGateMiddlewareTest extends TestCase
         self::assertSame(503, $response->getCode());
     }
 
-    public function testExactSimpleGoRuntimePathRemainsAvailableDuringDrain(): void
-    {
-        $gate = new SimpleUpgradeGate($this->runDirectory);
-        $gate->drain();
-        $middleware = new UpgradeTrafficGateMiddleware(simpleGate: $gate);
-        $jobId = '11111111-1111-4111-8111-111111111111';
-
-        $response = $middleware->handle(
-            $this->request('upgrade/api/simple/jobs/' . $jobId . '/backup-database', 'POST'),
-            static fn(): Response => response('simple-upgrade-ok', 200),
-        );
-
-        self::assertSame(200, $response->getCode());
-        self::assertSame('simple-upgrade-ok', $response->getContent());
-    }
-
-    public function testExactSimpleResumePathRemainsAvailableDuringDrain(): void
-    {
-        $gate = new SimpleUpgradeGate($this->runDirectory);
-        $gate->drain();
-        $middleware = new UpgradeTrafficGateMiddleware(simpleGate: $gate);
-        $jobId = '11111111-1111-4111-8111-111111111111';
-
-        $response = $middleware->handle(
-            $this->request('upgrade/api/simple/jobs/' . $jobId . '/resume', 'POST'),
-            static fn(): Response => response('simple-resume-ok', 200),
-        );
-
-        self::assertSame(200, $response->getCode());
-        self::assertSame('simple-resume-ok', $response->getContent());
-    }
-
     public function testAdminGateBlocksOrdinaryAdminButWhitelistsUpgradeEntry(): void
     {
         $gate = new SimpleUpgradeGate($this->runDirectory);

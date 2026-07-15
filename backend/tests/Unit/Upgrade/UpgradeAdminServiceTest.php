@@ -43,12 +43,12 @@ final class UpgradeAdminServiceTest extends TestCase
             'action' => 'upgrade',
             'source_version' => '1.2.2',
             'target_version' => '1.2.3',
-            'status' => 'awaiting_php_restart',
+            'status' => 'succeeded',
             'backup_path' => 'backups/' . self::JOB_ID,
             'package_path' => 'packages/' . self::JOB_ID . '.tar.gz',
             'created_at' => 100,
             'started_at' => 101,
-            'finished_at' => 0,
+            'finished_at' => 102,
             'error' => '',
         ], JSON_THROW_ON_ERROR));
 
@@ -56,7 +56,7 @@ final class UpgradeAdminServiceTest extends TestCase
 
         self::assertSame(1, $result['total']);
         self::assertSame('upgrade/backups/' . self::JOB_ID, $result['list'][0]['backup_path']);
-        self::assertSame('awaiting_php_restart', $result['list'][0]['status']);
+        self::assertSame('succeeded', $result['list'][0]['status']);
     }
 
     public function testRejectsArtifactPathTraversal(): void

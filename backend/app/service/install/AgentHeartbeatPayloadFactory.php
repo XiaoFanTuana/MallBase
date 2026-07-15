@@ -45,12 +45,11 @@ final class AgentHeartbeatPayloadFactory
         if (!in_array($componentType, self::COMPONENTS, true) || $now < 0 || $now > 4_102_444_800) {
             $this->fail();
         }
-        $origin = $instance['platform_base_url'] ?? null;
         $instanceId = $instance['instance_id'] ?? null;
         $token = $instance['token'] ?? null;
         $secret = $instance['activation_secret'] ?? null;
         $components = $instance['components'] ?? null;
-        if (!is_string($origin) || !$this->validOrigin($origin)
+        if (array_key_exists('platform_base_url', $instance)
             || !is_string($instanceId) || preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $instanceId) !== 1
             || !is_string($token) || !$this->validSecret($token, true)
             || !is_string($secret) || !$this->validSecret($secret, true)
@@ -85,7 +84,6 @@ final class AgentHeartbeatPayloadFactory
         ksort($active, SORT_STRING);
 
         return [
-            'platform_base_url' => $origin,
             'instance_id' => $instanceId,
             'token' => $token,
             'activation_secret' => $secret,
@@ -184,22 +182,6 @@ final class AgentHeartbeatPayloadFactory
                 $this->fail();
             }
         }
-    }
-
-    private function validOrigin(string $origin): bool
-    {
-        $parts = parse_url($origin);
-        if (!is_array($parts) || isset($parts['user'], $parts['pass'], $parts['query'], $parts['fragment'])
-            || ($parts['path'] ?? '') !== '' || !isset($parts['scheme'], $parts['host'])) {
-            return false;
-        }
-        $scheme = strtolower((string) $parts['scheme']);
-        if ($scheme === 'https') {
-            return true;
-        }
-        $host = strtolower((string) $parts['host']);
-
-        return $scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true);
     }
 
     private function assertStrictJson(string $json): void

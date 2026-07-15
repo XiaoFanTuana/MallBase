@@ -37,9 +37,9 @@ final readonly class SimpleUpgradeRuntimeService
     /** @param array<string,mixed> $body @return array<string,mixed> */
     public function backup(string $jobId, array $body): array
     {
-        $this->requirePaused();
         $this->requireJob($jobId);
         $this->requireFields($body, []);
+        $this->requirePaused();
 
         return $this->database->backup($jobId);
     }
@@ -47,22 +47,27 @@ final readonly class SimpleUpgradeRuntimeService
     /** @param array<string,mixed> $body @return array<string,mixed> */
     public function restore(string $jobId, array $body): array
     {
-        $this->requirePaused();
         $this->requireJob($jobId);
         $this->requireFields($body, ['source_job_id', 'database_path', 'database_sha256']);
-        if (($body['source_job_id'] ?? null) !== $jobId
+        if (!is_string($body['source_job_id'] ?? null)
             || !is_string($body['database_path'] ?? null)
             || !is_string($body['database_sha256'] ?? null)) {
             $this->invalid();
         }
 
-        return $this->database->restore($jobId, $body['database_path'], $body['database_sha256']);
+        $this->requireJob($body['source_job_id']);
+        $this->requirePaused();
+
+        return $this->database->restore(
+            $body['source_job_id'],
+            $body['database_path'],
+            $body['database_sha256'],
+        );
     }
 
     /** @param array<string,mixed> $body @return array<string,mixed> */
     public function migrate(string $jobId, array $body): array
     {
-        $this->requirePaused();
         $this->requireJob($jobId);
         $this->requireFields($body, ['migration_id', 'version', 'path', 'sha256']);
         foreach (['migration_id', 'version', 'path', 'sha256'] as $field) {
@@ -70,6 +75,7 @@ final readonly class SimpleUpgradeRuntimeService
                 $this->invalid();
             }
         }
+        $this->requirePaused();
 
         return $this->migrations->execute(
             $jobId,
@@ -83,12 +89,12 @@ final readonly class SimpleUpgradeRuntimeService
     /** @param array<string,mixed> $body @return array<string,mixed> */
     public function awaitingRestart(string $jobId, array $body): array
     {
-        $this->requirePaused();
         $this->requireJob($jobId);
         $this->requireFields($body, ['action', 'target_version']);
         if (!$this->action($body['action']) || !$this->version($body['target_version'])) {
             $this->invalid();
         }
+        $this->requirePaused();
 
         return [
             'state' => $this->gate->markAwaitingPhpRestart(),
@@ -100,7 +106,6 @@ final readonly class SimpleUpgradeRuntimeService
     /** @param array<string,mixed> $body @return array{state:string} */
     public function resume(string $jobId, array $body): array
     {
-        $this->requirePaused();
         $this->requireJob($jobId);
         $this->requireFields($body, []);
 

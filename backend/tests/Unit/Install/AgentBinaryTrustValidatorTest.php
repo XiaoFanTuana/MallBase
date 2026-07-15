@@ -11,54 +11,43 @@ use RuntimeException;
 final class AgentBinaryTrustValidatorTest extends TestCase
 {
     private string $root;
+    private string $active;
     private string $binary;
-    private string $checksums;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->root = sys_get_temp_dir() . '/mallbase-agent-trust-' . bin2hex(random_bytes(8));
-        mkdir($this->root, 0755);
-        mkdir($this->root . '/bin', 0755);
-        $this->binary = $this->root . '/bin/mallbase-agent-linux-amd64';
-        $this->checksums = $this->root . '/bin/checksums.sha256';
+        $this->active = $this->root . '/bin/active';
+        $this->binary = $this->active . '/mallbase-agent';
+        mkdir($this->active, 0750, true);
         file_put_contents($this->binary, "trusted-agent\n");
-        chmod($this->binary, 0555);
-        file_put_contents($this->checksums, hash_file('sha256', $this->binary) . "  mallbase-agent-linux-amd64\n");
-        chmod($this->checksums, 0444);
-        chmod($this->root . '/bin', 0555);
+        chmod($this->binary, 0755);
+        chmod($this->active, 0750);
     }
 
     protected function tearDown(): void
     {
-        if (is_dir($this->root . '/bin')) {
-            chmod($this->root . '/bin', 0755);
+        if (is_dir($this->active)) {
+            chmod($this->active, 0750);
         }
-        foreach ([$this->binary, $this->checksums] as $file) {
-            if (is_link($file) || is_file($file)) {
-                chmod($file, 0644);
-                unlink($file);
-            }
+        if (is_link($this->binary) || is_file($this->binary)) {
+            chmod($this->binary, 0644);
+            unlink($this->binary);
         }
-        if (is_dir($this->root . '/bin')) {
-            chmod($this->root . '/bin', 0755);
-            rmdir($this->root . '/bin');
-        }
-        if (is_dir($this->root)) {
-            rmdir($this->root);
-        }
+        @rmdir($this->active);
+        @rmdir($this->root . '/bin');
+        @rmdir($this->root);
         parent::tearDown();
     }
 
-    public function testExactReadOnlyMountAndChecksumAreTrusted(): void
+    public function testFixedActiveBinaryIsTrusted(): void
     {
-        $validator = $this->validator(
-            static fn(string $path): bool => str_ends_with($path, '/bin'),
+        $this->validator(
+            static fn(string $path): bool => str_ends_with($path, '/bin/active'),
             static fn(): bool => true,
             static fn(): bool => false,
-        );
-
-        $validator->validate($this->binary);
+        )->validate($this->binary);
 
         self::assertTrue(true);
     }
@@ -72,102 +61,113 @@ final class AgentBinaryTrustValidatorTest extends TestCase
         new AgentBinaryTrustValidator($uid, $uid, static fn(): bool => true);
     }
 
-    public function testUnsafeBinaryShapesAndChecksumsFailClosed(): void
+    public function testOnlyExactActiveFileShapeIsAccepted(): void
     {
-        $mutations = [
-            'wrong checksum' => function (): void {
-                chmod($this->checksums, 0644);
-                file_put_contents($this->checksums, str_repeat('0', 64) . "  mallbase-agent-linux-amd64\n");
-                chmod($this->checksums, 0444);
+        $cases = [
+            'non-contract binary mode' => function (): string {
+                chmod($this->binary, 0775);
+
+                return $this->binary;
             },
-            'duplicate checksum' => function (): void {
-                $line = (string) file_get_contents($this->checksums);
-                chmod($this->checksums, 0644);
-                file_put_contents($this->checksums, $line . $line);
-                chmod($this->checksums, 0444);
+            'writable active directory' => function (): string {
+                chmod($this->active, 0770);
+
+                return $this->binary;
             },
-            'writable binary' => fn() => chmod($this->binary, 0755),
-            'writable checksum' => fn() => chmod($this->checksums, 0644),
-            'writable bin directory' => fn() => chmod($this->root . '/bin', 0755),
+            'wrong file name' => function (): string {
+                $other = $this->active . '/other-agent';
+                file_put_contents($other, 'agent');
+                chmod($other, 0755);
+
+                return $other;
+            },
+            'wrong parent name' => function (): string {
+                $otherDirectory = $this->root . '/other';
+                mkdir($otherDirectory, 0750);
+                $other = $otherDirectory . '/mallbase-agent';
+                file_put_contents($other, 'agent');
+                chmod($other, 0755);
+
+                return $other;
+            },
         ];
 
-        foreach ($mutations as $name => $mutate) {
+        foreach ($cases as $name => $mutate) {
             $this->resetFixture();
-            $mutate();
+            $path = $mutate();
             try {
-                $this->validator(static fn(): bool => true)->validate($this->binary);
+                $this->validator(static fn(): bool => true)->validate($path);
                 self::fail($name . ' was trusted');
             } catch (RuntimeException $exception) {
                 self::assertSame('AGENT_BINARY_UNTRUSTED', $exception->getMessage(), $name);
+            } finally {
+                if ($path !== $this->binary && is_file($path)) {
+                    chmod($path, 0644);
+                    unlink($path);
+                    @rmdir(dirname($path));
+                }
             }
         }
     }
 
-    public function testSymlinkBinaryAndUnexpectedNameAreRejected(): void
+    public function testSymlinkBinaryIsRejected(): void
     {
         $target = $this->root . '/real-agent';
         file_put_contents($target, 'agent');
-        chmod($target, 0555);
-        chmod($this->root . '/bin', 0755);
+        chmod($target, 0755);
         chmod($this->binary, 0644);
         unlink($this->binary);
         symlink($target, $this->binary);
 
-        $this->assertUntrusted($this->binary);
-        $this->assertUntrusted($target);
-
-        unlink($this->binary);
-        chmod($target, 0644);
-        unlink($target);
-        file_put_contents($this->binary, "trusted-agent\n");
-        chmod($this->binary, 0555);
+        try {
+            $this->assertUntrusted($this->binary);
+        } finally {
+            unlink($this->binary);
+            chmod($target, 0644);
+            unlink($target);
+            file_put_contents($this->binary, "trusted-agent\n");
+            chmod($this->binary, 0755);
+        }
     }
 
-    public function testDirectDeploymentRequiresEveryParentToBeNonWritableByPhp(): void
+    public function testEveryAncestorMustBeNonWritableByPhp(): void
     {
-        $validator = $this->validator(
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('AGENT_BINARY_UNTRUSTED');
+        $this->validator(
             static fn(): bool => false,
             static fn(): bool => false,
             static fn(): bool => true,
-        );
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('AGENT_BINARY_UNTRUSTED');
-        $validator->validate($this->binary);
+        )->validate($this->binary);
     }
 
-    public function testReadOnlyMountCannotBypassMutableContainerAncestors(): void
+    public function testReadOnlyMountCannotBypassMutableAncestors(): void
     {
-        $validator = $this->validator(
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('AGENT_BINARY_UNTRUSTED');
+        $this->validator(
             static fn(): bool => true,
             static fn(): bool => false,
             static fn(): bool => true,
-        );
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('AGENT_BINARY_UNTRUSTED');
-        $validator->validate($this->binary);
+        )->validate($this->binary);
     }
 
     public function testDirectDeploymentMustProveFileCapabilitiesAreAbsent(): void
     {
-        $validator = $this->validator(
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('AGENT_BINARY_UNTRUSTED');
+        $this->validator(
             static fn(): bool => false,
             static fn(): bool => true,
             static fn(): bool => false,
-        );
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('AGENT_BINARY_UNTRUSTED');
-        $validator->validate($this->binary);
+        )->validate($this->binary);
     }
 
     private function validator(
         \Closure $mountProof,
         ?\Closure $ancestorProof = null,
         ?\Closure $capabilityAbsentProof = null,
-    ): AgentBinaryTrustValidator
-    {
+    ): AgentBinaryTrustValidator {
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : getmyuid();
 
         return new AgentBinaryTrustValidator(
@@ -191,17 +191,13 @@ final class AgentBinaryTrustValidatorTest extends TestCase
 
     private function resetFixture(): void
     {
-        chmod($this->root . '/bin', 0755);
+        chmod($this->active, 0750);
         if (is_link($this->binary)) {
             unlink($this->binary);
         }
         if (!is_file($this->binary)) {
             file_put_contents($this->binary, "trusted-agent\n");
         }
-        chmod($this->binary, 0555);
-        chmod($this->checksums, 0644);
-        file_put_contents($this->checksums, hash_file('sha256', $this->binary) . "  mallbase-agent-linux-amd64\n");
-        chmod($this->checksums, 0444);
-        chmod($this->root . '/bin', 0555);
+        chmod($this->binary, 0755);
     }
 }

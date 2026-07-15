@@ -13,9 +13,12 @@ final class AgentHeartbeatRunnerTest extends TestCase
     public function testRunnerReturnsDecodedHeartbeatResult(): void
     {
         $executor = static function (array $command, string $stdin, int $timeoutMilliseconds): array {
-            self::assertSame(['/app/upgrade/bin/mallbase-agent-linux-amd64', 'heartbeat'], $command);
+            self::assertSame(['/app/upgrade/bin/active/mallbase-agent', 'heartbeat'], $command);
             self::assertSame(5000, $timeoutMilliseconds);
-            self::assertSame('https://platform.gosowong.cn', json_decode($stdin, true, 512, JSON_THROW_ON_ERROR)['platform_base_url']);
+            self::assertArrayNotHasKey(
+                'platform_base_url',
+                json_decode($stdin, true, 512, JSON_THROW_ON_ERROR),
+            );
 
             return [
                 'exit_code' => 0,
@@ -26,7 +29,7 @@ final class AgentHeartbeatRunnerTest extends TestCase
 
         $result = (new AgentHeartbeatRunner(
             $executor,
-            '/app/upgrade/bin/mallbase-agent-linux-amd64',
+            '/app/upgrade/bin/active/mallbase-agent',
             5000,
         ))->run($this->payload());
 
@@ -45,7 +48,7 @@ final class AgentHeartbeatRunnerTest extends TestCase
                 'stdout' => '{"ok":true,"skipped":"heartbeat_active"}',
                 'stderr' => '',
             ],
-            '/app/upgrade/bin/mallbase-agent-linux-amd64',
+            '/app/upgrade/bin/active/mallbase-agent',
             5000,
         );
 
@@ -71,7 +74,7 @@ final class AgentHeartbeatRunnerTest extends TestCase
         foreach ($cases as $name => $response) {
             $runner = new AgentHeartbeatRunner(
                 static fn(): array => $response,
-                '/app/upgrade/bin/mallbase-agent-linux-amd64',
+                '/app/upgrade/bin/active/mallbase-agent',
                 5000,
             );
             $result = $runner->run($this->payload($secret));
@@ -97,7 +100,7 @@ final class AgentHeartbeatRunnerTest extends TestCase
         foreach ($invalid as $stdout) {
             $runner = new AgentHeartbeatRunner(
                 static fn(): array => ['exit_code' => 0, 'stdout' => $stdout, 'stderr' => ''],
-                '/app/upgrade/bin/mallbase-agent-linux-amd64',
+                '/app/upgrade/bin/active/mallbase-agent',
                 5000,
             );
             self::assertFalse($runner->run($this->payload())->ok, $stdout);
@@ -109,14 +112,12 @@ final class AgentHeartbeatRunnerTest extends TestCase
         $root = sys_get_temp_dir() . '/mallbase-agent-runner-' . bin2hex(random_bytes(8));
         mkdir($root, 0755);
         $bin = $root . '/bin';
-        mkdir($bin, 0755);
-        $binary = $bin . '/mallbase-agent-linux-amd64';
-        $checksums = $bin . '/checksums.sha256';
+        $active = $bin . '/active';
+        mkdir($active, 0750, true);
+        $binary = $active . '/mallbase-agent';
         file_put_contents($binary, "#!/bin/sh\nprintf '%s\\n' '{\"ok\":true,\"instance_id\":\"c6f83b5e-aadc-4a65-9c71-79a64aa22e58\"}'\n");
-        chmod($binary, 0555);
-        file_put_contents($checksums, hash_file('sha256', $binary) . "  mallbase-agent-linux-amd64\n");
-        chmod($checksums, 0444);
-        chmod($bin, 0555);
+        chmod($binary, 0755);
+        chmod($active, 0750);
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : getmyuid();
         $validator = new AgentBinaryTrustValidator(
             $uid,
@@ -131,11 +132,9 @@ final class AgentHeartbeatRunnerTest extends TestCase
             self::assertTrue($result->ok, $result->error);
             self::assertSame('c6f83b5e-aadc-4a65-9c71-79a64aa22e58', $result->instanceId);
         } finally {
-            chmod($bin, 0755);
             chmod($binary, 0644);
-            chmod($checksums, 0644);
             @unlink($binary);
-            @unlink($checksums);
+            @rmdir($active);
             @rmdir($bin);
             @rmdir($root);
         }
@@ -146,14 +145,12 @@ final class AgentHeartbeatRunnerTest extends TestCase
         $root = sys_get_temp_dir() . '/mallbase-agent-duplex-' . bin2hex(random_bytes(8));
         mkdir($root, 0755);
         $bin = $root . '/bin';
-        mkdir($bin, 0755);
-        $binary = $bin . '/mallbase-agent-linux-amd64';
-        $checksums = $bin . '/checksums.sha256';
+        $active = $bin . '/active';
+        mkdir($active, 0750, true);
+        $binary = $active . '/mallbase-agent';
         file_put_contents($binary, "#!/bin/sh\nhead -c 131072 /dev/zero | tr '\\000' x\ncat >/dev/null\nprintf '%s\\n' '{\"ok\":true}'\n");
-        chmod($binary, 0555);
-        file_put_contents($checksums, hash_file('sha256', $binary) . "  mallbase-agent-linux-amd64\n");
-        chmod($checksums, 0444);
-        chmod($bin, 0555);
+        chmod($binary, 0755);
+        chmod($active, 0750);
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : getmyuid();
         $validator = new AgentBinaryTrustValidator(
             $uid,
@@ -174,11 +171,9 @@ final class AgentHeartbeatRunnerTest extends TestCase
             self::assertSame('AGENT_OUTPUT_INVALID', $result->error);
             self::assertLessThan(2500, $elapsedMilliseconds, 'duplex pipes must progress under one deadline');
         } finally {
-            chmod($bin, 0755);
             chmod($binary, 0644);
-            chmod($checksums, 0644);
             @unlink($binary);
-            @unlink($checksums);
+            @rmdir($active);
             @rmdir($bin);
             @rmdir($root);
         }
@@ -188,7 +183,6 @@ final class AgentHeartbeatRunnerTest extends TestCase
     private function payload(string $token = 'secret'): array
     {
         return [
-            'platform_base_url' => 'https://platform.gosowong.cn',
             'instance_id' => 'c6f83b5e-aadc-4a65-9c71-79a64aa22e58',
             'token' => $token,
             'activation_secret' => '',
@@ -197,4 +191,5 @@ final class AgentHeartbeatRunnerTest extends TestCase
             'components' => [],
         ];
     }
+
 }

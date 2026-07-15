@@ -23,6 +23,7 @@ final class UpgradeRecord extends BaseModel
         'queued',
         'running',
         'awaiting_php_restart',
+        'succeeded',
         'failed',
     ];
 

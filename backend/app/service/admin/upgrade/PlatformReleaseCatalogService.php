@@ -4,33 +4,36 @@ declare(strict_types=1);
 
 namespace app\service\admin\upgrade;
 
+use app\service\install\AgentBinaryTrustValidator;
+use app\service\install\AgentProcessRunner;
+use app\service\upgrade\UpgradeStrictJsonDecoder;
 use Closure;
-use JsonException;
 use RuntimeException;
 use Throwable;
 
 /**
- * 读取平台公开发布目录；仅做版本发现，不代替 Agent 的执行前兼容校验。
+ * 通过固定 Agent 子命令读取公开发布目录；仅做版本发现，不代替执行前 resolve。
  */
 final class PlatformReleaseCatalogService
 {
     private const APP_CODE = 'mallbase';
 
-    private const MAXIMUM_RESPONSE_BYTES = 262_144;
+    /** stdout 包含唯一的终止换行。 */
+    private const MAXIMUM_STDOUT_BYTES = 262_144;
 
-    /** @var Closure(string):array{status:int,body:string} */
-    private readonly Closure $requester;
+    private const MAXIMUM_STDERR_BYTES = 64 * 1024;
 
-    private readonly string $platformOrigin;
+    /** @var Closure(array<int,string>,string,int):array<string,mixed>|null */
+    private readonly ?Closure $executor;
 
     public function __construct(
-        ?string $platformOrigin = null,
-        ?Closure $requester = null,
+        ?Closure $executor = null,
+        private readonly ?string $binaryPath = null,
+        private readonly int $timeoutMilliseconds = 10_000,
+        private readonly ?AgentBinaryTrustValidator $trustValidator = null,
         private readonly ?Closure $clock = null,
     ) {
-        $origin = $platformOrigin ?? (string) config('agent.platform_origin', '');
-        $this->platformOrigin = $this->normalizeOrigin($origin);
-        $this->requester = $requester ?? fn(string $url): array => $this->request($url);
+        $this->executor = $executor;
     }
 
     /**
@@ -48,28 +51,49 @@ final class PlatformReleaseCatalogService
         if (!$this->validVersion($currentVersion)) {
             throw new RuntimeException('UPGRADE_CATALOG_ARGUMENT_INVALID');
         }
-        $requester = $this->requester;
+        $binary = $this->binaryPath ?? $this->defaultBinaryPath();
+        if ($binary === null) {
+            $this->fail();
+        }
+
         try {
-            $response = $requester(
-                $this->platformOrigin . '/api/v1/releases?' . http_build_query(['app_code' => self::APP_CODE]),
+            $process = (new AgentProcessRunner($this->executor, $this->trustValidator))->run(
+                $binary,
+                'catalog',
+                '',
+                $this->timeoutMilliseconds,
+                self::MAXIMUM_STDOUT_BYTES,
+                self::MAXIMUM_STDERR_BYTES,
             );
         } catch (Throwable) {
             $this->fail();
         }
-        if (!is_array($response) || array_keys($response) !== ['status', 'body']
-            || ($response['status'] ?? null) !== 200 || !is_string($response['body'] ?? null)) {
+        if (!$this->exactObject($process, ['exit_code', 'stdout', 'stderr', 'timed_out'])
+            || !is_int($process['exit_code']) || $process['exit_code'] !== 0
+            || !is_string($process['stdout']) || !is_string($process['stderr'])
+            || !is_bool($process['timed_out']) || $process['timed_out']
+            || $process['stderr'] !== '') {
             $this->fail();
         }
-        $raw = $response['body'];
-        if ($raw === '' || strlen($raw) > self::MAXIMUM_RESPONSE_BYTES || !mb_check_encoding($raw, 'UTF-8')) {
+
+        $stdout = $process['stdout'];
+        if ($stdout === '' || strlen($stdout) > self::MAXIMUM_STDOUT_BYTES
+            || !str_ends_with($stdout, "\n") || !mb_check_encoding($stdout, 'UTF-8')) {
             $this->fail();
         }
+        $raw = substr($stdout, 0, -1);
+        if ($raw === '' || str_ends_with($raw, "\n") || !$this->isCompactJsonObject($raw)) {
+            $this->fail();
+        }
+
         try {
-            $document = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            $this->fail();
-        }
-        if (!$this->exactObject($document, ['data'])) {
+            $document = (new UpgradeStrictJsonDecoder(self::MAXIMUM_STDOUT_BYTES))->decode(
+                $raw,
+                'application/json',
+                strlen($raw),
+                ['data'],
+            );
+        } catch (Throwable) {
             $this->fail();
         }
         $data = $document['data'];
@@ -128,6 +152,7 @@ final class PlatformReleaseCatalogService
         } catch (Throwable) {
             $this->fail();
         }
+
         $notes = [];
         foreach ($release['release_notes'] as $note) {
             if (!is_string($note) || $note === '' || strlen($note) > 1024
@@ -137,15 +162,14 @@ final class PlatformReleaseCatalogService
             $notes[] = $note;
         }
 
-        $directKinds = [];
+        $hasDirectFull = false;
         foreach ($release['packages'] as $package) {
-            $kind = $this->directPackageKind($package, $currentVersion);
-            if ($kind !== null) {
-                $directKinds[$kind] = true;
+            if ($this->isDirectFullPackage($package, $currentVersion)) {
+                $hasDirectFull = true;
             }
         }
         if ($release['channel'] !== 'stable' || $this->compareVersions($version, $currentVersion) <= 0
-            || $directKinds === []) {
+            || !$hasDirectFull) {
             return null;
         }
         $summary = implode('；', $notes);
@@ -158,12 +182,12 @@ final class PlatformReleaseCatalogService
             'from_version' => $currentVersion,
             'channel' => 'stable',
             'summary' => $summary,
-            'package_kind' => isset($directKinds['patch']) ? 'patch' : 'full',
+            'package_kind' => 'full',
             'released_at' => $releasedAt,
         ];
     }
 
-    private function directPackageKind(mixed $package, string $currentVersion): ?string
+    private function isDirectFullPackage(mixed $package, string $currentVersion): bool
     {
         if (!is_array($package) || array_is_list($package)) {
             $this->fail();
@@ -182,6 +206,7 @@ final class PlatformReleaseCatalogService
         if ($keys !== $sortedRequired && $keys !== $sortedAllowed) {
             $this->fail();
         }
+
         $fromLayout = $package['from_storage_layout_version'];
         $toLayout = $package['to_storage_layout_version'];
         $bootstrap = $package['required_bootstrap_version'] ?? null;
@@ -189,7 +214,7 @@ final class PlatformReleaseCatalogService
             || !in_array($package['package_kind'], ['full', 'patch'], true)
             || !is_int($fromLayout) || $fromLayout < 0 || $fromLayout > 1_000_000
             || !is_int($toLayout) || $toLayout < $fromLayout || $toLayout > 1_000_000
-            || !is_null($bootstrap) && !$this->validVersion($bootstrap)
+            || $bootstrap !== null && !$this->validVersion($bootstrap)
             || !is_string($package['signing_key_id']) || $package['signing_key_id'] === ''
             || strlen($package['signing_key_id']) > 128
             || !is_string($package['package_sha256'])
@@ -197,11 +222,54 @@ final class PlatformReleaseCatalogService
             || !is_int($package['package_size_bytes']) || $package['package_size_bytes'] < 1) {
             $this->fail();
         }
-        if ($package['from_version'] !== $currentVersion || $fromLayout !== $toLayout || $bootstrap !== null) {
+
+        return $package['package_kind'] === 'full'
+            && $package['from_version'] === $currentVersion
+            && $fromLayout === 1
+            && $toLayout === 1
+            && $bootstrap === null;
+    }
+
+    private function defaultBinaryPath(): ?string
+    {
+        $root = (string) config('agent.upgrade_root', '');
+        if ($root === '') {
             return null;
         }
 
-        return $package['package_kind'];
+        return rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'bin'
+            . DIRECTORY_SEPARATOR . 'active' . DIRECTORY_SEPARATOR . 'mallbase-agent';
+    }
+
+    private function isCompactJsonObject(string $raw): bool
+    {
+        if ($raw[0] !== '{' || $raw[strlen($raw) - 1] !== '}') {
+            return false;
+        }
+
+        $inString = false;
+        $escaped = false;
+        $length = strlen($raw);
+        for ($index = 0; $index < $length; $index++) {
+            $character = $raw[$index];
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($character === '\\') {
+                    $escaped = true;
+                } elseif ($character === '"') {
+                    $inString = false;
+                }
+                continue;
+            }
+            if ($character === '"') {
+                $inString = true;
+            } elseif ($character === ' ' || $character === "\t" || $character === "\r" || $character === "\n") {
+                return false;
+            }
+        }
+
+        return !$inString && !$escaped;
     }
 
     /** @param list<string> $fields */
@@ -219,12 +287,8 @@ final class PlatformReleaseCatalogService
 
     private function validVersion(mixed $value): bool
     {
-        if (!is_string($value) || strlen($value) > 64
-            || preg_match('/^(0|[1-9][0-9]{0,18})\.(0|[1-9][0-9]{0,18})\.(0|[1-9][0-9]{0,18})$/D', $value) !== 1) {
-            return false;
-        }
-
-        return true;
+        return is_string($value) && strlen($value) <= 64
+            && preg_match('/^(0|[1-9][0-9]{0,18})\.(0|[1-9][0-9]{0,18})\.(0|[1-9][0-9]{0,18})$/D', $value) === 1;
     }
 
     private function compareVersions(string $left, string $right): int
@@ -243,48 +307,6 @@ final class PlatformReleaseCatalogService
         }
 
         return 0;
-    }
-
-    private function normalizeOrigin(string $origin): string
-    {
-        $parts = parse_url($origin);
-        if (!is_array($parts) || ($parts['scheme'] ?? null) !== 'https'
-            || !is_string($parts['host'] ?? null) || $parts['host'] === ''
-            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
-            || isset($parts['path']) && !in_array($parts['path'], ['', '/'], true)) {
-            throw new RuntimeException('UPGRADE_CATALOG_UNAVAILABLE');
-        }
-        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-
-        return 'https://' . $parts['host'] . $port;
-    }
-
-    /** @return array{status:int,body:string} */
-    private function request(string $url): array
-    {
-        if (!function_exists('curl_init')) {
-            $this->fail();
-        }
-        $handle = curl_init($url);
-        if ($handle === false) {
-            $this->fail();
-        }
-        curl_setopt_array($handle, [
-            CURLOPT_HTTPGET => true,
-            CURLOPT_HTTPHEADER => ['Accept: application/json'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT_MS => 3000,
-            CURLOPT_TIMEOUT_MS => 8000,
-            CURLOPT_FOLLOWLOCATION => false,
-        ]);
-        $raw = curl_exec($handle);
-        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-        curl_close($handle);
-        if (!is_string($raw)) {
-            $this->fail();
-        }
-
-        return ['status' => $status, 'body' => $raw];
     }
 
     private function fail(): never

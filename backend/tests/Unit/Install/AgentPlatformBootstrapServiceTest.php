@@ -140,7 +140,6 @@ final class AgentPlatformBootstrapServiceTest extends TestCase
         return [
             'schema_version' => 1,
             'revision' => 1,
-            'platform_base_url' => 'https://platform.gosowong.cn',
             'instance_id' => BootstrapMemoryStore::INSTANCE_ID,
             'token' => '',
             'activation_secret' => 'activation-proof',

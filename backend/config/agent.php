@@ -41,11 +41,8 @@ $readDecimal = static function (string $name, int $default, int $minimum, int $m
 $projectRoot = dirname(__DIR__, 2);
 $configuredRootValue = $readEnvironment('MALLBASE_UPGRADE_ROOT');
 $configuredRoot = is_string($configuredRootValue) ? $configuredRootValue : '';
-$platformOrigin = 'https://platform.gosowong.cn';
-
 return [
     'upgrade_root' => $configuredRoot !== '' ? $configuredRoot : $projectRoot . DIRECTORY_SEPARATOR . 'upgrade',
-    'platform_origin' => $platformOrigin,
     'expected_gid' => $readDecimal('MALLBASE_UPGRADE_SHARED_GID', 10001, 0, 4_294_967_294),
     'agent_uid' => $readDecimal('MALLBASE_AGENT_UID', 10001, 0, 4_294_967_294),
     'php_euid' => function_exists('posix_geteuid') ? posix_geteuid() : -1,

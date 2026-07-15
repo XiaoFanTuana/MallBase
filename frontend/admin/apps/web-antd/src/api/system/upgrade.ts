@@ -2,7 +2,12 @@ import { requestClient } from '#/api/request';
 
 export namespace UpgradeApi {
   export type Action = 'rollback' | 'upgrade';
-  export type Status = 'awaiting_php_restart' | 'failed' | 'queued' | 'running';
+  export type Status =
+    | 'awaiting_php_restart'
+    | 'failed'
+    | 'queued'
+    | 'running'
+    | 'succeeded';
 
   export interface RecordItem {
     action: Action;

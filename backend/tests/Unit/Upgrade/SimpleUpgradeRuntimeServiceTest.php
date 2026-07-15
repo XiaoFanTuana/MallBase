@@ -15,6 +15,7 @@ use RuntimeException;
 final class SimpleUpgradeRuntimeServiceTest extends TestCase
 {
     private const JOB_ID = '11111111-1111-4111-8111-111111111111';
+    private const ROLLBACK_JOB_ID = '22222222-2222-4222-8222-222222222222';
 
     private string $root;
     private SimpleUpgradeGate $gate;
@@ -57,7 +58,7 @@ final class SimpleUpgradeRuntimeServiceTest extends TestCase
 
         $backup = $service->backup(self::JOB_ID, []);
         self::assertSame('upgrade/backups/' . self::JOB_ID . '/database.sql', $backup['database_path']);
-        $restored = $service->restore(self::JOB_ID, [
+        $restored = $service->restore(self::ROLLBACK_JOB_ID, [
             'source_job_id' => self::JOB_ID,
             'database_path' => $backup['database_path'],
             'database_sha256' => $backup['database_sha256'],
@@ -102,7 +103,6 @@ final class SimpleUpgradeRuntimeServiceTest extends TestCase
                 'action' => 'upgrade',
                 'target_version' => '1.3.0',
             ]),
-            fn() => $service->resume(self::JOB_ID, []),
         ] as $operation) {
             try {
                 $operation();
@@ -131,6 +131,7 @@ final class SimpleUpgradeRuntimeServiceTest extends TestCase
 
         self::assertSame(['state' => 'normal'], $service->resume(self::JOB_ID, []));
         self::assertSame('normal', $this->gate->state());
+        self::assertSame(['state' => 'normal'], $service->resume(self::JOB_ID, []));
     }
 
     public function testPauseRejectsUnknownFieldOrInvalidAction(): void

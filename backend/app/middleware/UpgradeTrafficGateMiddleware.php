@@ -24,7 +24,6 @@ final readonly class UpgradeTrafficGateMiddleware
 
         $path = trim($request->pathinfo(), '/');
         if ($request->isOptions() || $this->isHealthPath($path)
-            || $this->isSimpleUpgradePath($path, strtoupper($request->method()))
             || $path === 'admin/api' || str_starts_with($path, 'admin/api/')) {
             return $next($request);
         }
@@ -66,21 +65,6 @@ final readonly class UpgradeTrafficGateMiddleware
         } catch (Throwable) {
             return 'unavailable';
         }
-    }
-
-    private function isSimpleUpgradePath(string $path, string $method): bool
-    {
-        if ($method !== 'POST') {
-            return false;
-        }
-
-        $uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-
-        return preg_match(
-            '#^upgrade/api/simple/jobs/' . $uuid
-            . '/(?:pause|backup-database|migrations|restore-database|awaiting-restart|resume)$#D',
-            $path,
-        ) === 1;
     }
 
     private function isHealthPath(string $path): bool

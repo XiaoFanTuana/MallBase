@@ -40,12 +40,13 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $instance = $this->store()->initializeFromLegacy(new InstallLockService($this->legacyPath), 1000);
 
         self::assertSame('activating', $instance['activation_state']);
-        self::assertSame('https://platform.gosowong.cn', $instance['platform_base_url']);
+        self::assertArrayNotHasKey('platform_base_url', $instance);
         self::assertArrayNotHasKey('upgrade_namespace_id', $instance);
         self::assertArrayNotHasKey('session_derivation_key', $instance);
 
         $persisted = json_decode((string) file_get_contents($this->root . '/config/instance.json'), true);
         self::assertIsArray($persisted);
+        self::assertArrayNotHasKey('platform_base_url', $persisted);
         self::assertArrayNotHasKey('upgrade_namespace_id', $persisted);
         self::assertArrayNotHasKey('session_derivation_key', $persisted);
     }
@@ -67,6 +68,7 @@ final class AgentInstanceConfigStoreTest extends TestCase
         self::assertSame('c6f83b5e-aadc-4a65-9c71-79a64aa22e58', $instance['instance_id']);
         self::assertSame(900, $instance['components']['backend_php']);
         self::assertArrayNotHasKey('upgrade_namespace_id', $instance);
+        self::assertArrayNotHasKey('platform_base_url', $instance);
     }
 
     public function testLegacyInstanceDocumentLoadsAndConvergesOnNextWrite(): void
@@ -91,6 +93,7 @@ final class AgentInstanceConfigStoreTest extends TestCase
         $persisted = json_decode((string) file_get_contents($this->root . '/config/instance.json'), true);
         self::assertArrayNotHasKey('upgrade_namespace_id', $persisted);
         self::assertArrayNotHasKey('session_derivation_key', $persisted);
+        self::assertArrayNotHasKey('platform_base_url', $persisted);
     }
 
     public function testActivationAndReportStateMachinesRemainAvailable(): void
@@ -129,7 +132,7 @@ final class AgentInstanceConfigStoreTest extends TestCase
         return [
             'schema_version' => 1,
             'revision' => 1,
-            'platform_base_url' => 'https://platform.gosowong.cn',
+            'platform_base_url' => 'https://legacy-platform.invalid',
             'instance_id' => 'c6f83b5e-aadc-4a65-9c71-79a64aa22e58',
             'token' => 'mbt_' . str_repeat('a', 32),
             'activation_secret' => '',
@@ -154,7 +157,6 @@ final class AgentInstanceConfigStoreTest extends TestCase
     {
         return new AgentInstanceConfigStore(
             $this->files,
-            'https://platform.gosowong.cn',
             900,
             3600,
             50,

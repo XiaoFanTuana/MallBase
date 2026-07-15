@@ -64,7 +64,8 @@ final class UpgradeAdminService extends BaseService
     }
 
     /**
-     * 使用当前版本查询 Platform 可升级版本；Agent 不参与后台版本列表展示。
+     * 使用当前版本通过固定 Agent catalog 子命令查询可升级版本。
+     * catalog 只负责后台版本发现，不代替任务执行前的认证 resolve。
      *
      * @return array<string, mixed>
      */

@@ -58,7 +58,8 @@ const actionPending = computed(
 const rollbackAvailable = computed(() =>
   records.value.some(
     (record) =>
-      record.backup_path !== '' && record.status === 'awaiting_php_restart',
+      record.backup_path !== '' &&
+      ['awaiting_php_restart', 'succeeded'].includes(record.status),
   ),
 );
 const catalogStateText = computed(() => {
@@ -112,10 +113,11 @@ const recordColumns = [
 ];
 
 const statusMeta: Record<string, { color: string; label: string }> = {
-  awaiting_php_restart: { color: 'warning', label: '等待手动部署 PHP 代码' },
+  awaiting_php_restart: { color: 'warning', label: '等待 PHP 重启确认' },
   failed: { color: 'error', label: '失败' },
   queued: { color: 'default', label: '等待执行' },
   running: { color: 'processing', label: '执行中' },
+  succeeded: { color: 'success', label: '已完成' },
 };
 
 function actionLabel(action: UpgradeApi.Action): string {

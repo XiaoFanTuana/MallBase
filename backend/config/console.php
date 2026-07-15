@@ -11,6 +11,7 @@ use app\command\OrderRecoverRefund;
 use app\command\PointsReleaseCommand;
 use app\command\SyncPermissions;
 use app\command\SyncSettingPermissions;
+use app\command\UpgradeRuntimeCommand;
 
 return [
     // 指令定义
@@ -24,5 +25,6 @@ return [
         'order:recover-refund' => OrderRecoverRefund::class,
         'points:release' => PointsReleaseCommand::class,
         'install:auto' => InstallAuto::class,
+        'upgrade:runtime' => UpgradeRuntimeCommand::class,
     ],
 ];

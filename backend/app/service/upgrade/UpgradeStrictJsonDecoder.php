@@ -13,7 +13,7 @@ final readonly class UpgradeStrictJsonDecoder
 {
     public function __construct(private int $maximumBytes = 8192)
     {
-        if ($this->maximumBytes < 2 || $this->maximumBytes > 65536) {
+        if ($this->maximumBytes < 2 || $this->maximumBytes > 262_144) {
             throw new RuntimeException('UPGRADE_JSON_INVALID');
         }
     }

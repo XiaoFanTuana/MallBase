@@ -9,15 +9,14 @@ use RuntimeException;
 use Throwable;
 
 /**
- * 校验固定 Agent 二进制及其同目录校验清单的不可替换信任边界。
+ * 校验固定 Agent 活动二进制的最小执行信任边界。
+ *
+ * 发布候选及其签名由 Agent 自身校验；PHP 只允许执行 Agent 用户拥有的
+ * 固定 active/mallbase-agent 文件，且 PHP 用户不能替换其目录或二进制。
  */
 final class AgentBinaryTrustValidator
 {
-    private const MAX_CHECKSUM_BYTES = 64 * 1024;
-    private const ALLOWED_BINARIES = [
-        'mallbase-agent-linux-amd64',
-        'mallbase-agent-linux-arm64',
-    ];
+    private const ACTIVE_BINARY_NAME = 'mallbase-agent';
 
     /** @var Closure(string):bool */
     private readonly Closure $readOnlyMountProof;
@@ -55,22 +54,17 @@ final class AgentBinaryTrustValidator
     {
         try {
             if ($binaryPath === '' || !str_starts_with($binaryPath, DIRECTORY_SEPARATOR)
-                || str_contains($binaryPath, "\0") || $binaryPath !== $this->cleanAbsolutePath($binaryPath)) {
+                || str_contains($binaryPath, "\0") || $binaryPath !== $this->cleanAbsolutePath($binaryPath)
+                || basename($binaryPath) !== self::ACTIVE_BINARY_NAME
+                || basename(dirname($binaryPath)) !== 'active') {
                 $this->fail();
             }
-            $basename = basename($binaryPath);
-            if (!in_array($basename, self::ALLOWED_BINARIES, true)) {
-                $this->fail();
-            }
-            $directory = dirname($binaryPath);
-            $checksumsPath = $directory . DIRECTORY_SEPARATOR . 'checksums.sha256';
 
+            $directory = dirname($binaryPath);
             $directoryStat = $this->lstat($directory);
-            $this->assertDirectory($directoryStat, $this->expectedOwnerUid, 0555);
             $binaryStat = $this->lstat($binaryPath);
-            $checksumStat = $this->lstat($checksumsPath);
-            $this->assertRegular($binaryStat, $this->expectedOwnerUid, 0555);
-            $this->assertRegular($checksumStat, $this->expectedOwnerUid, 0444);
+            $this->assertDirectory($directoryStat, $this->expectedOwnerUid, 0750);
+            $this->assertRegular($binaryStat, $this->expectedOwnerUid, 0755);
 
             $mountProof = $this->readOnlyMountProof;
             $ancestorProof = $this->ancestorImmutabilityProof;
@@ -81,18 +75,10 @@ final class AgentBinaryTrustValidator
                 $this->fail();
             }
 
-            [$checksumBytes, $checksumOpened] = $this->readPinned($checksumsPath, self::MAX_CHECKSUM_BYTES);
-            $this->assertSameIdentity($checksumStat, $checksumOpened);
-            $expected = $this->parseChecksum($checksumBytes, $basename);
-            [$binaryHash, $binaryOpened] = $this->hashPinned($binaryPath);
+            [, $binaryOpened] = $this->hashPinned($binaryPath);
             $this->assertSameIdentity($binaryStat, $binaryOpened);
-            if (!hash_equals($expected, $binaryHash)) {
-                $this->fail();
-            }
-
             $this->assertSameIdentity($directoryStat, $this->lstat($directory));
             $this->assertSameIdentity($binaryStat, $this->lstat($binaryPath));
-            $this->assertSameIdentity($checksumStat, $this->lstat($checksumsPath));
         } catch (RuntimeException $exception) {
             if ($exception->getMessage() === 'AGENT_BINARY_UNTRUSTED') {
                 throw $exception;
@@ -173,34 +159,6 @@ final class AgentBinaryTrustValidator
     }
 
     /** @return array{0:string,1:array<string|int,mixed>} */
-    private function readPinned(string $path, int $maximum): array
-    {
-        $handle = @fopen($path, 'rb');
-        if (!is_resource($handle)) {
-            $this->fail();
-        }
-        try {
-            $opened = fstat($handle);
-            if (!is_array($opened)) {
-                $this->fail();
-            }
-            $bytes = stream_get_contents($handle, $maximum + 1);
-            if (!is_string($bytes) || $bytes === '' || strlen($bytes) > $maximum || !feof($handle)) {
-                $this->fail();
-            }
-            $after = fstat($handle);
-            if (!is_array($after)) {
-                $this->fail();
-            }
-            $this->assertSameIdentity($opened, $after);
-
-            return [$bytes, $opened];
-        } finally {
-            fclose($handle);
-        }
-    }
-
-    /** @return array{0:string,1:array<string|int,mixed>} */
     private function hashPinned(string $path): array
     {
         $handle = @fopen($path, 'rb');
@@ -227,31 +185,6 @@ final class AgentBinaryTrustValidator
         } finally {
             fclose($handle);
         }
-    }
-
-    private function parseChecksum(string $bytes, string $basename): string
-    {
-        $found = null;
-        $seen = [];
-        $lines = explode("\n", $bytes);
-        foreach ($lines as $index => $line) {
-            if ($line === '' && $index === count($lines) - 1) {
-                continue;
-            }
-            if (preg_match('/^([0-9a-f]{64})  (mallbase-agent-linux-(?:amd64|arm64))$/D', $line, $match) !== 1
-                || isset($seen[$match[2]])) {
-                $this->fail();
-            }
-            $seen[$match[2]] = true;
-            if ($match[2] === $basename) {
-                $found = $match[1];
-            }
-        }
-        if (!is_string($found)) {
-            $this->fail();
-        }
-
-        return $found;
     }
 
     /** @return array<string|int, mixed> */
@@ -293,7 +226,6 @@ final class AgentBinaryTrustValidator
             }
             $mountOptions = explode(',', $parts[5]);
             $superOptions = isset($parts[$separator + 3]) ? explode(',', $parts[$separator + 3]) : [];
-
             $options = array_values(array_unique([...$mountOptions, ...$superOptions]));
 
             return in_array('ro', $options, true) && in_array('nosuid', $options, true);

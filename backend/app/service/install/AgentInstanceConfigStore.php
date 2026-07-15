@@ -19,7 +19,7 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
     private const MAX_TIMESTAMP = 4_102_444_800;
 
     private const TOP_LEVEL_FIELDS = [
-        'schema_version', 'revision', 'platform_base_url',
+        'schema_version', 'revision',
         'instance_id', 'token', 'activation_secret', 'activation_generation',
         'activation_secret_expires_at', 'activation_state', 'disabled', 'components',
         'report', 'updated_at',
@@ -48,22 +48,16 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         'backend_php', 'admin_web', 'uniapp', 'wechat_miniapp', 'queue', 'cron', 'agent',
     ];
 
-    private readonly string $platformOrigin;
-
     public function __construct(
         private readonly UpgradeSharedFileStore $files,
-        string $platformOrigin,
         private readonly int $activationProofLifetime,
         private readonly int $componentSeenThrottle,
         private readonly int $legacyLockTimeoutMilliseconds = 2000,
     ) {
-        $normalizedOrigin = $this->normalizeOrigin($platformOrigin);
-        if (PHP_INT_SIZE !== 8 || $normalizedOrigin === null
-            || $this->activationProofLifetime < 1 || $this->componentSeenThrottle < 1
+        if (PHP_INT_SIZE !== 8 || $this->activationProofLifetime < 1 || $this->componentSeenThrottle < 1
             || $this->legacyLockTimeoutMilliseconds < 1) {
             $this->fail('INSTANCE_ARGUMENT_INVALID');
         }
-        $this->platformOrigin = $normalizedOrigin;
     }
 
     /**
@@ -71,7 +65,7 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
      */
     public function load(): ?array
     {
-        return $this->loadUnlocked();
+        return $this->files->withInstanceLock(fn(): ?array => $this->loadUnlocked(true));
     }
 
     /**
@@ -117,7 +111,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
             $instance = [
                 'schema_version' => 1,
                 'revision' => 1,
-                'platform_base_url' => $this->platformOrigin,
                 'instance_id' => $instanceId,
                 'token' => $token,
                 'activation_secret' => $secret,
@@ -328,7 +321,7 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
     }
 
     /** @return array<string, mixed>|null */
-    private function loadUnlocked(): ?array
+    private function loadUnlocked(bool $convergeLegacy = false): ?array
     {
         $document = $this->files->readJson('instance');
         if ($document === null) {
@@ -336,7 +329,15 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         }
 
         try {
-            return $this->validateDocument($document);
+            $raw = get_object_vars($document);
+            $current = ($raw['schema_version'] ?? null) === 1
+                && $this->hasExactFields($raw, self::TOP_LEVEL_FIELDS);
+            $instance = $this->validateDocument($document);
+            if ($convergeLegacy && !$current) {
+                $this->writeInstance($instance);
+            }
+
+            return $instance;
         } catch (Throwable) {
             $this->fail('INSTANCE_INVALID');
         }
@@ -366,9 +367,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         if ((!$currentDocument && !$legacyV1Document && !$legacyV2Document)
             || !is_int($schemaVersion)
             || !is_int($raw['revision']) || $raw['revision'] < 1
-            || !is_string($raw['platform_base_url'])
-            || $this->normalizeOrigin($raw['platform_base_url']) !== $raw['platform_base_url']
-            || $raw['platform_base_url'] !== $this->platformOrigin
             || !is_string($raw['instance_id']) || !$this->validUuid($raw['instance_id'])
             || !is_string($raw['token']) || !$this->validToken($raw['token'])
             || ($legacyV2Document
@@ -410,7 +408,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         $instance = [
             'schema_version' => 1,
             'revision' => $raw['revision'],
-            'platform_base_url' => $raw['platform_base_url'],
             'instance_id' => $raw['instance_id'],
             'token' => $raw['token'],
         ];
@@ -437,7 +434,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
         $document = [
             'schema_version' => $instance['schema_version'],
             'revision' => $instance['revision'],
-            'platform_base_url' => $instance['platform_base_url'],
             'instance_id' => $instance['instance_id'],
             'token' => $instance['token'],
             'activation_secret' => $instance['activation_secret'],
@@ -768,38 +764,6 @@ final class AgentInstanceConfigStore implements AgentInstanceStateStore
                 && $instance['activation_secret_expires_at'] === 0,
             default => false,
         };
-    }
-
-    private function normalizeOrigin(string $value): ?string
-    {
-        if ($value === '' || strlen($value) > 2048 || trim($value) !== $value) {
-            return null;
-        }
-        $parts = parse_url($value);
-        if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])
-            || isset($parts['user']) || isset($parts['pass'])
-            || array_key_exists('query', $parts) || array_key_exists('fragment', $parts)
-            || (($parts['path'] ?? '') !== '' && ($parts['path'] ?? '') !== '/')) {
-            return null;
-        }
-        $scheme = strtolower((string) $parts['scheme']);
-        $host = strtolower((string) $parts['host']);
-        $hostForIp = trim($host, '[]');
-        $packedIp = @inet_pton($hostForIp);
-        $loopback = $host === 'localhost'
-            || is_string($packedIp) && (
-                strlen($packedIp) === 4 && ord($packedIp[0]) === 127
-                || $packedIp === inet_pton('::1')
-            );
-        if ($scheme !== 'https' && !($scheme === 'http' && $loopback)) {
-            return null;
-        }
-        $port = $parts['port'] ?? null;
-        if ($port !== null && (!is_int($port) || $port < 1 || $port > 65535)) {
-            return null;
-        }
-
-        return $scheme . '://' . $host . ($port === null ? '' : ':' . $port);
     }
 
     private function validUuid(string $value): bool

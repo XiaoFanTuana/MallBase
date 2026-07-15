@@ -7,7 +7,6 @@ namespace app;
 use app\cron\CronManager;
 use app\middleware\admin\UpgradeAdminGateMiddleware;
 use app\middleware\UpgradeTrafficGateMiddleware;
-use app\middleware\upgrade\SimpleUpgradeAuthMiddleware;
 use app\queue\UpgradeAwareWorker;
 use app\service\install\AgentHeartbeatClient;
 use app\service\install\AgentHeartbeatPayloadFactory;
@@ -19,6 +18,7 @@ use app\service\install\InstallLockService;
 use app\service\upgrade\SimpleDatabaseSnapshotService;
 use app\service\upgrade\SimpleSqlMigrationService;
 use app\service\upgrade\SimpleUpgradeGate;
+use app\service\upgrade\SimpleUpgradeCliService;
 use app\service\upgrade\SimpleUpgradeRuntimeService;
 use app\service\upgrade\UpgradeSharedFileStore;
 use app\service\upgrade\UpgradeStrictJsonDecoder;
@@ -59,7 +59,6 @@ final class UpgradeService extends Service
             AgentInstanceConfigStore::class => function (App $app): AgentInstanceConfigStore {
                 return new AgentInstanceConfigStore(
                     files: $app->make(UpgradeSharedFileStore::class),
-                    platformOrigin: (string) config('agent.platform_origin', ''),
                     activationProofLifetime: (int) config('agent.activation_proof_lifetime', 900),
                     componentSeenThrottle: (int) config('agent.component_seen_throttle', 3600),
                     legacyLockTimeoutMilliseconds: (int) config('agent.instance_lock_timeout_milliseconds', 2000),
@@ -107,9 +106,6 @@ final class UpgradeService extends Service
             CronManager::class => static function (App $app): CronManager {
                 return new CronManager($app->make(SimpleUpgradeGate::class));
             },
-            SimpleUpgradeAuthMiddleware::class => static function (App $app): SimpleUpgradeAuthMiddleware {
-                return new SimpleUpgradeAuthMiddleware($app->make(InstallLockService::class));
-            },
             SimpleDatabaseSnapshotService::class => function (): SimpleDatabaseSnapshotService {
                 $database = $this->databaseConfiguration();
                 $database['charset'] = (string) config('database.connections.mysql.charset', 'utf8mb4');
@@ -132,6 +128,12 @@ final class UpgradeService extends Service
                     gate: $app->make(SimpleUpgradeGate::class),
                     database: $app->make(SimpleDatabaseSnapshotService::class),
                     migrations: $app->make(SimpleSqlMigrationService::class),
+                );
+            },
+            SimpleUpgradeCliService::class => static function (App $app): SimpleUpgradeCliService {
+                return new SimpleUpgradeCliService(
+                    runtime: $app->make(SimpleUpgradeRuntimeService::class),
+                    decoder: $app->make(UpgradeStrictJsonDecoder::class),
                 );
             },
             Worker::class => function (App $app): Worker {

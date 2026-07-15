@@ -42,7 +42,7 @@ final class AgentHeartbeatPayloadFactoryTest extends TestCase
         $payload = $factory->create($instance, 'backend_php', 2_000_000);
 
         self::assertSame([
-            'platform_base_url', 'instance_id', 'token', 'activation_secret',
+            'instance_id', 'token', 'activation_secret',
             'app_version', 'environment', 'components',
         ], array_keys($payload));
         self::assertSame('1.2.3', $payload['app_version']['version']);
@@ -91,7 +91,7 @@ final class AgentHeartbeatPayloadFactoryTest extends TestCase
 
         file_put_contents($this->versionPath, '{"version":"1.2.3"}');
         $instance = $this->instance();
-        $instance['platform_base_url'] = 'http://attacker.example';
+        $instance['platform_base_url'] = 'https://legacy-platform.invalid';
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('AGENT_PAYLOAD_INVALID');
         $factory->create($instance, 'backend_php', 1000);
@@ -101,7 +101,6 @@ final class AgentHeartbeatPayloadFactoryTest extends TestCase
     private function instance(): array
     {
         return [
-            'platform_base_url' => 'https://platform.gosowong.cn',
             'instance_id' => 'c6f83b5e-aadc-4a65-9c71-79a64aa22e58',
             'token' => 'mbt_token',
             'activation_secret' => '',
