@@ -70,8 +70,8 @@ final class UpgradeController extends BaseController
     private function mapError(Throwable $exception): Response
     {
         [$status, $reason, $message] = match ($exception->getMessage()) {
-            'UPGRADE_RECORD_ARGUMENT_INVALID', 'UPGRADE_ENTRY_ARGUMENT_INVALID', 'UPGRADE_CATALOG_ARGUMENT_INVALID' => [422, $exception->getMessage(), '升级请求参数无效'],
-            'UPGRADE_ENTRY_CONFLICT' => [409, 'UPGRADE_ENTRY_CONFLICT', '已有升级任务等待或正在执行'],
+            'UPGRADE_RECORD_ARGUMENT_INVALID', 'UPGRADE_ENTRY_ARGUMENT_INVALID', 'UPGRADE_CATALOG_ARGUMENT_INVALID' => [400, $exception->getMessage(), '升级请求参数无效'],
+            'UPGRADE_ENTRY_CONFLICT' => [400, 'UPGRADE_ENTRY_CONFLICT', '已有升级任务等待或正在执行'],
             'UPGRADE_RECORD_INVALID' => [500, 'UPGRADE_RECORD_INVALID', '升级记录文件损坏，请检查任务记录'],
             'UPGRADE_ROOT_UNAVAILABLE', 'UPGRADE_RECORD_UNAVAILABLE', 'UPGRADE_ENTRY_UNAVAILABLE', 'UPGRADE_OVERVIEW_UNAVAILABLE' => [503, $exception->getMessage(), '升级服务共享目录暂时不可用'],
             'UPGRADE_CATALOG_UNAVAILABLE' => [503, 'UPGRADE_CATALOG_UNAVAILABLE', '平台版本目录暂时不可用'],
