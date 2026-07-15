@@ -10,7 +10,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Go 升级任务在共享目录中的只读记录与一次性入口票据存储。
+ * 一次性升级请求与 Agent 任务记录的共享文件投影。
  */
 final class UpgradeRecord extends BaseModel
 {
@@ -22,15 +22,7 @@ final class UpgradeRecord extends BaseModel
     private const STATUSES = [
         'queued',
         'running',
-        'preparing',
-        'draining',
-        'downloading',
-        'verifying',
-        'backing_up',
-        'applying',
-        'rolling_back',
         'awaiting_php_restart',
-        'completed',
         'failed',
     ];
 
@@ -45,6 +37,9 @@ final class UpgradeRecord extends BaseModel
     }
 
     /**
+     * 扫描 PHP 与 Agent 共享的任务目录，并按创建时间倒序返回严格校验后的记录。
+     * 此方法只读取文件，不根据运行中的 Agent 推测状态。
+     *
      * @return list<array<string, int|string>>
      */
     public function scan(string $root): array
@@ -89,39 +84,87 @@ final class UpgradeRecord extends BaseModel
     }
 
     /**
-     * @param array{schema_version:int,ticket_hash:string,admin_id:int,platform_token:string,issued_at:int,expires_at:int} $document
+     * 在同一把创建锁下先写 queued 记录，再发布一次性请求。
+     * 记录先落盘可保证 Agent 一旦消费请求，就一定能找到对应任务身份。
+     *
+     * @param array<string,int|string> $request
+     * @param array<string,int|string> $record
      */
-    public function writeEntryTicket(string $root, array $document): void
+    public function createQueuedJob(string $root, array $request, array $record): void
     {
         $root = $this->existingRoot($root);
-        $hash = $document['ticket_hash'] ?? '';
-        $platformToken = $document['platform_token'] ?? '';
-        if (($document['schema_version'] ?? null) !== 1
-            || !is_string($hash) || preg_match('/^[0-9a-f]{64}$/D', $hash) !== 1
-            || ($document['admin_id'] ?? 0) < 1
-            || !is_string($platformToken) || strlen($platformToken) < 1 || strlen($platformToken) > 4096
-            || preg_match('/^[\x21-\x7E]+$/D', $platformToken) !== 1
-            || ($document['issued_at'] ?? -1) < 0
-            || ($document['expires_at'] ?? 0) <= $document['issued_at']) {
+        $jobId = $request['job_id'] ?? '';
+        if (($request['schema_version'] ?? null) !== 1 || !is_string($jobId)
+            || preg_match(self::UUID_PATTERN, $jobId) !== 1
+            || ($record['schema_version'] ?? null) !== 1 || ($record['job_id'] ?? null) !== $jobId
+            || ($record['status'] ?? null) !== 'queued' || ($record['action'] ?? null) !== ($request['action'] ?? null)
+            || ($record['target_version'] ?? null) !== ($request['target_version'] ?? null)
+            || ($record['created_at'] ?? null) !== ($request['created_at'] ?? null)) {
             throw new RuntimeException('UPGRADE_ENTRY_ARGUMENT_INVALID');
         }
 
         $run = $root . DIRECTORY_SEPARATOR . 'run';
-        $tickets = $run . DIRECTORY_SEPARATOR . 'access-tickets';
+        $requests = $run . DIRECTORY_SEPARATOR . 'requests';
+        $jobs = $root . DIRECTORY_SEPARATOR . 'jobs';
+        $jobDirectory = $jobs . DIRECTORY_SEPARATOR . $jobId;
         $this->ensureDirectory($run, false);
-        $this->ensureDirectory($tickets);
+        $this->ensureDirectory($requests, false);
+        $this->ensureDirectory($jobs, false, null);
+        $lockPath = $run . DIRECTORY_SEPARATOR . 'job-create.lock';
+        if (is_link($lockPath)) {
+            throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
+        }
+        $lock = @fopen($lockPath, 'c+');
+        if (!is_resource($lock) || !@chmod($lockPath, 0660) || !flock($lock, LOCK_EX)) {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
+            throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
+        }
 
+        try {
+            foreach ($this->scan($root) as $existing) {
+                if (in_array($existing['status'], ['queued', 'running'], true)) {
+                    throw new RuntimeException('UPGRADE_ENTRY_CONFLICT');
+                }
+            }
+            if (file_exists($jobDirectory) || is_link($jobDirectory)) {
+                throw new RuntimeException('UPGRADE_ENTRY_CONFLICT');
+            }
+            if (!@mkdir($jobDirectory, 02770) || !@chmod($jobDirectory, 02770)) {
+                @rmdir($jobDirectory);
+                throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
+            }
+
+            $recordPath = $jobDirectory . DIRECTORY_SEPARATOR . 'record.json';
+            $requestPath = $requests . DIRECTORY_SEPARATOR . $jobId . '.json';
+            try {
+                $this->writeExclusiveJson($recordPath, $record, $jobDirectory, '.record-');
+                $this->writeExclusiveJson($requestPath, $request, $run, '.request-');
+            } catch (Throwable $exception) {
+                @unlink($requestPath);
+                @unlink($recordPath);
+                @rmdir($jobDirectory);
+                throw $exception;
+            }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    /** @param array<string,int|string> $document */
+    private function writeExclusiveJson(string $target, array $document, string $temporaryDirectory, string $prefix): void
+    {
+        if (file_exists($target) || is_link($target)) {
+            throw new RuntimeException('UPGRADE_ENTRY_CONFLICT');
+        }
         try {
             $bytes = json_encode($document, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
         } catch (JsonException) {
             throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
         }
-        $target = $tickets . DIRECTORY_SEPARATOR . $hash . '.json';
-        if (file_exists($target) || is_link($target)) {
-            throw new RuntimeException('UPGRADE_ENTRY_CONFLICT');
-        }
-
-        $temporary = $tickets . DIRECTORY_SEPARATOR . '.ticket-' . bin2hex(random_bytes(8)) . '.tmp';
+        $temporary = $temporaryDirectory . DIRECTORY_SEPARATOR . $prefix . bin2hex(random_bytes(8)) . '.tmp';
         $handle = @fopen($temporary, 'xb');
         if ($handle === false) {
             throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
@@ -200,7 +243,6 @@ final class UpgradeRecord extends BaseModel
             'status' => (string) $record['status'],
             'backup_path' => $this->artifactPath($record['backup_path'] ?? '', 'backups'),
             'package_path' => $this->artifactPath($record['package_path'] ?? '', 'packages'),
-            'log_path' => $this->artifactPath($record['log_path'] ?? '', 'logs'),
             'created_at' => $this->timestamp($record['created_at'] ?? null),
             'started_at' => $this->timestamp($record['started_at'] ?? null, true),
             'finished_at' => $this->timestamp($record['finished_at'] ?? null, true),
@@ -265,7 +307,7 @@ final class UpgradeRecord extends BaseModel
         return rtrim($resolved, DIRECTORY_SEPARATOR);
     }
 
-    private function ensureDirectory(string $path, bool $allowCreate = true): void
+    private function ensureDirectory(string $path, bool $allowCreate = true, ?int $requiredMode = 02770): void
     {
         $created = false;
         if (file_exists($path) || is_link($path)) {
@@ -279,12 +321,13 @@ final class UpgradeRecord extends BaseModel
         } elseif (is_link($path) || !is_dir($path)) {
             throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
         }
-        if ($created && !@chmod($path, 02770)) {
+        if ($created && $requiredMode !== null && !@chmod($path, $requiredMode)) {
             throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
         }
         clearstatcache(true, $path);
         $mode = @fileperms($path);
-        if (is_link($path) || !is_dir($path) || !is_int($mode) || ($mode & 07777) !== 02770) {
+        if (is_link($path) || !is_dir($path) || !is_int($mode)
+            || ($requiredMode !== null && ($mode & 07777) !== $requiredMode)) {
             throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
         }
     }

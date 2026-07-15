@@ -129,7 +129,7 @@ final class AgentHeartbeatRunner implements AgentHeartbeatClient
         $token = $decoded['token'] ?? '';
         $next = $decoded['next_report_after_seconds'] ?? 0;
         if (!is_string($skipped) || !is_string($instanceId) || !is_string($token) || !is_int($next)
-            || ($skipped !== '' && $skipped !== 'serve_active')
+            || ($skipped !== '' && $skipped !== 'heartbeat_active')
             || ($instanceId !== '' && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $instanceId) !== 1)
             || ($token !== '' && !$this->validToken($token))
             || $next < 0 || $next > self::MAX_TIMESTAMP) {

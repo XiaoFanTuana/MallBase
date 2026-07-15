@@ -42,7 +42,7 @@ final class AgentHeartbeatRunnerTest extends TestCase
         $runner = new AgentHeartbeatRunner(
             static fn(): array => [
                 'exit_code' => 0,
-                'stdout' => '{"ok":true,"skipped":"serve_active"}',
+                'stdout' => '{"ok":true,"skipped":"heartbeat_active"}',
                 'stderr' => '',
             ],
             '/app/upgrade/bin/mallbase-agent-linux-amd64',
@@ -52,7 +52,7 @@ final class AgentHeartbeatRunnerTest extends TestCase
         $result = $runner->run($this->payload());
 
         self::assertTrue($result->ok);
-        self::assertSame('serve_active', $result->skipped);
+        self::assertSame('heartbeat_active', $result->skipped);
     }
 
     public function testRunnerFailsClosedForProcessAndOutputFailuresWithoutLeakingSecrets(): void

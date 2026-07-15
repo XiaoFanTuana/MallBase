@@ -11,6 +11,9 @@ use think\Response;
 use Throwable;
 
 /**
+ * 后台升级 HTTP 入口。这里只做参数接收、固定错误映射和安全响应头；
+ * 任务创建与文件协议全部交给 UpgradeAdminService。
+ *
  * @extends BaseController<UpgradeAdminService>
  */
 final class UpgradeController extends BaseController
@@ -48,15 +51,16 @@ final class UpgradeController extends BaseController
         }
     }
 
-    public function createSession(): Response
+    public function createJob(): Response
     {
         try {
-            $result = $this->service()->createEntryTicket(
+            $result = $this->service()->createJob(
                 (int) ($this->request->admin_id ?? 0),
+                $this->request->post('action', ''),
                 $this->request->post('target_version', ''),
             );
 
-            return $this->success($result, '升级入口授权已创建')
+            return $this->success($result, '升级任务已创建')
                 ->header($this->securityHeaders());
         } catch (Throwable $exception) {
             return $this->mapError($exception);
@@ -67,8 +71,8 @@ final class UpgradeController extends BaseController
     {
         [$status, $reason, $message] = match ($exception->getMessage()) {
             'UPGRADE_RECORD_ARGUMENT_INVALID', 'UPGRADE_ENTRY_ARGUMENT_INVALID', 'UPGRADE_CATALOG_ARGUMENT_INVALID' => [422, $exception->getMessage(), '升级请求参数无效'],
-            'UPGRADE_ENTRY_CONFLICT' => [409, 'UPGRADE_ENTRY_CONFLICT', '升级入口授权冲突，请重试'],
-            'UPGRADE_RECORD_INVALID' => [500, 'UPGRADE_RECORD_INVALID', '升级记录文件损坏，请检查升级日志'],
+            'UPGRADE_ENTRY_CONFLICT' => [409, 'UPGRADE_ENTRY_CONFLICT', '已有升级任务等待或正在执行'],
+            'UPGRADE_RECORD_INVALID' => [500, 'UPGRADE_RECORD_INVALID', '升级记录文件损坏，请检查任务记录'],
             'UPGRADE_ROOT_UNAVAILABLE', 'UPGRADE_RECORD_UNAVAILABLE', 'UPGRADE_ENTRY_UNAVAILABLE', 'UPGRADE_OVERVIEW_UNAVAILABLE' => [503, $exception->getMessage(), '升级服务共享目录暂时不可用'],
             'UPGRADE_CATALOG_UNAVAILABLE' => [503, 'UPGRADE_CATALOG_UNAVAILABLE', '平台版本目录暂时不可用'],
             default => [503, 'UPGRADE_ADMIN_UNAVAILABLE', '升级服务暂时不可用'],

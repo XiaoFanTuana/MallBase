@@ -22,10 +22,11 @@ final class UpgradeSecurityHeadersTest extends TestCase
 
         $this->assertStringNotContainsString('->cookie(', $controller);
         $this->assertStringContainsString("hash('sha256', \$ticket)", $service);
-        $this->assertStringContainsString("'ticket_hash' => \$hash", $service);
+        $this->assertStringContainsString("'ticket_hash' => hash('sha256', \$ticket)", $service);
         $this->assertStringNotContainsString("'ticket' => \$ticket", $service);
         $this->assertStringContainsString("'Referrer-Policy' => 'no-referrer'", $controller);
-        $this->assertStringContainsString("'access-tickets'", $model);
+        $this->assertStringContainsString("'run'", $model);
+        $this->assertStringContainsString("'requests'", $model);
     }
 
     public function testAdminEntryControllerLogsOnlyTheMappedDiagnosticCode(): void
@@ -45,6 +46,6 @@ final class UpgradeSecurityHeadersTest extends TestCase
         );
         self::assertStringNotContainsString("config('upgrade.enabled', false)", $controller);
         self::assertStringNotContainsString('UpgradeControlRateLimiter', $controller);
-        self::assertStringContainsString('createEntryTicket', $controller);
+        self::assertStringContainsString('createJob', $controller);
     }
 }

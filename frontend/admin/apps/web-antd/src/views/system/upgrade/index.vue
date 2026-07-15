@@ -10,11 +10,11 @@ import { IconifyIcon } from '@vben/icons';
 import { message } from 'ant-design-vue';
 
 import {
-  createUpgradeEntryApi,
+  createUpgradeJobApi,
   getUpgradeOverviewApi,
   getUpgradeRecordsApi,
   getUpgradeReleaseCatalogApi,
-  probeUpgradeAgentApi,
+  waitForUpgradeStatusPage,
 } from '#/api/system/upgrade';
 
 defineOptions({ name: 'SystemUpgrade' });
@@ -22,8 +22,8 @@ defineOptions({ name: 'SystemUpgrade' });
 type CatalogStatus = 'error' | 'idle' | 'ready';
 
 const { hasAccessByCodes } = useAccess();
-const canEnter = computed(() =>
-  hasAccessByCodes(['SystemUpgradeSessionCreate']),
+const canCreateJob = computed(() =>
+  hasAccessByCodes(['SystemUpgradeJobCreate']),
 );
 const overview = ref<null | UpgradeApi.Overview>(null);
 const overviewLoading = ref(false);
@@ -31,7 +31,6 @@ const overviewError = ref('');
 const catalogStatus = ref<CatalogStatus>('idle');
 const catalogError = ref('');
 const releases = ref<UpgradeApi.ReleaseCandidate[]>([]);
-const agentOnline = ref(false);
 const lastCheckedAt = ref(0);
 const recordsLoading = ref(false);
 const enteringVersion = ref('');
@@ -53,12 +52,14 @@ const highestVersionText = computed(() =>
 const refreshing = computed(
   () => overviewLoading.value || recordsLoading.value,
 );
-const upgradeActionsDisabled = computed(
-  () =>
-    !agentOnline.value ||
-    overviewLoading.value ||
-    !catalogReady.value ||
-    enteringVersion.value !== '',
+const actionPending = computed(
+  () => overviewLoading.value || enteringVersion.value !== '',
+);
+const rollbackAvailable = computed(() =>
+  records.value.some(
+    (record) =>
+      record.backup_path !== '' && record.status === 'awaiting_php_restart',
+  ),
 );
 const catalogStateText = computed(() => {
   switch (catalogStatus.value) {
@@ -87,16 +88,6 @@ const catalogAlert = computed(() => {
     }
   }
 });
-const agentAlert = computed(() => {
-  if (overviewLoading.value || agentOnline.value) return null;
-
-  return {
-    description: '版本目录仍可查看，启动后方可执行升级。',
-    message: '升级执行服务未启动',
-    type: 'info' as const,
-  };
-});
-
 const releaseColumns = [
   { key: 'version', title: '版本', width: 180 },
   { key: 'type', title: '类型', width: 110 },
@@ -121,22 +112,14 @@ const recordColumns = [
 ];
 
 const statusMeta: Record<string, { color: string; label: string }> = {
-  applying: { color: 'processing', label: '正在应用代码' },
   awaiting_php_restart: { color: 'warning', label: '等待手动部署 PHP 代码' },
-  backing_up: { color: 'processing', label: '正在备份' },
-  completed: { color: 'success', label: '已完成' },
-  downloading: { color: 'processing', label: '正在下载' },
-  draining: { color: 'processing', label: '正在排空业务' },
   failed: { color: 'error', label: '失败' },
-  preparing: { color: 'processing', label: '准备中' },
   queued: { color: 'default', label: '等待执行' },
   running: { color: 'processing', label: '执行中' },
-  rolling_back: { color: 'processing', label: '正在恢复' },
-  verifying: { color: 'processing', label: '正在校验' },
 };
 
 function actionLabel(action: UpgradeApi.Action): string {
-  return action === 'rollback' ? '恢复' : '升级';
+  return action === 'rollback' ? '回滚' : '升级';
 }
 
 function statusLabel(status: UpgradeApi.Status): string {
@@ -189,12 +172,8 @@ async function loadOverview() {
   overviewError.value = '';
   catalogError.value = '';
   try {
-    const [overviewResult, online] = await Promise.all([
-      getUpgradeOverviewApi(),
-      probeUpgradeAgentApi(),
-    ]);
+    const overviewResult = await getUpgradeOverviewApi();
     overview.value = overviewResult;
-    agentOnline.value = online;
     lastCheckedAt.value = Math.floor(Date.now() / 1000);
     try {
       const catalog = await getUpgradeReleaseCatalogApi();
@@ -226,24 +205,26 @@ async function refreshAll() {
   await Promise.all([loadOverview(), loadRecords()]);
 }
 
-async function enterUpgrade(targetVersion = '') {
-  if (!canEnter.value) return;
-  if (upgradeActionsDisabled.value) {
-    if (!agentOnline.value) {
-      message.warning('版本目录可查看，但需先启动 Go 升级程序才能执行');
-    }
-    return;
-  }
-  if (!targetVersion) {
+async function createJob(action: UpgradeApi.Action, targetVersion = '') {
+  if (!canCreateJob.value || actionPending.value) return;
+  if (action === 'upgrade' && !targetVersion) {
     message.warning('请选择目标版本');
     return;
   }
-  enteringVersion.value = targetVersion || '__default__';
+  enteringVersion.value = targetVersion || '__rollback__';
   try {
-    const entry = await createUpgradeEntryApi(targetVersion);
-    window.location.assign(entry.upgrade_url);
+    const job = await createUpgradeJobApi(action, targetVersion);
+    const ready = await waitForUpgradeStatusPage(job.job_id);
+    if (!ready) {
+      message.warning(
+        '任务已创建，但宿主机执行器未及时启动；请检查 systemd 服务',
+      );
+      await loadRecords();
+      return;
+    }
+    window.location.assign(job.status_url);
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '无法进入升级页面');
+    message.error(error instanceof Error ? error.message : '升级任务创建失败');
   } finally {
     enteringVersion.value = '';
   }
@@ -270,7 +251,7 @@ onMounted(refreshAll);
 
 <template>
   <Page
-    description="查看当前运行版本、平台直达版本和历史记录。最终兼容校验与升级执行将在独立安全页面中完成。"
+    description="查看当前运行版本、平台候选版本和历史记录。创建任务后，宿主机上的一次性 Agent 会执行升级并临时提供只读状态页。"
     header-class="flex-wrap gap-3"
     title="系统升级"
   >
@@ -287,16 +268,27 @@ onMounted(refreshAll);
           重新检查
         </a-button>
         <a-button
-          v-access:code="'SystemUpgradeSessionCreate'"
-          :disabled="upgradeActionsDisabled || !highestRelease"
+          v-access:code="'SystemUpgradeJobCreate'"
+          :disabled="actionPending || !rollbackAvailable"
+          :loading="enteringVersion === '__rollback__'"
+          @click="createJob('rollback')"
+        >
+          <template #icon>
+            <IconifyIcon icon="lucide:rotate-ccw" />
+          </template>
+          回滚最近备份
+        </a-button>
+        <a-button
+          v-access:code="'SystemUpgradeJobCreate'"
+          :disabled="actionPending || !catalogReady || !highestRelease"
           :loading="enteringVersion === highestRelease?.version"
           type="primary"
-          @click="enterUpgrade(highestRelease?.version || '')"
+          @click="createJob('upgrade', highestRelease?.version || '')"
         >
           <template #icon>
             <IconifyIcon icon="lucide:arrow-up" />
           </template>
-          前往升级
+          升级到最高版本
         </a-button>
       </a-space>
     </template>
@@ -375,15 +367,9 @@ onMounted(refreshAll);
 
           <div class="overview-status-bar">
             <a-space>
-              <a-badge :status="agentOnline ? 'success' : 'default'" />
+              <a-badge status="processing" />
               <a-typography-text strong>
-                {{
-                  overviewLoading
-                    ? '正在检查升级执行服务'
-                    : agentOnline
-                      ? '升级执行服务已就绪（Go）'
-                      : '升级执行服务未启动（Go）'
-                }}
+                创建任务后，由宿主机一次性 Agent 自动执行
               </a-typography-text>
             </a-space>
             <span class="overview-muted">
@@ -400,8 +386,7 @@ onMounted(refreshAll);
             <div class="card-subtitle">
               以下版本均由平台提供从当前版本
               {{ currentRelease ? `v${currentRelease.version}` : '--' }}
-              直达的已验证升级包；进入执行页后，Go 将按 Agent
-              版本与存储布局再次确认兼容性。
+              直达的候选升级包；执行前，Agent 会再次校验版本、签名和存储布局。
             </div>
           </div>
         </template>
@@ -413,15 +398,6 @@ onMounted(refreshAll);
           class="mb-4"
           show-icon
           :type="catalogAlert.type"
-        />
-
-        <a-alert
-          v-if="agentAlert"
-          :description="agentAlert.description"
-          :message="agentAlert.message"
-          class="mb-4"
-          show-icon
-          :type="agentAlert.type"
         />
 
         <a-table
@@ -455,7 +431,7 @@ onMounted(refreshAll);
               {{ formatReleaseDate(record.released_at) }}
             </template>
             <template v-else-if="column.key === 'compatibility'">
-              <a-tag color="blue">平台已发布</a-tag>
+              <a-tag color="blue">平台候选</a-tag>
             </template>
             <template v-else-if="column.key === 'operation'">
               <a-space :size="4">
@@ -464,11 +440,11 @@ onMounted(refreshAll);
                 </a-button>
                 <a-divider type="vertical" />
                 <a-button
-                  v-access:code="'SystemUpgradeSessionCreate'"
-                  :disabled="upgradeActionsDisabled"
+                  v-access:code="'SystemUpgradeJobCreate'"
+                  :disabled="actionPending"
                   :loading="enteringVersion === record.version"
                   type="link"
-                  @click="enterUpgrade(record.version)"
+                  @click="createJob('upgrade', record.version)"
                 >
                   升级到此版本
                 </a-button>
@@ -551,7 +527,7 @@ onMounted(refreshAll);
           {{ selectedRelease.summary }}
         </a-descriptions-item>
         <a-descriptions-item label="兼容校验">
-          进入升级执行页后，由 Go 按 Agent 版本与存储布局重新确认
+          创建任务后，由 Agent 按版本、签名和存储布局重新确认
         </a-descriptions-item>
       </a-descriptions>
     </a-drawer>
@@ -582,9 +558,6 @@ onMounted(refreshAll);
         </a-descriptions-item>
         <a-descriptions-item label="升级包位置">
           {{ selectedRecord.package_path || '-' }}
-        </a-descriptions-item>
-        <a-descriptions-item label="日志位置">
-          {{ selectedRecord.log_path || '-' }}
         </a-descriptions-item>
         <a-descriptions-item label="开始时间">
           {{ formatTime(selectedRecord.started_at) }}

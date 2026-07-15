@@ -36,10 +36,23 @@ UPGRADE_ROOT=$PROJECT_ROOT/upgrade
 BIN_ROOT=$UPGRADE_ROOT/bin
 BACKEND_DATA_ROOT=$PROJECT_ROOT/data/backend
 ROOT_ENV=$PROJECT_ROOT/.env
-AGENT_UID=$(id -u)
-SHARED_GID=$(id -g)
+AGENT_USER=${MALLBASE_AGENT_USER:-}
+if [ -n "$AGENT_USER" ]; then
+    AGENT_UID=$(id -u "$AGENT_USER" 2>/dev/null) || fail HOST_PREFLIGHT_AGENT_USER_INVALID
+    SHARED_GID=$(id -g "$AGENT_USER" 2>/dev/null) || fail HOST_PREFLIGHT_AGENT_USER_INVALID
+else
+    AGENT_UID=$(id -u)
+    SHARED_GID=$(id -g)
+fi
 SHARED_DIRECTORY_MODE=2770
 [ "$(uname -s)" = Darwin ] && SHARED_DIRECTORY_MODE=770
+case "$(uname -m)" in
+    x86_64|amd64) AGENT_ARCHITECTURE=amd64 ;;
+    aarch64|arm64) AGENT_ARCHITECTURE=arm64 ;;
+    *) fail AGENT_ARCHITECTURE_UNSUPPORTED ;;
+esac
+AGENT_BINARY_NAME=mallbase-agent-linux-$AGENT_ARCHITECTURE
+AGENT_LAUNCHER=$BIN_ROOT/mallbase-agent
 
 sha256_file() {
     if command -v sha256sum >/dev/null 2>&1; then
@@ -87,7 +100,7 @@ prepare_directory() {
     [ ! -L "$path" ] || fail HOST_PREFLIGHT_DIRECTORY_INVALID
     if [ "$CHECK_ONLY" -eq 0 ]; then
         mkdir -p "$path"
-        chgrp "$SHARED_GID" "$path"
+        chown "$AGENT_UID:$SHARED_GID" "$path"
         chmod "$requested_mode" "$path"
     fi
     [ -d "$path" ] || fail HOST_PREFLIGHT_DIRECTORY_INVALID
@@ -149,7 +162,11 @@ for architecture in amd64 arm64; do
 done
 
 if [ "$CHECK_ONLY" -eq 0 ]; then
-    chgrp "$SHARED_GID" \
+    chmod 0755 "$BIN_ROOT"
+    [ ! -e "$AGENT_LAUNCHER" ] || [ -L "$AGENT_LAUNCHER" ] || fail AGENT_LAUNCHER_INVALID
+    rm -f "$AGENT_LAUNCHER"
+    ln -s "$AGENT_BINARY_NAME" "$AGENT_LAUNCHER"
+    chown "$AGENT_UID:$SHARED_GID" \
         "$UPGRADE_ROOT" \
         "$BIN_ROOT" \
         "$MANIFEST" \
@@ -162,6 +179,7 @@ fi
 
 prepare_directory "$UPGRADE_ROOT/config" 2770
 prepare_directory "$UPGRADE_ROOT/run" 2770
+prepare_directory "$UPGRADE_ROOT/run/requests" 2770
 prepare_directory "$UPGRADE_ROOT/jobs" 2770
 prepare_directory "$UPGRADE_ROOT/backups" 2770
 prepare_directory "$UPGRADE_ROOT/packages" 0700
@@ -189,6 +207,8 @@ fi
 [ "$(uid_of "$BIN_ROOT")" = "$AGENT_UID" ] || fail HOST_PREFLIGHT_OWNER_INVALID
 [ "$(gid_of "$BIN_ROOT")" = "$SHARED_GID" ] || fail HOST_PREFLIGHT_GROUP_INVALID
 [ "$(mode_of "$BIN_ROOT")" = 555 ] || fail HOST_PREFLIGHT_MODE_INVALID
+[ -L "$AGENT_LAUNCHER" ] && [ "$(readlink "$AGENT_LAUNCHER")" = "$AGENT_BINARY_NAME" ] \
+    || fail AGENT_LAUNCHER_INVALID
 [ "$(uid_of "$MANIFEST")" = "$AGENT_UID" ] || fail HOST_PREFLIGHT_OWNER_INVALID
 [ "$(gid_of "$MANIFEST")" = "$SHARED_GID" ] || fail HOST_PREFLIGHT_GROUP_INVALID
 [ "$(mode_of "$MANIFEST")" = 444 ] || fail HOST_PREFLIGHT_MODE_INVALID

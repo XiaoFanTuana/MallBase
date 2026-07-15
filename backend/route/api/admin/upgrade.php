@@ -22,11 +22,11 @@ Route::group('system/upgrade', function () {
             '_auth' => true,
             '_permission' => 'SystemUpgrade',
         ]);
-    Route::post('session', 'createSession')
-        ->name('SystemUpgradeSessionCreate')
+    Route::post('jobs', 'createJob')
+        ->name('SystemUpgradeJobCreate')
         ->option([
-            '_alias' => '进入系统升级',
-            '_desc' => '创建一次性升级入口授权',
+            '_alias' => '创建系统升级任务',
+            '_desc' => '创建宿主机一次性升级或回滚任务',
             '_auth' => true,
             '_type' => Permission::TYPE_BUTTON,
         ]);
@@ -34,7 +34,7 @@ Route::group('system/upgrade', function () {
     ->option([
         '_group_name' => '系统升级',
         '_group_code' => 'SystemUpgrade',
-        '_group_name_desc' => '查看升级记录并进入独立升级页面',
+        '_group_name_desc' => '查看版本与记录，并创建一次性升级任务',
         '_path' => '/system/upgrade',
         '_auth' => true,
         '_icon' => 'lucide:refresh-cw',

@@ -136,6 +136,32 @@ final class AgentDeploymentContractTest extends TestCase
         ] as $legacy) {
             self::assertStringNotContainsString($legacy, $preflight);
         }
+        self::assertStringContainsString('"$UPGRADE_ROOT/run/requests"', $preflight);
+        self::assertStringContainsString('mallbase-agent-linux-$AGENT_ARCHITECTURE', $preflight);
+        self::assertStringContainsString('MALLBASE_AGENT_USER', $preflight);
+    }
+
+    public function testSystemdStartsOneAgentProcessForEachQueuedJob(): void
+    {
+        $pathUnit = $this->read('deploy/systemd/mallbase-agent@.path');
+        $serviceUnit = $this->read('deploy/systemd/mallbase-agent@.service');
+
+        self::assertStringContainsString('PathExistsGlob=%f/upgrade/run/requests/*.json', $pathUnit);
+        self::assertStringContainsString('Unit=mallbase-agent@%i.service', $pathUnit);
+        self::assertStringContainsString('ExecStart=%f/upgrade/bin/mallbase-agent run-job', $serviceUnit);
+        self::assertStringContainsString('User=mallbase-agent', $serviceUnit);
+        self::assertStringContainsString('Group=mallbase-upgrade', $serviceUnit);
+        self::assertStringNotContainsString(' serve', $pathUnit . $serviceUnit);
+    }
+
+    public function testProductionBackendPortIsLoopbackOnly(): void
+    {
+        $compose = $this->read('docker-compose.yml');
+
+        self::assertStringContainsString(
+            '127.0.0.1:${SWOOLE_HTTP_PORT:-8080}:${SWOOLE_HTTP_PORT:-8080}',
+            $compose,
+        );
     }
 
     public function testLegacyDeploymentFilesAndCommandsAreRemoved(): void

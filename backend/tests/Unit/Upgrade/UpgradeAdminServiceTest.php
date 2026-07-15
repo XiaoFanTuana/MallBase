@@ -6,13 +6,13 @@ namespace Tests\Unit\Upgrade;
 
 use app\model\upgrade\UpgradeRecord;
 use app\service\admin\upgrade\UpgradeAdminService;
-use app\service\install\InstallLockService;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 final class UpgradeAdminServiceTest extends TestCase
 {
     private const JOB_ID = '11111111-1111-4111-8111-111111111111';
+    private const CREATED_JOB_ID = '22222222-2222-4222-8222-222222222222';
     private const TICKET = 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678';
 
     private string $root;
@@ -24,6 +24,8 @@ final class UpgradeAdminServiceTest extends TestCase
         mkdir($this->root . '/jobs/' . self::JOB_ID, 0770, true);
         mkdir($this->root . '/run', 02770, true);
         chmod($this->root . '/run', 02770);
+        mkdir($this->root . '/run/requests', 02770);
+        chmod($this->root . '/run/requests', 02770);
         mkdir($this->root . '/runtime/install', 0777, true);
     }
 
@@ -44,7 +46,6 @@ final class UpgradeAdminServiceTest extends TestCase
             'status' => 'awaiting_php_restart',
             'backup_path' => 'backups/' . self::JOB_ID,
             'package_path' => 'packages/' . self::JOB_ID . '.tar.gz',
-            'log_path' => 'logs/' . self::JOB_ID . '.log',
             'created_at' => 100,
             'started_at' => 101,
             'finished_at' => 0,
@@ -69,7 +70,6 @@ final class UpgradeAdminServiceTest extends TestCase
             'status' => 'failed',
             'backup_path' => 'backups/../secret',
             'package_path' => '',
-            'log_path' => '',
             'created_at' => 100,
             'started_at' => 100,
             'finished_at' => 101,
@@ -81,73 +81,85 @@ final class UpgradeAdminServiceTest extends TestCase
         (new UpgradeRecord())->scan($this->root);
     }
 
-    public function testCreatesShortLivedHashedTicketWithoutPersistingRawSecret(): void
+    public function testCreatesQueuedOneShotRequestWithoutPersistingSecrets(): void
     {
         $service = new UpgradeAdminService(
-            $this->root,
-            static fn(): int => 1000,
-            static fn(): string => self::TICKET,
-            $this->installLock(),
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1000,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => self::CREATED_JOB_ID,
         );
 
-        $result = $service->createEntryTicket(7);
+        $result = $service->createJob(7, 'upgrade', '1.2.0');
 
         $hash = hash('sha256', self::TICKET);
-        $path = $this->root . '/run/access-tickets/' . $hash . '.json';
-        self::assertSame('/upgrade/?ticket=' . self::TICKET, $result['upgrade_url']);
-        self::assertSame(1060, $result['expires_at']);
+        $path = $this->root . '/run/requests/' . self::CREATED_JOB_ID . '.json';
+        self::assertSame(self::CREATED_JOB_ID, $result['job_id']);
+        self::assertSame('queued', $result['status']);
+        self::assertSame('/upgrade/?ticket=' . self::TICKET, $result['status_url']);
+        self::assertSame(1600, $result['expires_at']);
         self::assertFileExists($path);
         self::assertSame(02770, fileperms($this->root . '/run') & 07777);
-        self::assertSame(02770, fileperms($this->root . '/run/access-tickets') & 07777);
+        self::assertSame(02770, fileperms($this->root . '/run/requests') & 07777);
         self::assertSame(0660, fileperms($path) & 0777);
         $stored = (string) file_get_contents($path);
         self::assertStringNotContainsString(self::TICKET, $stored);
+        self::assertStringNotContainsString('platform_token', $stored);
+        self::assertStringNotContainsString('mbt_upgrade_token', $stored);
         self::assertSame([
             'schema_version' => 1,
+            'job_id' => self::CREATED_JOB_ID,
+            'action' => 'upgrade',
+            'target_version' => '1.2.0',
+            'requested_by' => 7,
             'ticket_hash' => $hash,
-            'admin_id' => 7,
-            'platform_token' => 'mbt_upgrade_token',
-            'issued_at' => 1000,
-            'expires_at' => 1060,
+            'created_at' => 1000,
+            'expires_at' => 1600,
         ], json_decode($stored, true, 32, JSON_THROW_ON_ERROR));
-        self::assertSame(0755, fileperms($this->root . '/runtime') & 0777);
-        self::assertSame(0755, fileperms($this->root . '/runtime/install') & 0777);
-        self::assertSame(0600, fileperms($this->root . '/runtime/install/install.lock') & 0777);
-    }
-
-    public function testCreatesTargetBoundEntryTicketForDirectUpgrade(): void
-    {
-        $service = new UpgradeAdminService(
-            $this->root,
-            static fn(): int => 1000,
-            static fn(): string => self::TICKET,
-            $this->installLock(),
-        );
-
-        $service->createEntryTicket(7, '1.2.0');
-
-        $hash = hash('sha256', self::TICKET);
-        $stored = json_decode(
-            (string) file_get_contents($this->root . '/run/access-tickets/' . $hash . '.json'),
+        $record = json_decode(
+            (string) file_get_contents($this->root . '/jobs/' . self::CREATED_JOB_ID . '/record.json'),
             true,
             32,
             JSON_THROW_ON_ERROR,
         );
-        self::assertSame('1.2.0', $stored['target_version'] ?? null);
+        self::assertSame('queued', $record['status'] ?? null);
+        self::assertSame('upgrade', $record['action'] ?? null);
+        self::assertSame('1.2.0', $record['target_version'] ?? null);
+        self::assertArrayNotHasKey('log_path', $record);
     }
 
-    public function testRejectsInvalidTargetBoundEntryTicket(): void
+    public function testRejectsInvalidOneShotJobArguments(): void
     {
         $service = new UpgradeAdminService(
-            $this->root,
-            static fn(): int => 1000,
-            static fn(): string => self::TICKET,
-            $this->installLock(),
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1000,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => self::CREATED_JOB_ID,
         );
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('UPGRADE_ENTRY_ARGUMENT_INVALID');
-        $service->createEntryTicket(7, 'latest');
+        $service->createJob(7, 'upgrade', 'latest');
+    }
+
+    public function testRejectsASecondActiveJobInsideTheCreationLock(): void
+    {
+        $service = new UpgradeAdminService(
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1000,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => self::CREATED_JOB_ID,
+        );
+        $service->createJob(7, 'upgrade', '1.2.0');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('UPGRADE_ENTRY_CONFLICT');
+        (new UpgradeAdminService(
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1001,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => '33333333-3333-4333-8333-333333333333',
+        ))->createJob(8, 'rollback');
     }
 
     public function testReturnsCurrentReleaseOverviewWithoutPlatformAccess(): void
@@ -170,80 +182,60 @@ final class UpgradeAdminServiceTest extends TestCase
         ], $service->getOverview());
     }
 
-    public function testEntryTicketFailsClosedWhenPlatformTokenIsDisabledOrUnavailable(): void
+    public function testCreatesRollbackRequestWithoutTargetVersion(): void
     {
-        foreach ([
-            ['disabled' => true],
-            ['token' => ''],
-            ['token' => 'invalid token'],
-        ] as $override) {
-            $service = new UpgradeAdminService(
-                $this->root,
-                static fn(): int => 1000,
-                static fn(): string => self::TICKET,
-                $this->installLock($override),
-            );
-            try {
-                $service->createEntryTicket(7);
-                self::fail('entry ticket accepted an unavailable platform token');
-            } catch (RuntimeException $exception) {
-                self::assertSame('UPGRADE_ENTRY_UNAVAILABLE', $exception->getMessage());
-            }
-        }
-        self::assertSame([], glob($this->root . '/run/access-tickets/*.json') ?: []);
+        $service = new UpgradeAdminService(
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1000,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => self::CREATED_JOB_ID,
+        );
+
+        $service->createJob(7, 'rollback', '');
+
+        $stored = json_decode(
+            (string) file_get_contents($this->root . '/run/requests/' . self::CREATED_JOB_ID . '.json'),
+            true,
+            32,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('rollback', $stored['action'] ?? null);
+        self::assertSame('', $stored['target_version'] ?? null);
     }
 
-    public function testEntryTicketRejectsAnExistingSharedDirectoryWithTheWrongMode(): void
+    public function testJobRequestRejectsAnExistingSharedDirectoryWithTheWrongMode(): void
     {
         chmod($this->root . '/run', 0770);
         $service = new UpgradeAdminService(
-            $this->root,
-            static fn(): int => 1000,
-            static fn(): string => self::TICKET,
-            $this->installLock(),
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1000,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => self::CREATED_JOB_ID,
         );
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('UPGRADE_ENTRY_UNAVAILABLE');
-        $service->createEntryTicket(7);
+        $service->createJob(7, 'upgrade', '1.2.0');
     }
 
-    public function testEntryTicketDoesNotCreateTheAgentOwnedRunDirectory(): void
+    public function testJobRequestDoesNotCreateTheSharedRunDirectory(): void
     {
+        rmdir($this->root . '/run/requests');
         rmdir($this->root . '/run');
         $service = new UpgradeAdminService(
-            $this->root,
-            static fn(): int => 1000,
-            static fn(): string => self::TICKET,
-            $this->installLock(),
+            configuredRoot: $this->root,
+            clock: static fn(): int => 1000,
+            ticketFactory: static fn(): string => self::TICKET,
+            jobIdFactory: static fn(): string => self::CREATED_JOB_ID,
         );
 
         try {
-            $service->createEntryTicket(7);
-            self::fail('entry ticket created the Agent-owned run directory');
+            $service->createJob(7, 'upgrade', '1.2.0');
+            self::fail('job request created the shared run directory');
         } catch (RuntimeException $exception) {
             self::assertSame('UPGRADE_ENTRY_UNAVAILABLE', $exception->getMessage());
         }
         self::assertDirectoryDoesNotExist($this->root . '/run');
-    }
-
-    /** @param array<string,mixed> $override */
-    private function installLock(array $override = []): InstallLockService
-    {
-        $path = $this->root . '/runtime/install/install.lock';
-        file_put_contents($path, json_encode([
-            'installed_at' => '2026-07-14 10:00:00',
-            'platform' => array_replace([
-                'instance_id' => '22222222-2222-4222-8222-222222222222',
-                'token' => 'mbt_upgrade_token',
-                'disabled' => false,
-            ], $override),
-        ], JSON_THROW_ON_ERROR));
-        chmod($this->root . '/runtime', 0777);
-        chmod($this->root . '/runtime/install', 0777);
-        chmod($path, 0777);
-
-        return new InstallLockService($path);
     }
 
     private function removeTree(string $path): void

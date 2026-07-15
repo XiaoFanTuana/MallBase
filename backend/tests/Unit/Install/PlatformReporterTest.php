@@ -9,7 +9,6 @@ use app\service\install\AgentHeartbeatPayloadFactory;
 use app\service\install\AgentHeartbeatResult;
 use app\service\install\AgentInstanceStateStore;
 use app\service\install\AgentPlatformBootstrapService;
-use app\service\install\AgentRuntimeLeaseReader;
 use app\service\install\InstallLockService;
 use app\service\install\PlatformReporter;
 use PHPUnit\Framework\TestCase;
@@ -35,21 +34,17 @@ final class PlatformReporterTest extends TestCase
         parent::tearDown();
     }
 
-    public function testUninstalledDisabledAndLiveServeInstancesNeverSpawnHeartbeat(): void
+    public function testUninstalledAndDisabledInstancesNeverSpawnHeartbeat(): void
     {
         $client = new ReporterQueueClient([]);
         $store = new ReporterMemoryStore($this->confirmed());
-        $reporter = $this->reporter(new InstallLockService($this->lockPath), $store, $client, true);
+        $reporter = $this->reporter(new InstallLockService($this->lockPath), $store, $client);
         $reporter->tick();
         self::assertCount(0, $client->payloads);
 
         $legacy = $this->installedLock();
         $store->instance['disabled'] = true;
-        $this->reporter($legacy, $store, $client, false)->tick();
-        self::assertCount(0, $client->payloads);
-
-        $store->instance['disabled'] = false;
-        $this->reporter($legacy, $store, $client, true)->tick();
+        $this->reporter($legacy, $store, $client)->tick();
         self::assertCount(0, $client->payloads);
         self::assertSame(0, $store->reservationCount);
     }
@@ -61,7 +56,7 @@ final class PlatformReporterTest extends TestCase
         $client = new ReporterQueueClient([
             new AgentHeartbeatResult(true, ReporterMemoryStore::INSTANCE_ID),
         ]);
-        $reporter = $this->reporter($legacy, $store, $client, false);
+        $reporter = $this->reporter($legacy, $store, $client);
 
         $reporter->tick('admin_web');
         $reporter->tick('admin_web');
@@ -84,12 +79,28 @@ final class PlatformReporterTest extends TestCase
             AgentHeartbeatResult::failure('secret platform token'),
         ]);
 
-        $this->reporter($legacy, $store, $client, false)->tick('backend_php');
+        $this->reporter($legacy, $store, $client)->tick('backend_php');
 
         self::assertSame([
             'success' => false,
             'next' => 300,
             'error' => 'AGENT_HEARTBEAT_FAILED',
+        ], $store->lastResult);
+    }
+
+    public function testConcurrentHeartbeatIsTreatedAsASuccessfulSkip(): void
+    {
+        $store = new ReporterMemoryStore($this->confirmed());
+        $client = new ReporterQueueClient([
+            new AgentHeartbeatResult(true, skipped: 'heartbeat_active'),
+        ]);
+
+        $this->reporter($this->installedLock(), $store, $client)->tick();
+
+        self::assertSame([
+            'success' => true,
+            'next' => 86400,
+            'error' => '',
         ], $store->lastResult);
     }
 
@@ -102,7 +113,7 @@ final class PlatformReporterTest extends TestCase
             new AgentHeartbeatResult(true, ReporterMemoryStore::INSTANCE_ID),
         ]);
 
-        $this->reporter($legacy, $store, $client, false)->tick('backend_php');
+        $this->reporter($legacy, $store, $client)->tick('backend_php');
 
         self::assertSame('confirmed', $store->instance['activation_state']);
         self::assertSame('mbt_token', $store->instance['token']);
@@ -115,7 +126,6 @@ final class PlatformReporterTest extends TestCase
         InstallLockService $legacy,
         ReporterMemoryStore $store,
         ReporterQueueClient $client,
-        bool $leaseAlive,
     ): PlatformReporter {
         $payloads = new AgentHeartbeatPayloadFactory($this->versionPath, static fn(): array => []);
         $clock = static fn(): int => 1000;
@@ -125,7 +135,6 @@ final class PlatformReporterTest extends TestCase
             $legacy,
             $store,
             $client,
-            new ReporterLease($leaseAlive),
             $payloads,
             $bootstrap,
             $clock,
@@ -171,18 +180,6 @@ final class PlatformReporterTest extends TestCase
             'report' => [],
             'updated_at' => 1000,
         ];
-    }
-}
-
-final class ReporterLease implements AgentRuntimeLeaseReader
-{
-    public function __construct(private readonly bool $alive)
-    {
-    }
-
-    public function isServeLeaseAlive(int $now): bool
-    {
-        return $this->alive;
     }
 }
 

@@ -2,19 +2,7 @@ import { requestClient } from '#/api/request';
 
 export namespace UpgradeApi {
   export type Action = 'rollback' | 'upgrade';
-  export type Status =
-    | 'applying'
-    | 'awaiting_php_restart'
-    | 'backing_up'
-    | 'completed'
-    | 'downloading'
-    | 'draining'
-    | 'failed'
-    | 'preparing'
-    | 'queued'
-    | 'rolling_back'
-    | 'running'
-    | 'verifying';
+  export type Status = 'awaiting_php_restart' | 'failed' | 'queued' | 'running';
 
   export interface RecordItem {
     action: Action;
@@ -23,7 +11,6 @@ export namespace UpgradeApi {
     error: string;
     finished_at: number;
     job_id: string;
-    log_path: string;
     package_path: string;
     source_version: string;
     started_at: number;
@@ -36,9 +23,11 @@ export namespace UpgradeApi {
     total: number;
   }
 
-  export interface EntryTicket {
+  export interface JobCreated {
     expires_at: number;
-    upgrade_url: string;
+    job_id: string;
+    status: 'queued';
+    status_url: string;
   }
 
   export interface CurrentRelease {
@@ -77,11 +66,14 @@ export function getUpgradeRecordsApi(params: { limit: number; page: number }) {
   });
 }
 
-export function createUpgradeEntryApi(targetVersion = '') {
-  return requestClient.post<UpgradeApi.EntryTicket>(
-    '/system/upgrade/session',
-    targetVersion ? { target_version: targetVersion } : {},
-  );
+export function createUpgradeJobApi(
+  action: UpgradeApi.Action,
+  targetVersion = '',
+) {
+  return requestClient.post<UpgradeApi.JobCreated>('/system/upgrade/jobs', {
+    action,
+    target_version: targetVersion,
+  });
 }
 
 export function getUpgradeReleaseCatalogApi() {
@@ -90,21 +82,33 @@ export function getUpgradeReleaseCatalogApi() {
   );
 }
 
-export async function probeUpgradeAgentApi(): Promise<boolean> {
-  try {
-    const response = await fetch('/upgrade/health', {
-      cache: 'no-store',
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' },
-    });
-    if (!response.ok) return false;
-    const body = (await response.json().catch(() => null)) as null | {
-      code?: number;
-      status?: string;
-    };
-
-    return body?.status === 'ok' || body?.code === 200;
-  } catch {
-    return false;
+/**
+ * 等待 systemd.path 启动当前任务的临时 Agent 页面。
+ * 后台记录已经由 PHP 创建，因此页面未及时启动只影响实时查看，不影响长期历史。
+ */
+export async function waitForUpgradeStatusPage(
+  jobId: string,
+  wait: (milliseconds: number) => Promise<void> = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  attempts = 12,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) {
+      await wait(Math.min(250 * 2 ** (attempt - 1), 2000));
+    }
+    try {
+      const response = await fetch(
+        `/upgrade/ready?job_id=${encodeURIComponent(jobId)}`,
+        { cache: 'no-store', credentials: 'same-origin' },
+      );
+      if (!response.ok) continue;
+      const body = (await response.json().catch(() => null)) as null | {
+        status?: string;
+      };
+      if (body?.status === 'ready') return true;
+    } catch {
+      // systemd.path may still be starting the short-lived Agent process.
+    }
   }
+  return false;
 }

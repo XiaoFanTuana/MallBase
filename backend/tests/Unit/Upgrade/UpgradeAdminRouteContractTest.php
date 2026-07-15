@@ -20,7 +20,7 @@ final class UpgradeAdminRouteContractTest extends TestCase
     {
         $route = (string) file_get_contents(dirname(__DIR__, 3) . '/route/api/admin/upgrade.php');
         $start = strpos($route, "Route::get('records'");
-        $end = strpos($route, "Route::post('session'", (int) $start);
+        $end = strpos($route, "Route::post('jobs'", (int) $start);
 
         $this->assertNotFalse($start);
         $this->assertNotFalse($end);

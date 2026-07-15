@@ -12,15 +12,14 @@ use Throwable;
 /**
  * 平台实例低频上报服务。
  *
- * PHP 不再直接访问平台；所有网络请求由固定 Agent 子进程或正在运行的
- * serve 进程完成，共享 instance.json 是唯一凭据与调度真相源。
+ * PHP 不直接访问平台；所有网络请求都由固定 Agent 子进程完成，
+ * instance.json 是唯一凭据与调度真相源。
  */
 final class PlatformReporter
 {
     private ?UpgradeSharedFileStore $files = null;
     private ?AgentInstanceStateStore $instanceStore = null;
     private ?AgentHeartbeatClient $heartbeatClient = null;
-    private ?AgentRuntimeLeaseReader $leaseReader = null;
     private ?AgentHeartbeatPayloadFactory $payloadFactory = null;
     private ?AgentPlatformBootstrapService $bootstrapService = null;
 
@@ -32,7 +31,6 @@ final class PlatformReporter
         private readonly ?InstallLockService $lockService = null,
         ?AgentInstanceStateStore $instances = null,
         ?AgentHeartbeatClient $heartbeat = null,
-        ?AgentRuntimeLeaseReader $leases = null,
         ?AgentHeartbeatPayloadFactory $payloads = null,
         ?AgentPlatformBootstrapService $bootstrap = null,
         ?Closure $clock = null,
@@ -40,7 +38,6 @@ final class PlatformReporter
     ) {
         $this->instanceStore = $instances;
         $this->heartbeatClient = $heartbeat;
-        $this->leaseReader = $leases;
         $this->payloadFactory = $payloads;
         $this->bootstrapService = $bootstrap;
         $this->clock = $clock ?? static fn(): int => time();
@@ -69,10 +66,6 @@ final class PlatformReporter
 
                 return;
             }
-            if ($this->leases()->isServeLeaseAlive($now)) {
-                return;
-            }
-
             $reservation = $instances->reserveReportWindow(
                 $componentType,
                 $now,
@@ -84,7 +77,7 @@ final class PlatformReporter
             $result = $this->heartbeat()->run(
                 $this->payloads()->create($reservation['instance'], $componentType, $now),
             );
-            $success = $result->ok && ($result->skipped === 'serve_active'
+            $success = $result->ok && ($result->skipped === 'heartbeat_active'
                 || $result->instanceId === (string) ($reservation['instance']['instance_id'] ?? ''));
             $error = $success ? '' : $this->stableError($result->error);
             $instances->recordReportResult(
@@ -145,11 +138,6 @@ final class PlatformReporter
             null,
             (int) config('agent.heartbeat_timeout_milliseconds', 5000),
         );
-    }
-
-    private function leases(): AgentRuntimeLeaseReader
-    {
-        return $this->leaseReader ??= new AgentRuntimeStatusReader($this->sharedFiles());
     }
 
     private function payloads(): AgentHeartbeatPayloadFactory

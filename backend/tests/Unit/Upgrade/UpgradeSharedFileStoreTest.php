@@ -51,24 +51,10 @@ final class UpgradeSharedFileStoreTest extends TestCase
         self::assertSame(0660, fileperms($this->root . '/config/instance.json') & 0777);
     }
 
-    public function testAgentStatusIsReadOnlyFromPhp(): void
-    {
-        $path = $this->root . '/run/agent-status.json';
-        file_put_contents($path, "{\"schema_version\":1,\"healthy\":true}\n");
-        chmod($path, 0660);
-        $store = $this->store();
-
-        self::assertTrue($store->readJson('agent_status')->healthy);
-        $this->assertFailure('SHARED_FILE_UNAVAILABLE', fn() => $store->writeJson(
-            'agent_status',
-            (object) ['schema_version' => 1],
-        ));
-    }
-
     public function testOldLogicalDocumentsAreUnavailable(): void
     {
         $store = $this->store();
-        foreach (['upgrade_gate', 'namespace_projection', 'session_auth', 'runtime_registry'] as $name) {
+        foreach (['agent_status', 'upgrade_gate', 'namespace_projection', 'session_auth', 'runtime_registry'] as $name) {
             $this->assertFailure('SHARED_FILE_UNAVAILABLE', fn() => $store->readJson($name));
         }
     }

@@ -29,7 +29,7 @@ final readonly class UpgradeAdminGateMiddleware
             'admin/api/system/upgrade/releases',
             'admin/api/system/upgrade/records',
         ], true))
-            || ($method === 'POST' && $path === 'admin/api/system/upgrade/session')) {
+            || ($method === 'POST' && $path === 'admin/api/system/upgrade/jobs')) {
             return $next($request);
         }
 

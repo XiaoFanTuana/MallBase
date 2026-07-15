@@ -6,7 +6,6 @@ namespace app\service\admin\upgrade;
 
 use app\model\upgrade\UpgradeRecord;
 use app\service\install\AgentHeartbeatPayloadFactory;
-use app\service\install\InstallLockService;
 use Closure;
 use mall_base\base\BaseService;
 use RuntimeException;
@@ -16,7 +15,7 @@ use RuntimeException;
  */
 final class UpgradeAdminService extends BaseService
 {
-    private const ENTRY_TICKET_TTL = 60;
+    private const JOB_TICKET_TTL = 600;
 
     protected string $modelClass = UpgradeRecord::class;
 
@@ -24,13 +23,17 @@ final class UpgradeAdminService extends BaseService
         private readonly ?string $configuredRoot = null,
         private readonly ?Closure $clock = null,
         private readonly ?Closure $ticketFactory = null,
-        private readonly ?InstallLockService $installLock = null,
+        private readonly ?Closure $jobIdFactory = null,
         private readonly ?Closure $currentReleaseReader = null,
         private readonly ?PlatformReleaseCatalogService $releaseCatalog = null,
     ) {
     }
 
-    /** @return array{current:array{version:string,released_at:string,notes:list<string>}} */
+    /**
+     * 读取当前安装版本，供后台展示和查询 Platform 候选版本时使用。
+     *
+     * @return array{current:array{version:string,released_at:string,notes:list<string>}}
+     */
     public function getOverview(): array
     {
         $reader = $this->currentReleaseReader ?? static fn(): array =>
@@ -60,7 +63,11 @@ final class UpgradeAdminService extends BaseService
         ]];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * 使用当前版本查询 Platform 可升级版本；Agent 不参与后台版本列表展示。
+     *
+     * @return array<string, mixed>
+     */
     public function getReleaseCatalog(): array
     {
         $overview = $this->getOverview();
@@ -70,6 +77,8 @@ final class UpgradeAdminService extends BaseService
     }
 
     /**
+     * 从 jobs/<job-id>/record.json 分页读取长期任务记录。
+     *
      * @return array{total:int,list:list<array<string, int|string>>}
      */
     public function getList(int $page, int $limit): array
@@ -85,35 +94,54 @@ final class UpgradeAdminService extends BaseService
     }
 
     /**
-     * @return array{upgrade_url:string,expires_at:int}
+     * 创建一次性宿主机任务。请求文件只保存 ticket hash，Platform 凭据由
+     * Agent 从 instance.json 读取，避免同一密钥在任务目录中重复落盘。
+     *
+     * @return array{job_id:string,status:string,status_url:string,expires_at:int}
      */
-    public function createEntryTicket(int $adminId, mixed $targetVersion = ''): array
+    public function createJob(int $adminId, mixed $action, mixed $targetVersion = ''): array
     {
-        if ($adminId < 1 || !is_string($targetVersion)
-            || ($targetVersion !== ''
-                && preg_match('/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/D', $targetVersion) !== 1)) {
+        if ($adminId < 1 || !is_string($action) || !in_array($action, ['upgrade', 'rollback'], true)
+            || !is_string($targetVersion)
+            || ($action === 'upgrade'
+                && preg_match('/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/D', $targetVersion) !== 1)
+            || ($action === 'rollback' && $targetVersion !== '')) {
             throw new RuntimeException('UPGRADE_ENTRY_ARGUMENT_INVALID');
         }
-        $platformToken = $this->platformToken();
+        $jobId = $this->newJobId();
         $ticket = $this->newTicket();
-        $issuedAt = $this->now();
-        $expiresAt = $issuedAt + self::ENTRY_TICKET_TTL;
-        $hash = hash('sha256', $ticket);
-        $document = [
+        $createdAt = $this->now();
+        $expiresAt = $createdAt + self::JOB_TICKET_TTL;
+        $request = [
             'schema_version' => 1,
-            'ticket_hash' => $hash,
-            'admin_id' => $adminId,
-            'platform_token' => $platformToken,
-            'issued_at' => $issuedAt,
+            'job_id' => $jobId,
+            'action' => $action,
+            'target_version' => $targetVersion,
+            'requested_by' => $adminId,
+            'ticket_hash' => hash('sha256', $ticket),
+            'created_at' => $createdAt,
             'expires_at' => $expiresAt,
         ];
-        if ($targetVersion !== '') {
-            $document['target_version'] = $targetVersion;
-        }
-        $this->model()->writeEntryTicket($this->root(), $document);
+        $record = [
+            'schema_version' => 1,
+            'job_id' => $jobId,
+            'action' => $action,
+            'source_version' => '',
+            'target_version' => $targetVersion,
+            'status' => 'queued',
+            'backup_path' => '',
+            'package_path' => '',
+            'created_at' => $createdAt,
+            'started_at' => 0,
+            'finished_at' => 0,
+            'error' => '',
+        ];
+        $this->model()->createQueuedJob($this->root(), $request, $record);
 
         return [
-            'upgrade_url' => '/upgrade/?ticket=' . rawurlencode($ticket),
+            'job_id' => $jobId,
+            'status' => 'queued',
+            'status_url' => '/upgrade/?ticket=' . rawurlencode($ticket),
             'expires_at' => $expiresAt,
         ];
     }
@@ -140,16 +168,22 @@ final class UpgradeAdminService extends BaseService
         return $ticket;
     }
 
-    private function platformToken(): string
+    private function newJobId(): string
     {
-        $platform = ($this->installLock ?? app()->make(InstallLockService::class))->getPlatformState();
-        $token = $platform['token'] ?? null;
-        if (($platform['disabled'] ?? false) === true || !is_string($token)
-            || strlen($token) < 1 || strlen($token) > 4096
-            || preg_match('/^[\x21-\x7E]+$/D', $token) !== 1) {
+        if ($this->jobIdFactory !== null) {
+            $jobId = (string) ($this->jobIdFactory)();
+        } else {
+            $bytes = random_bytes(16);
+            $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+            $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+            $hex = bin2hex($bytes);
+            $jobId = substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
+                . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20);
+        }
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $jobId) !== 1) {
             throw new RuntimeException('UPGRADE_ENTRY_UNAVAILABLE');
         }
 
-        return $token;
+        return $jobId;
     }
 }

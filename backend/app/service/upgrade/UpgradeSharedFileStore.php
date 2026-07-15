@@ -13,14 +13,13 @@ use Throwable;
 /**
  * PHP 与宿主机 Agent 之间的最小共享文件边界。
  *
- * PHP 只写实例配置，只读 Agent 状态；升级工单、备份与入口票据由各自服务管理。
+ * PHP 只读写实例配置；升级任务和备份由各自服务管理。
  */
 final class UpgradeSharedFileStore
 {
     /** @var array<string,array{path:string,owner:string,write:bool}> */
     private const DOCUMENTS = [
         'instance' => ['path' => 'config/instance.json', 'owner' => 'php', 'write' => true],
-        'agent_status' => ['path' => 'run/agent-status.json', 'owner' => 'agent', 'write' => false],
     ];
 
     private const INSTANCE_LOCK_PATH = 'run/instance-config.lock';

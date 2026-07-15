@@ -9,3 +9,4 @@
 !/bin/mallbase-agent-linux-amd64
 !/bin/mallbase-agent-linux-arm64
 !/bin/checksums.sha256
+/bin/mallbase-agent

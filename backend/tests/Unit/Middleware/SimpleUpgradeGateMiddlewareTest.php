@@ -111,7 +111,7 @@ final class SimpleUpgradeGateMiddlewareTest extends TestCase
             static fn(): Response => response('unexpected', 200),
         );
         $upgrade = $middleware->handle(
-            $this->request('admin/api/system/upgrade/session', 'POST'),
+            $this->request('admin/api/system/upgrade/jobs', 'POST'),
             static fn(): Response => response('upgrade-admin-ok', 200),
         );
         $overview = $middleware->handle(

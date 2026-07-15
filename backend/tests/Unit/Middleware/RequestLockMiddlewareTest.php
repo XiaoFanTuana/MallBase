@@ -21,7 +21,7 @@ final class RequestLockMiddlewareTest extends TestCase
             }
         };
         $rule->option(['_request_lock' => false]);
-        $request = (new Request())->setMethod('POST')->setPathinfo('admin/api/system/upgrade/session');
+        $request = (new Request())->setMethod('POST')->setPathinfo('admin/api/system/upgrade/jobs');
         $request->setRule($rule);
         $called = 0;
 

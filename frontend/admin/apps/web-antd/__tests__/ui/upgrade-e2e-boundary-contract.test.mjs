@@ -45,10 +45,11 @@ test('Vite sends Admin to PHP and upgrade traffic to the temporary Go server', (
 test('real-backend E2E separates Admin records from the optional Go shell', () => {
   assert.equal(existsSync(upgradeE2eUrl), true);
   const e2eSource = readFileSync(upgradeE2eUrl, 'utf8');
+  assert.match(e2eSource, /\/admin\/api\/system\/upgrade\/overview/);
+  assert.match(e2eSource, /\/admin\/api\/system\/upgrade\/releases/);
   assert.match(e2eSource, /\/admin\/api\/system\/upgrade\/records/);
-  assert.match(e2eSource, /\/admin\/api\/system\/upgrade\/session/);
-  assert.match(e2eSource, /\/upgrade\/health/);
-  assert.match(e2eSource, /shell\.status\(\)\)\.toBe\(401\)/);
-  assert.match(e2eSource, /application\/json/);
+  assert.match(e2eSource, /expect\(agentRequests\)\.toEqual\(\[\]\)/);
+  assert.doesNotMatch(e2eSource, /\/admin\/api\/system\/upgrade\/session/);
+  assert.doesNotMatch(e2eSource, /\/upgrade\/health/);
   assert.doesNotMatch(e2eSource, /\/upgrade\/api\/maintenance/);
 });
