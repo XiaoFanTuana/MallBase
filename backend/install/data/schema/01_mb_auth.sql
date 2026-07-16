@@ -151,7 +151,7 @@ CREATE TABLE `mb_admin_operation_log` (
 -- 插入初始数据
 -- -----------------------------
 
--- 插入超级管理员（默认密码：admin123，需要在生产环境修改）
+-- 插入超级管理员占位记录（安装器会立即写入用户设置的强密码）
 INSERT INTO `mb_admin` (`id`, `username`, `password`, `nickname`, `avatar`, `status`, `password_changed_at`, `remark`) VALUES
 (1, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '超级管理员', '/static/admin/logo.png', 1, CURRENT_TIMESTAMP, '系统默认管理员');
 

@@ -186,7 +186,7 @@ docker compose -f docker-compose.dev.yml --profile tools up rotate-db-password
 处理：
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ls backend/public/admin/index.html
 ```
 

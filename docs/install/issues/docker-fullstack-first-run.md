@@ -98,7 +98,7 @@
 ```bash
 sh deploy/docker/cleanup-dev.sh --all-images
 docker compose -f docker-compose.dev.yml up -d
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 本次已验证首次启动可以直接跑通：

@@ -66,7 +66,7 @@ pnpm run build --filter=@vben/web-antd
 Docker 全套模式单独构建：
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 完整说明见 [admin-build.md](./admin-build.md)。

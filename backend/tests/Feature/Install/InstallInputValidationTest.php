@@ -27,6 +27,16 @@ final class InstallInputValidationTest extends TestCase
         $this->assertTrue($validation['success']);
     }
 
+    public function testShortAdminPasswordBlocksInstall(): void
+    {
+        $validation = $this->validate($this->validParams([
+            'admin_pass' => 'secret123',
+        ]));
+
+        $this->assertFalse($validation['success']);
+        $this->assertSame('管理员密码至少 12 位', $validation['message']);
+    }
+
     public function testClientEntryChecksClientBuildIndexHtml(): void
     {
         $source = (string) file_get_contents(dirname(__DIR__, 3) . '/app/service/install/InstallService.php');
@@ -43,7 +53,7 @@ final class InstallInputValidationTest extends TestCase
     private function validParams(array $overrides = []): array
     {
         return array_merge([
-            'admin_pass' => 'secret123',
+            'admin_pass' => 'secret123456',
             'admin_user' => 'admin',
             'db_host' => '127.0.0.1',
             'db_name' => 'mall_base',

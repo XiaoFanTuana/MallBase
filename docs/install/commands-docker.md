@@ -5,6 +5,7 @@
 - [docker-backend-only.md](./docker-backend-only.md)
 - [docker-fullstack.md](./docker-fullstack.md)
 - [docker-production.md](./docker-production.md)
+- [docker-fullstack-production.md](./docker-fullstack-production.md)
 
 ## 只启动后端容器
 
@@ -30,13 +31,22 @@ docker compose -f docker-compose.dev.yml up -d
 docker compose up -d --build
 ```
 
+## 启动 Docker 生产全功能版
+
+适用：方式五。
+
+```bash
+docker compose -f docker-compose.full.yml pull
+docker compose -f docker-compose.full.yml up -d
+```
+
 ## 启动 Docker 开发全套并单独执行前端打包
 
 适用：方式三。
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 ## 查看后端日志

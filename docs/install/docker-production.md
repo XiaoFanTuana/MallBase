@@ -2,6 +2,8 @@
 
 适合单后端容器 + 宿主机 Nginx 的生产部署方式。
 
+需要由 Docker 同时托管 Admin、H5、MySQL、Redis、定时任务和队列时，优先使用[方式五：Docker 生产全功能部署](./docker-fullstack-production.md)。本页保留给已经自备数据库、Redis 和宿主机 Nginx 的部署场景。
+
 ## 前提
 
 - 服务器已安装 Docker 与 Docker Compose
@@ -157,8 +159,9 @@ docker compose up -d
 | 根 `.env` | 容器环境变量 | `env_file` 注入 | Compose 读取项目根 `.env`，启动时注入容器；入口脚本再派生 `/app/.env`。 |
 | `backend_runtime` volume | `/app/runtime` | 命名 volume | 运行时缓存、日志、安装锁等持久化数据。 |
 | `backend_uploads` volume | `/app/public/uploads` | 命名 volume | 用户上传文件持久化数据。 |
+| `backend_certs` volume | `/app/storage/cert` | 命名 volume | 微信支付等商户证书持久化数据。 |
 
-生产 compose 不挂载 `/workspace`，也不会把服务器上的项目根目录映射进容器。重建镜像后，代码来自新镜像；运行时数据和上传文件继续由两个命名 volume 保留。
+生产 compose 不挂载 `/workspace`，也不会把服务器上的项目根目录映射进容器。重建镜像后，代码来自新镜像；运行时数据、上传文件和商户证书继续由三个命名 volume 保留。
 
 如果生产环境选择 Nginx 直接托管静态资源，前端文件在宿主机 Nginx 目录；如果选择所有请求统一代理到 Swoole，需要确保前端产物已经进入镜像，或额外挂载到容器内 `/app/public/admin` 和 `/app/public/client`。
 

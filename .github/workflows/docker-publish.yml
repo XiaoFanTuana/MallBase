@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -52,16 +52,30 @@ jobs:
         working-directory: backend
 
   publish:
-    name: Build and Push Backend Image
+    name: Build and Push ${{ matrix.name }} Image
     needs: verify
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Backend
+            dockerfile: deploy/docker/Dockerfile
+            repository_variable: DOCKERHUB_REPOSITORY
+            default_repository: mallbase-backend
+            cache_scope: backend
+          - name: Web
+            dockerfile: deploy/docker/web/Dockerfile
+            repository_variable: DOCKERHUB_WEB_REPOSITORY
+            default_repository: mallbase-web
+            cache_scope: web
     env:
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY || 'mallbase-backend' }}
+      DOCKERHUB_REPOSITORY: ${{ vars[matrix.repository_variable] || matrix.default_repository }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check Docker Hub configuration
         id: dockerhub
@@ -78,11 +92,11 @@ jobs:
 
       - name: Set up QEMU
         if: steps.dockerhub.outputs.configured == 'true'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         if: steps.dockerhub.outputs.configured == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
         if: steps.dockerhub.outputs.configured == 'true'
@@ -94,7 +108,7 @@ jobs:
       - name: Extract Docker metadata
         if: steps.dockerhub.outputs.configured == 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: docker.io/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.DOCKERHUB_REPOSITORY }}
           tags: |
@@ -107,13 +121,15 @@ jobs:
 
       - name: Build and push
         if: steps.dockerhub.outputs.configured == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
-          file: deploy/docker/Dockerfile
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
+          provenance: mode=max
+          sbom: true

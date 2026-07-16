@@ -548,8 +548,8 @@ class InstallService extends BaseService
      * 2. 项目根目录 .env（统一主配置源）
      * 3. backend/.env（生产 / 仅后端容器 / 历史环境兜底）
      *
-     * 管理员账号和演示数据不再作为 env 配置入口，Web 安装统一回到安装表单确认。
-     * 可选 CLI 安装入口仍使用代码内置默认值，避免依赖第二套 env 配置。
+     * Web 安装的管理员账号和演示数据由安装表单确认；CLI 安装命令会在调用
+     * 本方法后单独处理 INSTALL_ADMIN_USER / INSTALL_ADMIN_PASSWORD 和 --demo。
      */
     public function buildParamsFromEnv(): array
     {
@@ -572,10 +572,10 @@ class InstallService extends BaseService
             'redis_db'       => $get('REDIS_CACHE_DB') !== '' ? (int) $get('REDIS_CACHE_DB') : 0,
             'redis_password' => $get('REDIS_PASSWORD'),
             'admin_user'     => 'admin',
-            'admin_pass'     => 'admin123',
+            'admin_pass'     => '',
             'import_demo'    => false,
-            'cron_enable'    => false,
-            'swoole_queue_enable' => false,
+            'cron_enable'    => $this->envFlagText($get('CRON_ENABLE')) === 'true',
+            'swoole_queue_enable' => $this->envFlagText($get('SWOOLE_QUEUE_ENABLE')) === 'true',
             // 站点域名（用于 Upload 本地域名、邮件/分享链接等全局场景，统一存 mb_setting.site_url，不再写 env）
             // env 中可预置 SITE_URL 作为 CLI 安装（install:auto）的输入；Web 向导提交空串时会回退到当前 request 域名
             'site_url'       => $get('SITE_URL'),
@@ -891,7 +891,13 @@ class InstallService extends BaseService
                 'REDIS_PASSWORD'         => $redisConfig['password'],
                 'CACHE_DRIVER'           => 'redis',
                 'CRON_ENABLE'            => $cronEnable ? 'true' : 'false',
+                'QUEUE_CONNECTION'       => $swooleQueueEnable ? 'redis' : 'sync',
                 'SWOOLE_QUEUE_ENABLE'    => $swooleQueueEnable ? 'true' : 'false',
+                'QUEUE_REDIS_QUEUE'      => (string) env('QUEUE_REDIS_QUEUE', 'default'),
+                'QUEUE_REDIS_HOST'       => $redisConfig['host'],
+                'QUEUE_REDIS_PORT'       => (string) $redisConfig['port'],
+                'QUEUE_REDIS_PASSWORD'   => $redisConfig['password'],
+                'QUEUE_REDIS_SELECT'     => (string) env('QUEUE_REDIS_SELECT', 1),
                 'JWT_SECRET'             => $jwtSecret,
                 'JWT_EXPIRE'             => (string) env('JWT_EXPIRE', 7200),
                 'JWT_REFRESH_EXPIRE'     => (string) env('JWT_REFRESH_EXPIRE', 2592000),
@@ -1315,6 +1321,14 @@ class InstallService extends BaseService
             'REDIS_CACHE_DB',
             'REDIS_PASSWORD',
             'CACHE_DRIVER',
+            'CRON_ENABLE',
+            'QUEUE_CONNECTION',
+            'SWOOLE_QUEUE_ENABLE',
+            'QUEUE_REDIS_QUEUE',
+            'QUEUE_REDIS_HOST',
+            'QUEUE_REDIS_PORT',
+            'QUEUE_REDIS_PASSWORD',
+            'QUEUE_REDIS_SELECT',
             'JWT_SECRET',
             'JWT_EXPIRE',
             'JWT_REFRESH_EXPIRE',

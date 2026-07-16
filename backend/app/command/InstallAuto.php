@@ -53,6 +53,8 @@ class InstallAuto extends Command
         'SITE_URL',
         'SWOOLE_HTTP_PORT',
         'SWOOLE_WORKER_NUM',
+        'INSTALL_ADMIN_USER',
+        'INSTALL_ADMIN_PASSWORD',
     ];
 
     /**
@@ -99,6 +101,16 @@ class InstallAuto extends Command
 
         $params = $service->buildParamsFromEnv();
         $params['import_demo'] = (bool) $input->getOption('demo');
+        $params['admin_user'] = trim((string) (getenv('INSTALL_ADMIN_USER') ?: 'admin')) ?: 'admin';
+        $configuredAdminPassword = (string) (getenv('INSTALL_ADMIN_PASSWORD') ?: '');
+        $params['admin_pass'] = $configuredAdminPassword !== ''
+            ? $configuredAdminPassword
+            : bin2hex(random_bytes(12));
+
+        if (strlen($params['admin_pass']) < 12) {
+            $output->writeln('<error>[install:auto] INSTALL_ADMIN_PASSWORD 至少需要 12 个字符</error>');
+            return 1;
+        }
 
         $missing = [];
         $requiredLabels = [

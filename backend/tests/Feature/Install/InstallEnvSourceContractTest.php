@@ -46,6 +46,51 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString("\$cacheManager->forgetDriver(['redis', 'file']);", $source);
     }
 
+    public function testInstallerDoesNotShipDefaultAdminPassword(): void
+    {
+        $root = dirname(__DIR__, 4);
+        $service = (string) file_get_contents($root . '/backend/app/service/install/InstallService.php');
+        $page = (string) file_get_contents($root . '/backend/public/install/index.html');
+        $autoInstall = (string) file_get_contents($root . '/backend/app/command/InstallAuto.php');
+
+        $this->assertStringNotContainsString('admin123', $service);
+        $this->assertStringNotContainsString('admin123', $page);
+        $this->assertStringNotContainsString('admin123', $autoInstall);
+        $this->assertStringContainsString("bin2hex(random_bytes(12))", $autoInstall);
+        $this->assertStringContainsString('INSTALL_ADMIN_PASSWORD 至少需要 12 个字符', $autoInstall);
+    }
+
+    public function testFullStackComposeKeepsInstallDefaultsAndDataInternal(): void
+    {
+        $root = dirname(__DIR__, 4);
+        $compose = (string) file_get_contents($root . '/docker-compose.full.yml');
+        $service = (string) file_get_contents($root . '/backend/app/service/install/InstallService.php');
+
+        $this->assertStringContainsString('MALLBASE_WEB_IMAGE', $compose);
+        $this->assertStringContainsString('backend_bootstrap:/workspace:ro', $compose);
+        $this->assertStringContainsString('BACKEND_ENV_EXPORT: /bootstrap/.env', $compose);
+        $this->assertStringContainsString('CRON_ENABLE: "${CRON_ENABLE:-true}"', $compose);
+        $this->assertStringContainsString('QUEUE_CONNECTION: "${QUEUE_CONNECTION:-redis}"', $compose);
+        $this->assertStringContainsString('SWOOLE_QUEUE_ENABLE: "${SWOOLE_QUEUE_ENABLE:-true}"', $compose);
+        $this->assertStringContainsString('QUEUE_REDIS_USE_CACHE_AUTH: "true"', $compose);
+        $this->assertStringContainsString('${MALLBASE_BIND_HOST:-127.0.0.1}', $compose);
+        $this->assertStringContainsString('backend_certs:/app/storage/cert', $compose);
+        $this->assertStringContainsString('backend_config:/app-config', $compose);
+        $this->assertStringContainsString('backend_uploads:/srv/mallbase-uploads:ro', $compose);
+        $this->assertStringContainsString('BACKEND_ENV_PATH: /app-config/.env', $compose);
+        $this->assertStringContainsString('http://127.0.0.1:8080/healthz', $compose);
+        $this->assertStringContainsString('/usr/local/bin/mallbase-healthcheck.php', $compose);
+        $this->assertStringContainsString('internal: true', $compose);
+        $this->assertStringContainsString('check-db-auth:', $compose);
+        $this->assertStringContainsString('condition: service_completed_successfully', $compose);
+        $this->assertStringNotContainsString('MYSQL_PORT:-', $compose);
+        $this->assertStringNotContainsString('REDIS_HOST_PORT:-', $compose);
+        $this->assertStringContainsString("\$this->envFlagText(\$get('CRON_ENABLE')) === 'true'", $service);
+        $this->assertStringContainsString("\$this->envFlagText(\$get('SWOOLE_QUEUE_ENABLE')) === 'true'", $service);
+        $this->assertStringContainsString("'QUEUE_CONNECTION'       => \$swooleQueueEnable ? 'redis' : 'sync'", $service);
+        $this->assertStringContainsString("'QUEUE_REDIS_PASSWORD'   => \$redisConfig['password']", $service);
+    }
+
     public function testDockerProductionUsesRootEnvFileWithoutWorkspaceMount(): void
     {
         $root = dirname(__DIR__, 4);
@@ -69,5 +114,6 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString('生产单后端容器不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
         $this->assertStringContainsString('`backend_runtime` volume', $docs);
         $this->assertStringContainsString('`backend_uploads` volume', $docs);
+        $this->assertStringContainsString('`backend_certs` volume', $docs);
     }
 }

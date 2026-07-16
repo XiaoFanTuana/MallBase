@@ -36,7 +36,7 @@ set -eu
 #
 #   --all-images
 #     兼容旧参数，等同于 --images，并额外删除共享基础镜像：
-#       mysql:8.0 / redis:7-alpine / node:20-alpine / alpine:3.19
+#       mysql:8.0 / redis:7-alpine / node:20-alpine / alpine:3.24.1
 #
 # 注意：
 #   - --docker 与 --images 会删除数据库、Redis 或镜像状态。
@@ -222,7 +222,7 @@ if [ "$ALL_IMAGES" -eq 1 ]; then
         mysql:8.0 \
         redis:7-alpine \
         node:20-alpine \
-        alpine:3.19
+        alpine:3.24.1
     do
         docker image rm -f "$image" >/dev/null 2>&1 || true
     done

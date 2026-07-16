@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -46,6 +46,9 @@ jobs:
         run: find app config mall_base public route tests -name '*.php' -print0 | xargs -0 -n1 php -l
         working-directory: backend
 
+      - name: Docker healthcheck syntax check
+        run: php -l deploy/docker/backend-healthcheck.php
+
       - name: Run tests
         run: composer test
         working-directory: backend
@@ -56,15 +59,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: frontend/admin/.node-version
           cache: pnpm
@@ -100,10 +103,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20.19.0
           cache: npm
@@ -143,3 +146,77 @@ jobs:
           test -f dist/build/mp-weixin/app.json
           node -e "const config = require('./dist/build/mp-weixin/project.config.json'); if (config.appid !== 'wx1234567890abcdef') process.exit(1)"
         working-directory: frontend/uniapp
+
+  full-stack-image:
+    name: Full Stack Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate shell scripts
+        run: sh -n deploy/docker/ensure-env.sh deploy/docker/docker-entrypoint.sh deploy/docker/mysql-entrypoint.sh deploy/docker/redis-entrypoint.sh deploy/docker/check-db-auth.sh deploy/docker/rotate-db-password.sh
+
+      - name: Validate full stack Compose
+        run: |
+          cp deploy/docker/.example.env .env
+          docker compose -f docker-compose.full.yml config --quiet
+          docker compose -f docker-compose.frontend-build.yml config --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Web image
+        run: docker buildx build --load --file deploy/docker/web/Dockerfile --tag mallbase-web:test .
+
+      - name: Smoke test Web image
+        run: |
+          volume=mallbase-web-uploads-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          docker volume create "$volume"
+          docker run --rm -v "$volume:/uploads" alpine:3.24.1 \
+            sh -c 'printf "upload-smoke\n" > /uploads/smoke.txt; printf "blocked\n" > /uploads/smoke.php'
+          docker run -d --name mallbase-web-test \
+            -v "$volume:/srv/mallbase-uploads:ro" \
+            mallbase-web:test
+          trap 'docker logs mallbase-web-test; docker rm -f mallbase-web-test; docker volume rm -f "$volume"' EXIT
+          for attempt in $(seq 1 20); do
+            if docker exec mallbase-web-test wget -q -O /dev/null http://127.0.0.1:8080/healthz; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec mallbase-web-test test -s /usr/share/nginx/html/admin/index.html
+          docker exec mallbase-web-test test -s /usr/share/nginx/html/client/index.html
+          docker exec mallbase-web-test sh -c \
+            'wget -q -O - http://127.0.0.1:8080/uploads/smoke.txt | grep -q "^upload-smoke$"'
+          if docker exec mallbase-web-test wget -q -O /dev/null http://127.0.0.1:8080/uploads/smoke.php; then
+            echo "Executable upload was served unexpectedly" >&2
+            exit 1
+          fi
+
+      - name: Build Backend image
+        run: docker buildx build --load --file deploy/docker/Dockerfile --tag mallbase-backend:test .
+
+      - name: Verify persistent Backend runtime config
+        run: |
+          volume=mallbase-backend-config-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          docker volume create "$volume"
+          trap 'docker volume rm -f "$volume"' EXIT
+          docker run --rm \
+            -e BACKEND_ENV_PATH=/app-config/.env \
+            -v "$volume:/app-config" \
+            mallbase-backend:test \
+            sh -c 'test -L /app/.env; sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=old-password/; s/^QUEUE_REDIS_PASSWORD=.*/QUEUE_REDIS_PASSWORD=old-password/" /app-config/.env; printf "INSTALL_RUNTIME_MARKER=ci-persisted\n" >> /app-config/.env'
+          docker run --rm \
+            -e BACKEND_ENV_PATH=/app-config/.env \
+            -e REDIS_PASSWORD= \
+            -e QUEUE_REDIS_USE_CACHE_AUTH=true \
+            -v "$volume:/app-config" \
+            mallbase-backend:test \
+            sh -c 'test -L /app/.env && grep -q "^INSTALL_RUNTIME_MARKER=ci-persisted$" /app/.env && grep -q "^REDIS_PASSWORD=$" /app/.env && grep -q "^QUEUE_REDIS_PASSWORD=$" /app/.env'
+          docker run --rm mallbase-backend:test \
+            php -r 'exit(ini_get("upload_max_filesize") === "220M" && ini_get("post_max_size") === "240M" ? 0 : 1);'

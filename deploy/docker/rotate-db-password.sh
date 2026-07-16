@@ -38,7 +38,7 @@ echo ">>> [rotate-db-password] 开始把 MySQL 中的业务账号密码同步为
 if mysql --protocol=TCP -hmysql -uroot -p"${MYSQL_ROOT_PASSWORD}" \
     -e "ALTER USER '${escaped_user}'@'%' IDENTIFIED BY '${escaped_pass}'; FLUSH PRIVILEGES;"; then
     echo ">>> [rotate-db-password] 完成：已把 ${DB_USER}@'%' 的密码同步为根 .env 的 DB_PASS"
-    echo ">>> [rotate-db-password] 后续重新执行 docker compose up -d，backend 会直接使用新的 backend/.env 运行。"
+    echo ">>> [rotate-db-password] 后续重新执行对应的 docker compose up -d，让 backend 加载新密码。"
     exit 0
 fi
 

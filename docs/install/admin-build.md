@@ -5,17 +5,17 @@
 ## 打包文件位置
 
 - 打包用 Compose：[`docker-compose.frontend-build.yml`](../../docker-compose.frontend-build.yml)
-- 配套脚本：[`deploy/docker/frontend-build.sh`](../../deploy/docker/frontend-build.sh)
+- 构建镜像：[`deploy/docker/web/Dockerfile`](../../deploy/docker/web/Dockerfile)
 
 ## 方式一：Docker 一键打包（推荐，适用方式三）
 
 在仓库根目录执行：
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
-容器会在 `frontend/admin` 下完成打包，并把产物同步到 `backend/public/admin`。需要重新打包时再执行同一条命令即可（会先清空 `backend/public/admin` 再写入）。
+Compose 会在干净的 Linux 构建阶段中完成打包，不会读取宿主机 `node_modules`，然后把产物同步到 `backend/public/admin`。需要重新打包时再执行同一条命令即可（会先清空 `backend/public/admin` 再写入）。
 
 查看打包日志：
 
@@ -26,7 +26,7 @@ docker logs ${PREFIX}-frontend-build
 
 ## 方式二：本地打包（适用方式一 / 方式四）
 
-需要本机已安装 Node.js 20.19.0+ 和 pnpm 10+：
+需要本机使用项目 `.node-version` 指定的 Node.js 22.22.0 和 pnpm 10.28.2：
 
 ```bash
 cd frontend/admin
@@ -44,10 +44,10 @@ cp -r frontend/admin/apps/web-antd/dist/. backend/public/admin/
 
 ## 构建流程
 
-`deploy/docker/frontend-build.sh` 的步骤：
+`deploy/docker/web/Dockerfile` 的 Admin 构建阶段执行：
 
-1. 启用 `corepack` 并激活项目声明的 `pnpm` 版本
-2. `pnpm install --frozen-lockfile` 安装依赖（严格按 lockfile）
+1. 使用 Node.js 22.22.0，启用 `corepack` 并激活 pnpm 10.28.2
+2. `pnpm fetch` 后执行离线 `pnpm install --frozen-lockfile`
 3. `pnpm run build:antd` 构建后台前端
 4. 把 `apps/web-antd/dist` 拷贝到产物目录（容器内挂载为 `backend/public/admin`）
 

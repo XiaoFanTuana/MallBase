@@ -117,7 +117,7 @@ sh deploy/docker/cleanup-dev.sh --all-images
 - `mysql:8.0`
 - `redis:7-alpine`
 - `node:20-alpine`
-- `alpine:3.19`
+- `alpine:3.24.1`
 
 这些镜像可能被本机其他项目使用，删除后下次还要重新拉取。
 
