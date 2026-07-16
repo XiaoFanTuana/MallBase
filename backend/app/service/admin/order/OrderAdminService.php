@@ -147,7 +147,7 @@ class OrderAdminService extends BaseService
             $remark = $deliveryType === Order::DELIVERY_TYPE_VIRTUAL
                 ? sprintf('虚拟发货：%s', $deliveryNote)
                 : sprintf('发货：%s %s', $company['name'], $sn);
-            $machine->transit(
+            $changed = $machine->transit(
                 order: $order,
                 toStatus: OrderStatus::SHIPPED,
                 operatorType: OperatorType::ADMIN,
@@ -648,6 +648,9 @@ class OrderAdminService extends BaseService
                 operatorId: $adminId,
                 remark: $reason !== null && $reason !== '' ? mb_substr($reason, 0, 255) : '管理员关闭订单',
             );
+            if (!$changed) {
+                return;
+            }
             $stock->restoreBatch($items);
             if ($prepayLogIds !== []) {
                 $this->model(PaymentLog::class)
@@ -698,22 +701,28 @@ class OrderAdminService extends BaseService
                 $prepayClose->closeLogs($prepayLogs);
                 $prepayLogIds = $prepayClose->idsOf($prepayLogs);
 
-                $this->transaction(function () use ($order, $items, $machine, $stock, $prepayLogIds): void {
-                    $machine->transit(
+                $didClose = (bool) $this->transaction(function () use ($order, $items, $machine, $stock, $prepayLogIds): bool {
+                    $changed = $machine->transit(
                         order: $order,
                         toStatus: OrderStatus::CLOSED,
                         operatorType: OperatorType::SYSTEM,
                         operatorId: null,
                         remark: '支付超时自动关闭',
                     );
+                    if (!$changed) {
+                        return false;
+                    }
                     $stock->restoreBatch($items);
                     if ($prepayLogIds !== []) {
                         $this->model(PaymentLog::class)
                             ->whereIn('id', $prepayLogIds)
                             ->update(['event_type' => PaymentLog::EVENT_CLOSED]);
                     }
+                    return true;
                 });
-                $closed++;
+                if ($didClose) {
+                    $closed++;
+                }
             } catch (\Throwable $e) {
                 // 单条异常不中断批量，写入日志后继续
                 OrderLog::create([

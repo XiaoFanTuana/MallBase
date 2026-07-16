@@ -96,6 +96,12 @@ const resetSearch = () => {
   loadData(searchParams.value);
 };
 
+const handleTableChange = (next: { current?: number; pageSize?: number }) => {
+  pagination.current = next.current ?? 1;
+  pagination.pageSize = next.pageSize ?? pagination.pageSize;
+  loadData(searchParams.value);
+};
+
 const providerName = (id: number) =>
   providers.value.find((p) => p.id === id)?.name || `#${id}`;
 
@@ -164,7 +170,7 @@ if (hasAccessByCodes(['SmsSignList'])) {
               @click="
                 () => {
                   pagination.current = 1;
-                  loadData(searchParams.value);
+                  loadData(searchParams);
                 }
               "
             >
@@ -184,13 +190,7 @@ if (hasAccessByCodes(['SmsSignList'])) {
         :pagination="pagination"
         :scroll="{ x: 1200 }"
         row-key="id"
-        @change="
-          (newPagination) => {
-            pagination.current = newPagination.current;
-            pagination.pageSize = newPagination.pageSize;
-            loadData(searchParams.value);
-          }
-        "
+        @change="handleTableChange"
         v-access:code="'SmsSignList'"
       >
         <template #bodyCell="{ column, record }">

@@ -103,12 +103,6 @@ const getPicPreviewUrl = (pic: FileInfo | string): string => {
   return `${import.meta.env.VITE_GLOB_API_URL || ''}${pic}`;
 };
 
-/** 获取图片提交 URL */
-const getPicUrl = (pic: FileInfo | string): string => {
-  if (!pic) return '';
-  if (typeof pic === 'object') return pic.url || '';
-  return pic;
-};
 const fileNameFromValue = (value: unknown) => String(value || '').split('/').pop() || '';
 
 const handleAddSpec = () => {
@@ -918,7 +912,7 @@ onMounted(() => loadOptions());
                     row-key="spec_values"
                     class="sku-table"
                   >
-                    <template #bodyCell="{ column, record, index: rowIdx }">
+                    <template #bodyCell="{ column, record }">
                       <!-- ---- 批量行 ---- -->
                       <template v-if="(record as SkuRow)._isBatch">
                         <template v-if="(column as any)._isSpecCol">

@@ -10,6 +10,7 @@ use app\model\goods\GoodsSku;
 use app\model\goods\GoodsSkuDetail;
 use app\model\goods\GoodsTagRelation;
 use app\model\marketing\PointsRule;
+use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -261,9 +262,11 @@ class ClientGoodsService extends BaseService
 
     private function getGoodsDescription(int $goodsId): string
     {
-        return (string) ($this->model(GoodsDetail::class)
+        $description = (string) ($this->model(GoodsDetail::class)
             ->where('goods_id', $goodsId)
             ->value('description') ?? '');
+
+        return app()->make(RichTextSanitizer::class)->sanitize($description);
     }
 
     /**
@@ -481,9 +484,10 @@ class ClientGoodsService extends BaseService
             ->whereIn('sku_id', $skuIds)
             ->column('description', 'sku_id');
 
+        $sanitizer = app()->make(RichTextSanitizer::class);
         foreach ($skus as &$sku) {
             $skuId = (int) ($sku['id'] ?? 0);
-            $sku['description'] = (string) ($detailMap[$skuId] ?? '');
+            $sku['description'] = $sanitizer->sanitize((string) ($detailMap[$skuId] ?? ''));
         }
         unset($sku);
 

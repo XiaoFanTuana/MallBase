@@ -11,6 +11,7 @@ use app\model\goods\Goods;
 use app\model\goods\GoodsBrand;
 use app\model\goods\GoodsCategory;
 use app\model\goods\GoodsTag;
+use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -807,6 +808,14 @@ class ClientDecorationSchemeService extends BaseService
             $props = $this->normalizeModuleStyleAliases($props);
 
             $type = (string) ($item['type'] ?? $item['component'] ?? '');
+            if ($type === 'richText') {
+                $sanitizer = app()->make(RichTextSanitizer::class);
+                foreach (['content', 'html'] as $field) {
+                    if (isset($props[$field]) && is_string($props[$field])) {
+                        $props[$field] = $sanitizer->sanitize($props[$field]);
+                    }
+                }
+            }
             if ($type === 'banner') {
                 $props = $this->normalizeBannerProps($props);
             }

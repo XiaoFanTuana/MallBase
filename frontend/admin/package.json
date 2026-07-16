@@ -49,6 +49,7 @@
     "publint": "vsh publint",
     "reinstall": "pnpm clean --del-lock && pnpm install",
     "test:unit": "vitest run --dom",
+    "test:contracts": "node --test apps/web-antd/__tests__/ui/admin-responsive-contract.test.mjs apps/web-antd/__tests__/ui/customer-service-config-contract.test.mjs apps/web-antd/__tests__/ui/settings-maintenance-contract.test.mjs",
     "test:e2e": "pnpm -F @vben/web-antd run test:e2e",
     "test:e2e:web": "pnpm -F @vben/web-antd run test:e2e",
     "test:e2e:play": "pnpm -F @vben/playground run test:e2e",

@@ -5,7 +5,14 @@ import { message, Modal } from 'ant-design-vue';
 /**
  * 通用表格 CRUD 操作 composable
  * @param api API 对象，包含 list、create、update、delete 等方法
+ * @param api.create 创建接口
+ * @param api.delete 删除接口
+ * @param api.getInfo 详情接口
+ * @param api.list 列表接口
+ * @param api.update 更新接口
  * @param options 配置选项
+ * @param options.defaultPageSize 默认分页大小
+ * @param options.immediateLoad 是否立即加载列表
  */
 export function useTableCrud<T, P>(
   api: {
@@ -67,13 +74,14 @@ export function useTableCrud<T, P>(
 
   // 删除
   const handleDelete = (record: T, titleField: string = 'name') => {
-    if (!api.delete) return;
+    const deleteApi = api.delete;
+    if (!deleteApi) return;
 
     const title = (record as any)[titleField] || '该记录';
     Modal.confirm({
       content: `确定要删除"${title}"吗？`,
       onOk: async () => {
-        await api.delete((record as any).id);
+        await deleteApi((record as any).id);
         message.success('删除成功');
         loadData();
       },
@@ -103,6 +111,10 @@ export function useFormModal<T>() {
   const modalTitle = ref('新增');
   const formData = ref<any>({});
   const formRef = ref();
+
+  const bindFormRef = (instance: unknown) => {
+    formRef.value = instance;
+  };
 
   // 打开新增弹窗
   const openCreateModal = (initialData?: any) => {
@@ -166,6 +178,7 @@ export function useFormModal<T>() {
     modalVisible,
     modalTitle,
     formData,
+    bindFormRef,
     formRef,
     openCreateModal,
     openEditModal,

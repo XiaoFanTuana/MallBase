@@ -126,6 +126,7 @@ class WechatService extends BaseService
         if ($user === null) {
             throw new BusinessException('用户登录态已过期,请重新登录');
         }
+        $this->assertUserEnabled($user);
 
         $existingByMobile = $this->model()
             ->where('mobile', $mobile)
@@ -171,6 +172,7 @@ class WechatService extends BaseService
         if ($user === null) {
             throw new BusinessException('用户登录态已过期,请重新登录');
         }
+        $this->assertUserEnabled($user);
 
         // 若该手机号已属于另一个用户(老 H5 用户) → 合并:把 openid 写到老用户上,
         // 删除本次创建的临时 user 行(register_type=wechat_miniapp 且 mobile=null 的占位用户)
@@ -204,6 +206,7 @@ class WechatService extends BaseService
         if ($user === null) {
             throw new BusinessException('用户登录态已过期,请重新登录');
         }
+        $this->assertUserEnabled($user);
 
         $this->applyMiniappProfile($user, $nickname, $avatar, $this->settingBool('wechat_mini_force_userinfo'));
 
@@ -291,6 +294,7 @@ class WechatService extends BaseService
         if ($user === null) {
             throw new BusinessException('用户登录态已过期,请重新登录');
         }
+        $this->assertUserEnabled($user);
 
         $existingByMobile = $this->model()
             ->where('mobile', $mobile)
@@ -356,6 +360,8 @@ class WechatService extends BaseService
             return $user;
         }
 
+        $this->assertUserEnabled($user);
+
         // 命中老用户:补齐空字段
         $updates = [];
         if ((string) $user->{$openidColumn} === '') {
@@ -376,6 +382,9 @@ class WechatService extends BaseService
      */
     private function mergeWechatBindingsInto(User $to, User $from, string $source): void
     {
+        $this->assertUserEnabled($to);
+        $this->assertUserEnabled($from);
+
         $openidColumn = $this->openidColumnOf($source);
         $updates = [];
 
@@ -447,6 +456,8 @@ class WechatService extends BaseService
      */
     private function issueToken(User $user, string $registerType, string $account): array
     {
+        $this->assertUserEnabled($user);
+
         $user->save([
             'last_login_time' => date('Y-m-d H:i:s'),
             'last_login_ip'   => Request::ip(),
@@ -473,6 +484,13 @@ class WechatService extends BaseService
         );
 
         return $token;
+    }
+
+    private function assertUserEnabled(User $user): void
+    {
+        if ((int) $user->getData('status') !== 1) {
+            throw new BusinessException('账号已禁用');
+        }
     }
 
     private function miniappUserInfoRequired(User $user): bool

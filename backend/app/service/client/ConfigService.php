@@ -6,6 +6,7 @@ namespace app\service\client;
 
 use app\common\enum\PayMethod;
 use app\service\SystemSettingService;
+use app\service\content\RichTextSanitizer;
 use mall_base\base\BaseModel;
 use mall_base\base\BaseService;
 
@@ -57,6 +58,14 @@ class ConfigService extends BaseService
         'customer_service_',
     ];
 
+    private const RICH_TEXT_PUBLIC_FIELDS = [
+        'client_about_content',
+        'client_after_sale_policy',
+        'client_agreement',
+        'client_platform_rules',
+        'client_privacy',
+    ];
+
     /**
      * 获取客户端基础配置
      *
@@ -102,6 +111,13 @@ class ConfigService extends BaseService
         $merged['points_enabled'] = $this->settingEnabled('points_enabled', true) ? 1 : 0;
         $merged['member_enabled'] = $this->settingEnabled('member_enabled', false) ? 1 : 0;
         $merged['distribution_enabled'] = $this->settingEnabled('distribution_enabled', true) ? 1 : 0;
+
+        $sanitizer = app()->make(RichTextSanitizer::class);
+        foreach (self::RICH_TEXT_PUBLIC_FIELDS as $code) {
+            if (isset($merged[$code]) && is_string($merged[$code])) {
+                $merged[$code] = $sanitizer->sanitize($merged[$code]);
+            }
+        }
 
         // 版权 {year} 占位替换
         if (!empty($merged['copyright_date']) && is_string($merged['copyright_date'])) {

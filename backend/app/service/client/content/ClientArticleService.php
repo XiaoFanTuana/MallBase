@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\service\client\content;
 
 use app\model\content\Article;
+use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
 use mall_base\base\BaseService;
 use mall_base\exception\BusinessException;
@@ -59,6 +60,7 @@ class ClientArticleService extends BaseService
 
         $data = $article->toArray();
         $data['read_count'] = (int) ($data['read_count'] ?? 0) + 1;
+        $data['content'] = app()->make(RichTextSanitizer::class)->sanitize((string) ($data['content'] ?? ''));
 
         return app()->make(AssetHydrator::class)->hydrateArticleDetail($data);
     }

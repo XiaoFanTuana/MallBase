@@ -268,7 +268,10 @@ onLoad((query) => {
 
   if (source.value === 'sku') {
     skuId.value = query.sku_id || ''
-    quantity.value = Number(query.quantity) || 1
+    const requestedQuantity = Number(query.quantity)
+    quantity.value = Number.isInteger(requestedQuantity) && requestedQuantity > 0
+      ? Math.min(requestedQuantity, 999)
+      : 1
 
     // 直接购买模式：从 storage 读取临时商品信息
     const skuInfo = uni.getStorageSync('buy_now_sku')

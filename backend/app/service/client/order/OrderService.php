@@ -269,7 +269,7 @@ class OrderService extends BaseService
             $order->trade_no   = mb_substr($transactionId, 0, 64);
             $order->save();
 
-            $machine->transit(
+            $changed = $machine->transit(
                 order: $order,
                 toStatus: OrderStatus::PAID,
                 operatorType: OperatorType::SYSTEM,
@@ -316,6 +316,9 @@ class OrderService extends BaseService
                 operatorId: $userId,
                 remark: $reason !== null && $reason !== '' ? mb_substr($reason, 0, 255) : '买家取消订单',
             );
+            if (!$changed) {
+                return;
+            }
             $stock->restoreBatch($items);
             if ($prepayLogIds !== []) {
                 $this->model(PaymentLog::class)

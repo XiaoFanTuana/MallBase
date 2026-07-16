@@ -44,7 +44,7 @@ const {
   modalVisible,
   modalTitle,
   formData,
-  formRef,
+  bindFormRef,
   openCreateModal,
   openEditModal,
   handleSubmit,
@@ -94,6 +94,12 @@ const handleTest = async (row: SmsProviderApi.ProviderItem) => {
 const resetSearch = () => {
   searchParams.value = { keyword: '', driver: undefined, status: undefined };
   pagination.current = 1;
+  loadData(searchParams.value);
+};
+
+const handleTableChange = (next: { current?: number; pageSize?: number }) => {
+  pagination.current = next.current ?? 1;
+  pagination.pageSize = next.pageSize ?? pagination.pageSize;
   loadData(searchParams.value);
 };
 
@@ -201,13 +207,7 @@ if (hasAccessByCodes(['SmsProviderList'])) {
         :pagination="pagination"
         :scroll="{ x: 1300 }"
         row-key="id"
-        @change="
-          (newPagination) => {
-            pagination.current = newPagination.current;
-            pagination.pageSize = newPagination.pageSize;
-            loadData(searchParams);
-          }
-        "
+        @change="handleTableChange"
         v-access:code="'SmsProviderList'"
       >
         <template #bodyCell="{ column, record }">
@@ -266,7 +266,7 @@ if (hasAccessByCodes(['SmsProviderList'])) {
       @ok="handleFormSubmit"
     >
       <a-form
-        ref="formRef"
+        :ref="bindFormRef"
         :model="formData"
         :label-col="{ span: 6 }"
         :wrapper-col="{ span: 16 }"

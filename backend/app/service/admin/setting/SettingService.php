@@ -10,6 +10,7 @@ use app\model\setting\Setting;
 use app\model\setting\SettingGroup;
 use app\model\setting\SettingSection;
 use app\service\cache\SettingCacheService;
+use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
 use app\validate\admin\setting\SettingValueValidate;
 use app\service\UploadService;
@@ -2633,6 +2634,9 @@ class SettingService extends BaseService
 
         if ((string)$setting->type === Setting::TYPE_OPTION_LIST) {
             $value = $this->normalizeOptionListValue($value);
+        }
+        if ((string) $setting->type === Setting::TYPE_EDITOR) {
+            $value = app()->make(RichTextSanitizer::class)->sanitize((string) $value);
         }
 
         $setting->value = $value;

@@ -70,7 +70,7 @@ final class OrderStatusMachineConcurrencyContractTest extends TestCase
                 'paid_at' => date('Y-m-d H:i:s'),
             ]);
 
-            $this->machine()->transit(
+            $changed = $this->machine()->transit(
                 $staleOrder,
                 OrderStatus::PAID,
                 OperatorType::SYSTEM,
@@ -78,6 +78,7 @@ final class OrderStatusMachineConcurrencyContractTest extends TestCase
                 'duplicate pay notify',
             );
 
+            $this->assertFalse($changed);
             $this->assertSame(OrderStatus::PAID, (int) Db::name('order')->where('id', $orderId)->value('status'));
             $this->assertSame(0, (int) Db::name('order_log')->where('order_id', $orderId)->count());
         } finally {

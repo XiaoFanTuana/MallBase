@@ -10,6 +10,8 @@ import {
 
 import { IconifyIcon } from '@vben/icons';
 
+import { sanitizeRichTextHtml } from '#/utils/sanitize-html';
+
 type ModuleItem = Record<string, any>;
 type PreviewRecord = Record<string, any>;
 
@@ -1783,10 +1785,10 @@ function distributionActions(module: ModuleItem): WalletPreviewAction[] {
 }
 
 function richTextHtml(module: ModuleItem) {
-  return (
+  return sanitizeRichTextHtml(
     module.props?.content ||
-    module.props?.html ||
-    '<p><strong>图文内容</strong></p><p>这里展示活动说明、门店公告或售后政策。</p>'
+      module.props?.html ||
+      '<p><strong>图文内容</strong></p><p>这里展示活动说明、门店公告或售后政策。</p>',
   );
 }
 
@@ -2315,10 +2317,13 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                   class="home-rich"
                   :style="moduleBoxStyle(module)"
                 >
+                  <!-- Content is sanitized by sanitizeRichTextHtml before rendering. -->
+                  <!-- eslint-disable vue/no-v-html -->
                   <div
                     class="home-rich__content"
                     v-html="richTextHtml(module)"
                   ></div>
+                  <!-- eslint-enable vue/no-v-html -->
                 </div>
 
                 <div
@@ -2530,7 +2535,7 @@ function handlePreviewMouseDown(index: number, event: MouseEvent) {
                     v-if="module.props.show_progress !== false"
                     class="profile-member-card__progress"
                   >
-                    <i />
+                    <i></i>
                   </div>
                   <p
                     v-if="

@@ -55,6 +55,7 @@ class OrderStatusMachine extends BaseService
      * @param int|null    $operatorId    操作方主键（系统触发时可为 null）
      * @param string|null $remark        备注（取消原因、关闭原因等）
      *
+     * @return bool 是否实际发生了状态流转
      * @throws BusinessException 状态非法 / 不允许流转
      */
     public function transit(
@@ -63,14 +64,14 @@ class OrderStatusMachine extends BaseService
         int $operatorType,
         ?int $operatorId = null,
         ?string $remark = null
-    ): void {
+    ): bool {
         if (!OrderStatus::isValid($toStatus)) {
             throw new BusinessException('订单目标状态不合法');
         }
 
         $orderId = (int) ($order->id ?? 0);
         if ($orderId > 0) {
-            $this->transaction(function () use ($order, $orderId, $toStatus, $operatorType, $operatorId, $remark): void {
+            return (bool) $this->transaction(function () use ($order, $orderId, $toStatus, $operatorType, $operatorId, $remark): bool {
                 /** @var Order|null $lockedOrder */
                 $lockedOrder = $this->model()
                     ->where('id', $orderId)
@@ -81,20 +82,21 @@ class OrderStatusMachine extends BaseService
                     throw new BusinessException('订单不存在');
                 }
 
-                $this->transitLoadedOrder($lockedOrder, $toStatus, $operatorType, $operatorId, $remark);
+                $changed = $this->transitLoadedOrder($lockedOrder, $toStatus, $operatorType, $operatorId, $remark);
                 $this->syncOrderSnapshot($order, $lockedOrder);
+                return $changed;
             });
-            return;
         }
 
         $fromStatus = $this->resolvedFromStatus($order, $toStatus);
         if ($fromStatus === null) {
-            return;
+            return false;
         }
 
         $this->transaction(function () use ($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark): void {
             $this->persistTransit($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark);
         });
+        return true;
     }
 
     private function transitLoadedOrder(
@@ -103,13 +105,14 @@ class OrderStatusMachine extends BaseService
         int $operatorType,
         ?int $operatorId,
         ?string $remark
-    ): void {
+    ): bool {
         $fromStatus = $this->resolvedFromStatus($order, $toStatus);
         if ($fromStatus === null) {
-            return;
+            return false;
         }
 
         $this->persistTransit($order, $fromStatus, $toStatus, $operatorType, $operatorId, $remark);
+        return true;
     }
 
     private function resolvedFromStatus(Order $order, int $toStatus): ?int

@@ -259,13 +259,16 @@ class RefundOrderAdminService extends BaseService
         $machine = app()->make(RefundOrderStatusMachine::class);
 
         $this->transaction(function () use ($refund, $machine, $orderItemId, $quantity, $successTime): void {
-            $machine->transit(
+            $changed = $machine->transit(
                 refund: $refund,
                 toStatus: RefundOrderStatus::COMPLETED,
                 operatorType: OperatorType::SYSTEM,
                 operatorId: null,
                 remark: null,
             );
+            if (!$changed) {
+                return;
+            }
 
             if ($successTime !== null && trim($successTime) !== '') {
                 $refund->refunded_at = date('Y-m-d H:i:s', strtotime($successTime));
@@ -584,7 +587,48 @@ class RefundOrderAdminService extends BaseService
         $machine = app()->make(RefundOrderStatusMachine::class);
         /** @var PaymentAdapter $payment */
         $payment = app()->make(WechatRefundAdapter::class);
+
+        $this->transaction(function () use (
+            $refund,
+            $adminId,
+            $adminRemark,
+            $defaultRemark,
+            $machine,
+            $expectedStatuses,
+            $statusErrorMessage
+        ): void {
+            /** @var RefundOrder|null $lockedRefund */
+            $lockedRefund = $this->model()
+                ->where('id', (int) $refund->id)
+                ->whereNull('delete_time')
+                ->lock(true)
+                ->find();
+            if ($lockedRefund === null) {
+                throw new BusinessException('售后单不存在');
+            }
+            if (!in_array((int) $lockedRefund->status, $expectedStatuses, true)) {
+                throw new BusinessException($statusErrorMessage);
+            }
+
+            if ((int) $lockedRefund->type === RefundOrderStatus::TYPE_RETURN_REFUND
+                && trim((string) ($lockedRefund->return_received_at ?? '')) === '') {
+                $lockedRefund->return_received_at = date('Y-m-d H:i:s');
+                $lockedRefund->save();
+            }
+
+            $machine->transit(
+                refund: $lockedRefund,
+                toStatus: RefundOrderStatus::REFUNDING,
+                operatorType: OperatorType::ADMIN,
+                operatorId: $adminId,
+                remark: $adminRemark !== '' ? $adminRemark : $defaultRemark,
+            );
+        });
+
         $refundStatus = $payment->refund($context);
+        if ($refundStatus !== 'SUCCESS') {
+            return;
+        }
 
         $this->transaction(function () use (
             $refund,
@@ -593,28 +637,16 @@ class RefundOrderAdminService extends BaseService
             $defaultRemark,
             $machine,
             $quantity,
-            $orderItemId,
-            $refundStatus
+            $orderItemId
         ): void {
-            $toStatus = $refundStatus === 'SUCCESS'
-                ? RefundOrderStatus::COMPLETED
-                : RefundOrderStatus::REFUNDING;
-
-            if ((int) $refund->type === RefundOrderStatus::TYPE_RETURN_REFUND
-                && trim((string) ($refund->return_received_at ?? '')) === '') {
-                $refund->return_received_at = date('Y-m-d H:i:s');
-                $refund->save();
-            }
-
-            $machine->transit(
+            $changed = $machine->transit(
                 refund: $refund,
-                toStatus: $toStatus,
+                toStatus: RefundOrderStatus::COMPLETED,
                 operatorType: OperatorType::ADMIN,
                 operatorId: $adminId,
                 remark: $adminRemark !== '' ? $adminRemark : $defaultRemark,
             );
-
-            if ($toStatus !== RefundOrderStatus::COMPLETED) {
+            if (!$changed) {
                 return;
             }
 

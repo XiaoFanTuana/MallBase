@@ -91,7 +91,13 @@ class Trace
         }
 
         $context = Co::getContext();
-        return $context['trace_id'] ?? self::id();
+        $traceId = (string) ($context['trace_id'] ?? '');
+        if ($traceId === '') {
+            $traceId = self::generate();
+            $context['trace_id'] = $traceId;
+        }
+
+        return $traceId;
     }
 
     /**

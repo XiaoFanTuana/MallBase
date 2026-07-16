@@ -14,6 +14,7 @@ use app\model\goods\GoodsTagRelation;
 use app\model\distribution\DistributionCommissionRule;
 use app\model\setting\FreightTemplate;
 use app\service\admin\support\CsvExportService;
+use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
 use app\service\upload\AssetIdNormalizer;
 use app\service\upload\AssetService;
@@ -530,6 +531,7 @@ class GoodsService extends BaseService
     protected function syncGoodsDetail(int $goodsId, string $description): void
     {
         $description = mb_substr($description, 0, 16000);
+        $description = app()->make(RichTextSanitizer::class)->sanitize($description);
         $this->model(GoodsDetail::class)->where('goods_id', $goodsId)->delete();
 
         if ($description === '') {
@@ -550,8 +552,10 @@ class GoodsService extends BaseService
     protected function syncSkuDetails(int $goodsId, array $savedSkus, array $inputSkus): void
     {
         $rows = [];
+        $sanitizer = app()->make(RichTextSanitizer::class);
         foreach ($savedSkus as $index => $sku) {
             $description = mb_substr((string) ($inputSkus[$index]['description'] ?? ''), 0, 16000);
+            $description = $sanitizer->sanitize($description);
             if ($description === '') {
                 continue;
             }
@@ -570,9 +574,11 @@ class GoodsService extends BaseService
 
     protected function getGoodsDescription(int $goodsId): string
     {
-        return (string) ($this->model(GoodsDetail::class)
+        $description = (string) ($this->model(GoodsDetail::class)
             ->where('goods_id', $goodsId)
             ->value('description') ?? '');
+
+        return app()->make(RichTextSanitizer::class)->sanitize($description);
     }
 
     /**
@@ -594,9 +600,10 @@ class GoodsService extends BaseService
             ->whereIn('sku_id', $skuIds)
             ->column('description', 'sku_id');
 
+        $sanitizer = app()->make(RichTextSanitizer::class);
         foreach ($skus as &$sku) {
             $skuId = (int) ($sku['id'] ?? 0);
-            $sku['description'] = (string) ($detailMap[$skuId] ?? '');
+            $sku['description'] = $sanitizer->sanitize((string) ($detailMap[$skuId] ?? ''));
         }
         unset($sku);
 

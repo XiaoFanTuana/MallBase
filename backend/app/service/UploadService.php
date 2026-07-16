@@ -11,6 +11,7 @@ use mall_base\base\BaseService;
 use mall_base\drivers\DriverManager;
 use mall_base\drivers\upload\LocalUploadDriver;
 use mall_base\exception\BusinessException;
+use think\facade\Log;
 
 /**
  * 上传公共服务
@@ -591,9 +592,11 @@ class UploadService extends BaseService
         $objectName = $subDir . '/' . $this->generateDatePath() . '/' . $fileName;
 
         $tempPath = $file->getPathname();
+        $uploaded = false;
 
         try {
             $uploadDriver->upload($tempPath, $objectName);
+            $uploaded = true;
             $fileInfo = $uploadDriver->getFileInfo($objectName);
             if (!is_array($fileInfo)) {
                 throw new BusinessException('上传失败：无法读取文件信息');
@@ -609,6 +612,24 @@ class UploadService extends BaseService
                 $uploaderId,
                 $categoryId
             );
+        } catch (\Throwable $e) {
+            if ($uploaded) {
+                try {
+                    if (!$uploadDriver->delete($objectName)) {
+                        Log::warning('上传后入库失败，存储对象清理未成功', [
+                            'driver' => $driverName,
+                            'object_name' => $objectName,
+                        ]);
+                    }
+                } catch (\Throwable $cleanupError) {
+                    Log::error('上传后入库失败，清理存储对象时发生异常', [
+                        'driver' => $driverName,
+                        'object_name' => $objectName,
+                        'cleanup_error' => $cleanupError->getMessage(),
+                    ]);
+                }
+            }
+            throw $e;
         } finally {
             if (file_exists($tempPath)) {
                 unlink($tempPath);

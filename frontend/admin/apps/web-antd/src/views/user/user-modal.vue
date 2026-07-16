@@ -91,7 +91,7 @@ const rules = {
     {
       validator: (_rule: unknown, value: string) => {
         if (value && value !== formData.value.password) {
-          return Promise.reject('两次输入的密码不一致');
+          return Promise.reject(new Error('两次输入的密码不一致'));
         }
         return Promise.resolve();
       },
@@ -106,20 +106,25 @@ const rules = {
 /* ---------------- 提交 ---------------- */
 const loading = ref(false);
 
+type UserSubmitData = ClientUserApi.UpdateParams & {
+  confirm_password?: string;
+};
+
 const handleSubmit = async () => {
   try {
     await formRef.value?.validate();
     loading.value = true;
 
-    const data = { ...formData.value };
+    const avatar = formData.value.avatar;
+    const data: UserSubmitData = {
+      ...formData.value,
+      avatar:
+        typeof avatar === 'object' && 'url' in avatar ? avatar.url : avatar,
+    };
     delete data.confirm_password; // 删除确认密码字段
 
     // 处理头像字段
-    if (data.avatar) {
-      if (typeof data.avatar === 'object' && 'url' in data.avatar) {
-        data.avatar = data.avatar.url;
-      }
-    } else {
+    if (!data.avatar) {
       delete data.avatar;
     }
 
@@ -143,7 +148,7 @@ const handleSubmit = async () => {
       await updateClientUserApi(props.editData!.id, data);
       message.success('更新成功');
     } else {
-      await createClientUserApi(data);
+      await createClientUserApi(data as ClientUserApi.CreateParams);
       message.success('创建成功');
     }
 
@@ -184,7 +189,8 @@ watch(
           birthday: data.birthday || undefined,
           status: data.status ?? 1,
           remark: data.remark || '',
-          group_ids: data.groups?.map((g: UserGroupApi.GroupItem) => g.id) || [],
+          group_ids:
+            data.groups?.map((g: UserGroupApi.GroupItem) => g.id) || [],
           tag_ids: data.tags?.map((t: UserTagApi.TagItem) => t.id) || [],
         }
       : {
