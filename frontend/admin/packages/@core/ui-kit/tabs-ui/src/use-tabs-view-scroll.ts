@@ -1,8 +1,8 @@
+import type { ComponentPublicInstance } from 'vue';
+
 import type { TabsProps } from './types';
 
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-
-import { VbenScrollbar } from '@vben-core/shadcn-ui';
 
 import { useDebounceFn } from '@vueuse/core';
 
@@ -12,7 +12,7 @@ export function useTabsViewScroll(props: TabsProps) {
   let resizeObserver: null | ResizeObserver = null;
   let mutationObserver: MutationObserver | null = null;
   let tabItemCount = 0;
-  const scrollbarRef = ref<InstanceType<typeof VbenScrollbar> | null>(null);
+  const scrollbarRef = ref<ComponentPublicInstance | null>(null);
   const scrollViewportEl = ref<DomElement>(null);
   const showScrollButton = ref(false);
   const scrollIsAtLeft = ref(true);
@@ -137,10 +137,13 @@ export function useTabsViewScroll(props: TabsProps) {
       scrollViewportEl.value.scrollWidth > scrollbarWidth;
   }
 
-  const handleScrollAt = useDebounceFn(({ left, right }) => {
-    scrollIsAtLeft.value = left;
-    scrollIsAtRight.value = right;
-  }, 100);
+  const handleScrollAt = useDebounceFn(
+    ({ left, right }: { left: boolean; right: boolean }) => {
+      scrollIsAtLeft.value = left;
+      scrollIsAtRight.value = right;
+    },
+    100,
+  );
 
   function handleWheel({ deltaY }: WheelEvent) {
     scrollViewportEl.value?.scrollBy({
