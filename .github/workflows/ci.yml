@@ -210,13 +210,13 @@ jobs:
             -e BACKEND_ENV_PATH=/app-config/.env \
             -v "$volume:/app-config" \
             mallbase-backend:test \
-            sh -c 'sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=old-password/; s/^QUEUE_REDIS_PASSWORD=.*/QUEUE_REDIS_PASSWORD=old-password/" /app/.env; printf "INSTALL_RUNTIME_MARKER=ci-persisted\n" >> /app/.env'
+            sh -c 'test -L /app/.env; sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=old-password/; s/^QUEUE_REDIS_PASSWORD=.*/QUEUE_REDIS_PASSWORD=old-password/" /app-config/.env; printf "INSTALL_RUNTIME_MARKER=ci-persisted\n" >> /app-config/.env'
           docker run --rm \
             -e BACKEND_ENV_PATH=/app-config/.env \
             -e REDIS_PASSWORD= \
             -e QUEUE_REDIS_USE_CACHE_AUTH=true \
             -v "$volume:/app-config" \
             mallbase-backend:test \
-            sh -c 'grep -q "^INSTALL_RUNTIME_MARKER=ci-persisted$" /app/.env && grep -q "^REDIS_PASSWORD=$" /app/.env && grep -q "^QUEUE_REDIS_PASSWORD=$" /app/.env'
+            sh -c 'test -L /app/.env && grep -q "^INSTALL_RUNTIME_MARKER=ci-persisted$" /app/.env && grep -q "^REDIS_PASSWORD=$" /app/.env && grep -q "^QUEUE_REDIS_PASSWORD=$" /app/.env'
           docker run --rm mallbase-backend:test \
             php -r 'exit(ini_get("upload_max_filesize") === "220M" && ini_get("post_max_size") === "240M" ? 0 : 1);'
