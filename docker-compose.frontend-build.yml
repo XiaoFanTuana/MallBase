@@ -2,26 +2,23 @@
 # 前端一次性打包：后台前端资源同步到 backend/public/admin
 #
 # 用法：
-#   docker compose -f docker-compose.frontend-build.yml up frontend-build
+#   docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 # ==========================================
 
 name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
 
 services:
   frontend-build:
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: deploy/docker/web/Dockerfile
+      target: admin-builder
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-frontend-build
-    working_dir: /app
+    working_dir: /build/admin
     volumes:
-      - ./frontend/admin:/app
       - ./backend/public/admin:/dist
-      - frontend_pnpm_store:/root/.local/share/pnpm/store
-      - ./deploy/docker/frontend-build.sh:/frontend-build.sh:ro
-    environment:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      CI: "true"
-    command: sh /frontend-build.sh
+    command:
+      - sh
+      - -c
+      - rm -rf /dist/* && cp -R apps/web-antd/dist/. /dist/
     restart: "no"
-
-volumes:
-  frontend_pnpm_store:

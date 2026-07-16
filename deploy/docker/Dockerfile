@@ -31,6 +31,14 @@ RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.jit_buffer_size=128M" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.jit=1255" >> /usr/local/etc/php/conf.d/opcache.ini
 
+# Match the application's 200 MB video limit while leaving room for multipart overhead.
+RUN printf '%s\n' \
+        'upload_max_filesize=220M' \
+        'post_max_size=240M' \
+        'memory_limit=512M' \
+        'max_execution_time=300' \
+        > /usr/local/etc/php/conf.d/mallbase-uploads.ini
+
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -42,13 +50,19 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 COPY backend/ .
 COPY .version /.version
 RUN composer dump-autoload --optimize --no-dev \
-    && mkdir -p runtime public/uploads \
-    && chmod -R 777 runtime
+    && mkdir -p runtime public/uploads storage/cert \
+    && chmod -R 775 runtime public/uploads \
+    && chmod 700 storage/cert
 
 COPY deploy/docker/docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY deploy/docker/backend-healthcheck.php /usr/local/bin/mallbase-healthcheck.php
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && php -l /usr/local/bin/mallbase-healthcheck.php
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=8s --start-period=30s --retries=3 \
+    CMD ["php", "/usr/local/bin/mallbase-healthcheck.php"]
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php", "think", "swoole"]

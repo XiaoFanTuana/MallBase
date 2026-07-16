@@ -23,7 +23,7 @@ pnpm run build --filter=@vben/web-antd
 适用：方式三。
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 ### 单独重跑 `frontend-build`
@@ -31,7 +31,7 @@ docker compose -f docker-compose.frontend-build.yml up frontend-build
 适用：方式三。
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 ## 启动后台前端 dev server
@@ -46,7 +46,7 @@ pnpm run dev:antd
 
 ## 启动前端临时调试容器
 
-用于在 `node:20-alpine` 中进入 `frontend/admin` 的临时调试环境。
+用于在 `node:22.22.0-alpine` 中进入 `frontend/admin` 的临时调试环境。
 
 适用：方式二、方式三；需要本机已安装 Docker。
 
@@ -59,19 +59,7 @@ docker run --rm -it \
   -v mallbase-pnpm-store:/root/.local/share/pnpm/store \
   -v mallbase-admin-node_modules:/app/node_modules \
   -w /app \
-  node:20-alpine \
-  sh -lc 'corepack enable && corepack prepare pnpm@10.28.2 --activate && exec sh'
-```
-
-最小改动版：
-
-```bash
-docker run --rm -it \
-  -p 5666:5666 \
-  -v "$PWD/frontend/admin:/app" \
-  -v mallbase-pnpm-store:/root/.local/share/pnpm/store \
-  -w /app \
-  node:20-alpine \
+  node:22.22.0-alpine \
   sh -lc 'corepack enable && corepack prepare pnpm@10.28.2 --activate && exec sh'
 ```
 

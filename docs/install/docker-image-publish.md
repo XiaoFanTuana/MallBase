@@ -1,6 +1,9 @@
 # Docker Hub 多架构镜像发布
 
-本项目通过 GitHub Actions 自动构建并推送后端生产镜像到 Docker Hub。
+本项目通过 GitHub Actions 自动构建并推送两个生产镜像到 Docker Hub：
+
+- `mallbase-backend`：PHP 8.2、Swoole 和后端代码
+- `mallbase-web`：Nginx、Admin 和 UniApp H5 静态产物
 
 ## 触发方式
 
@@ -39,12 +42,14 @@ Settings -> Secrets and variables -> Actions
 | 名称 | 默认值 | 用途 |
 |------|--------|------|
 | `DOCKERHUB_NAMESPACE` | `DOCKERHUB_USERNAME` | Docker Hub 命名空间，通常就是用户名或组织名 |
-| `DOCKERHUB_REPOSITORY` | `mallbase-backend` | Docker Hub 仓库名 |
+| `DOCKERHUB_REPOSITORY` | `mallbase-backend` | 后端 Docker Hub 仓库名 |
+| `DOCKERHUB_WEB_REPOSITORY` | `mallbase-web` | Web Docker Hub 仓库名 |
 
 默认镜像名为：
 
 ```text
 docker.io/<DOCKERHUB_USERNAME>/mallbase-backend
+docker.io/<DOCKERHUB_USERNAME>/mallbase-web
 ```
 
 ## 标签规则
@@ -63,23 +68,25 @@ docker.io/<DOCKERHUB_USERNAME>/mallbase-backend
 
 ```env
 MALLBASE_BACKEND_IMAGE=<你的DockerHub用户名>/mallbase-backend:latest
+MALLBASE_WEB_IMAGE=<你的DockerHub用户名>/mallbase-web:latest
 ```
 
 然后拉取并启动：
 
 ```bash
-docker compose pull backend
-docker compose up -d
+docker compose -f docker-compose.full.yml pull
+docker compose -f docker-compose.full.yml up -d
 ```
 
 如果你要固定版本，使用版本标签：
 
 ```env
 MALLBASE_BACKEND_IMAGE=<你的DockerHub用户名>/mallbase-backend:1.2.3
+MALLBASE_WEB_IMAGE=<你的DockerHub用户名>/mallbase-web:1.2.3
 ```
 
 ## 注意
 
 - Docker Hub Token 应该使用 Access Token，权限至少需要能写入目标仓库。
-- 后端镜像只包含 PHP/Swoole 后端和镜像构建时已有的静态文件；后台 Admin、UniApp H5 和微信小程序制品由 [frontend-release-artifacts.md](./frontend-release-artifacts.md) 单独构建。
-- 首次推送前，Docker Hub 上可以先手动创建 `mallbase-backend` 仓库；如果账号策略允许，也可以由首次 push 自动创建。
+- Web 镜像包含 Admin 和 UniApp H5；微信小程序仍由 [frontend-release-artifacts.md](./frontend-release-artifacts.md) 单独构建和发布。
+- 首次推送前，可以在 Docker Hub 上创建 `mallbase-backend` 和 `mallbase-web` 两个仓库；如果账号策略允许，也可以由首次 push 自动创建。

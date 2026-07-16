@@ -28,7 +28,9 @@ services:
     volumes:
       - backend_runtime:/app/runtime
       - backend_uploads:/app/public/uploads
+      - backend_certs:/app/storage/cert
 
 volumes:
   backend_runtime:
   backend_uploads:
+  backend_certs:

@@ -91,7 +91,7 @@ docker compose -f docker-compose.dev.yml up -d
 ### 5. 单独执行后台前端打包
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 ### 6. 查看关键状态
@@ -146,7 +146,7 @@ http://localhost:8080/admin/
 如果你改了后台前端代码，重新执行：
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 它会重新构建 `@vben/web-antd`，并把产物覆盖到 `backend/public/admin`。

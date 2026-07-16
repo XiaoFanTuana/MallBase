@@ -2,6 +2,7 @@
 set -eu
 
 ROOT_ENV=/workdir/.env
+ROTATE_COMMAND="${DB_PASSWORD_ROTATE_COMMAND:-docker compose -f docker-compose.dev.yml --profile tools up rotate-db-password}"
 
 if [ ! -f "$ROOT_ENV" ]; then
     echo ">>> [check-db-auth] 未找到项目根目录 .env"
@@ -30,8 +31,8 @@ if mysql --protocol=TCP -hmysql -u"${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" -e "S
 fi
 
 echo ">>> [check-db-auth] 业务库账号认证失败：当前根 .env 中的 DB_USER/DB_PASS 无法登录 mysql。"
-echo ">>> [check-db-auth] 这通常表示 data/mysql 是旧数据，而你后来修改过根 .env 的 DB_PASS。"
+echo ">>> [check-db-auth] 这通常表示 MySQL 持久化数据来自旧配置，而你后来修改过根 .env 的 DB_PASS。"
 echo ">>> [check-db-auth] 如果要保留现有数据，请先确认根 .env 中的 DB_PASS 是目标新密码，然后执行："
-echo ">>> [check-db-auth]   docker compose -f docker-compose.dev.yml --profile tools up rotate-db-password"
+echo ">>> [check-db-auth]   ${ROTATE_COMMAND}"
 echo ">>> [check-db-auth] 如果不要现有数据，请按文档执行“完全清零重来”。"
 exit 1

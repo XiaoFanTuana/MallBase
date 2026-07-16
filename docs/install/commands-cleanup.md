@@ -119,7 +119,7 @@ docker image rm -f mallbase-backend:dev
 连共享基础镜像一起删除：
 
 ```bash
-docker image rm -f mysql:8.0 redis:7-alpine node:20-alpine alpine:3.19
+docker image rm -f mysql:8.0 redis:7-alpine node:20-alpine alpine:3.24.1
 ```
 
 ## 重新测试首装前的清理边界

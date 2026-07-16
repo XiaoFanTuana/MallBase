@@ -38,7 +38,7 @@ composer --working-dir backend install --no-dev --optimize-autoloader
 4. 校验 Redis 连接，目标 Redis DB 必须为空。
 5. 写入 `backend/.env`，并把配置应用到当前安装进程。
 6. 导入 `backend/install/data/schema/*.sql` 表结构。
-7. 创建默认管理员账号 `admin` / `admin123`。
+7. 创建管理员账号；账号默认是 `admin`，密码由 `INSTALL_ADMIN_PASSWORD` 提供或自动随机生成。
 8. 默认跳过演示数据和演示静态资源；加 `--demo` 时会导入 `backend/install/data/demo/*.sql`，并拷贝 `backend/install/static/demo` 到 `backend/public/static/demo`。
 9. 同步路由权限、系统设置菜单、地区数据和站点域名。
 10. 检查默认静态资源。
@@ -181,14 +181,14 @@ redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT:-6379}" -n "${REDIS_CACHE_DB:-0}" 
 [install:auto] 安装完成
 [install:auto] 基本信息：
 [install:auto] - 管理员账号：admin
-[install:auto] - 管理员密码：admin123
+[install:auto] - 管理员密码：<自动生成的 24 位随机密码>
 [install:auto] - 演示数据：未安装
 [install:auto] - 站点地址：http://127.0.0.1:8080
 [install:auto] - 管理后台：http://127.0.0.1:8080/admin/
 [install:auto] - 客户端入口：http://127.0.0.1:8080/client/
 [install:auto] - 数据库：mallbase@127.0.0.1:3306/mallbase
 [install:auto] - Redis：127.0.0.1:6379 DB 0
-[install:auto] 安装完成后请尽快修改默认管理员密码。
+[install:auto] 请立即安全保存管理员密码；该随机密码不会写回项目根 .env。
 [install:auto] 安装完成后请重启 Swoole，让新配置和安装锁生效。
 ```
 

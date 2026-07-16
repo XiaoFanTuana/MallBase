@@ -1,0 +1,166 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+map $http_x_forwarded_proto $mallbase_forwarded_proto {
+    ''      $scheme;
+    default $http_x_forwarded_proto;
+}
+
+server {
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
+    server_name _;
+    server_tokens off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    client_max_body_size 220m;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    gzip_types
+        application/javascript
+        application/json
+        application/xml
+        image/svg+xml
+        text/css
+        text/plain
+        text/xml;
+
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $backend_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location = /admin {
+        return 308 /admin/;
+    }
+
+    location = /client {
+        return 308 /client/;
+    }
+
+    location = /admin/api {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location ^~ /admin/api/ {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location = /client/api {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location ^~ /client/api/ {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    # Includes payment and refund callbacks under /api/notify/.
+    location = /api {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location ^~ /api/ {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    # Installation streams progress as SSE and must not be buffered by Nginx.
+    location = /install/api/executeStream {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        add_header X-Accel-Buffering "no" always;
+        proxy_pass $backend_upstream;
+    }
+
+    location = /install {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location ^~ /install/ {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    # Backend-owned assets are not duplicated into the immutable web image.
+    location = /static {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location ^~ /static/ {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+
+    location ~* ^/uploads/.*\.(?:cgi|html?|phar|php[0-9]?|phtml|pl|py|sh|shtml)(?:/|$) {
+        return 403;
+    }
+
+    location = /uploads {
+        return 308 /uploads/;
+    }
+
+    location /uploads/ {
+        alias /srv/mallbase-uploads/;
+        autoindex off;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location = /admin/index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    location = /client/index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    location ~* ^/(?:admin|client)/.+\.(?:css|js|mjs|eot|ttf|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+        try_files $uri =404;
+    }
+
+    location ~* ^/(?:admin|client)/.+\.(?:avif|gif|ico|jpe?g|png|svg|webp)$ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        access_log off;
+        try_files $uri =404;
+    }
+
+    location /admin/ {
+        try_files $uri $uri/ /admin/index.html;
+    }
+
+    location /client/ {
+        try_files $uri $uri/ /client/index.html;
+    }
+
+    # Root/install checks and backend-only routes remain owned by the application.
+    location / {
+        include /etc/nginx/snippets/mallbase-proxy-headers.conf;
+        proxy_pass $backend_upstream;
+    }
+}

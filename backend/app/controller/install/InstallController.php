@@ -175,8 +175,8 @@ class InstallController extends BaseController
             return ['success' => false, 'message' => '数据库名只能包含字母、数字和下划线'];
         }
 
-        if (strlen((string) $params['admin_pass']) < 6) {
-            return ['success' => false, 'message' => '管理员密码至少 6 位'];
+        if (strlen((string) $params['admin_pass']) < 12) {
+            return ['success' => false, 'message' => '管理员密码至少 12 位'];
         }
 
         if (isset($params['redis_db']) && (int) $params['redis_db'] < 0) {

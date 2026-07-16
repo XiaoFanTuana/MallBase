@@ -21,8 +21,8 @@
 `install:auto` 默认行为：
 
 - 从当前进程 env 读取数据库、Redis、站点域名
-- 管理员账号固定为 `admin`
-- 管理员默认密码固定为 `admin123`
+- 管理员账号默认是 `admin`，可用 `INSTALL_ADMIN_USER` 修改
+- `INSTALL_ADMIN_PASSWORD` 未设置时自动生成 24 位随机密码，并在成功摘要中输出一次
 - 默认不导入演示数据；需要演示/测试数据时加 `--demo`
 - 默认不开启 Cron 和 Swoole 内置队列 Worker
 - 如果 `install.lock` 已存在，直接跳过并返回成功
@@ -197,14 +197,14 @@ rm -f backend/runtime/install/install.lock
 [install:auto] 安装完成
 [install:auto] 基本信息：
 [install:auto] - 管理员账号：admin
-[install:auto] - 管理员密码：admin123
+[install:auto] - 管理员密码：<自动生成的 24 位随机密码>
 [install:auto] - 演示数据：未安装
 [install:auto] - 站点地址：http://127.0.0.1:8080
 [install:auto] - 管理后台：http://127.0.0.1:8080/admin/
 [install:auto] - 客户端入口：http://127.0.0.1:8080/client/
 [install:auto] - 数据库：mallbase@127.0.0.1:3306/mallbase
 [install:auto] - Redis：127.0.0.1:6379 DB 0
-[install:auto] 安装完成后请尽快修改默认管理员密码。
+[install:auto] 请立即安全保存管理员密码；该随机密码不会写回项目根 .env。
 [install:auto] 安装完成后请重启 Swoole，让新配置和安装锁生效。
 ```
 
@@ -269,12 +269,14 @@ curl -I http://127.0.0.1:8080/admin/
 
 ## 10. 登录信息
 
-命令行安装使用内置管理员信息：
+命令行安装默认使用管理员账号 `admin`。密码可以在执行前显式设置，至少 12 个字符：
 
-- 用户名：`admin`
-- 密码：`admin123`
+```bash
+export INSTALL_ADMIN_USER=admin
+export INSTALL_ADMIN_PASSWORD='替换为强随机密码'
+```
 
-登录后可在个人资料页修改默认管理员密码。
+不设置 `INSTALL_ADMIN_PASSWORD` 时，命令会生成 24 位随机密码并在安装成功摘要中输出一次，请立即保存。
 
 ## 常见问题
 

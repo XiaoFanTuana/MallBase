@@ -34,7 +34,7 @@ ls backend/public/admin/index.html
 如果不存在，先生成后台前端资源，例如：
 
 ```bash
-docker compose -f docker-compose.frontend-build.yml up frontend-build
+docker compose -f docker-compose.frontend-build.yml up --build --force-recreate frontend-build
 ```
 
 如果需要同时发布 H5，确认本地 H5 产物存在：

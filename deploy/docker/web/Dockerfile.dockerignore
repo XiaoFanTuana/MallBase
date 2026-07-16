@@ -1,0 +1,18 @@
+# The repository-level .dockerignore excludes frontend entirely. This
+# Dockerfile-specific context keeps only the two web applications and image files.
+**
+!frontend/
+!frontend/admin/
+!frontend/admin/**
+!frontend/uniapp/
+!frontend/uniapp/**
+!deploy/
+!deploy/docker/
+!deploy/docker/web/
+!deploy/docker/web/**
+
+frontend/admin/**/node_modules
+frontend/admin/**/dist
+frontend/admin/**/.turbo
+frontend/uniapp/node_modules
+frontend/uniapp/dist

@@ -1,0 +1,220 @@
+# Production full stack: Web (Admin + H5), backend, MySQL and Redis.
+# Run from the repository root with: docker compose -f docker-compose.full.yml up -d
+
+name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  ensure-env:
+    image: alpine:3.24.1
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-ensure-env
+    restart: "no"
+    environment:
+      ROOT_ENV_EXPORT: /config/.env
+      BACKEND_ENV_EXPORT: /bootstrap/.env
+    volumes:
+      - .:/workdir
+      - app_config:/config
+      - backend_bootstrap:/bootstrap
+      - ./deploy/docker/ensure-env.sh:/ensure-env.sh:ro
+    command: sh /ensure-env.sh
+    logging: *default-logging
+
+  mysql:
+    image: mysql:8.0
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-mysql
+    restart: unless-stopped
+    entrypoint: ["sh", "/mysql-entrypoint.sh"]
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - app_config:/workdir:ro
+      - ./deploy/docker/mysql-entrypoint.sh:/mysql-entrypoint.sh:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          . /workdir/.env &&
+          mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+    networks:
+      - data
+    logging: *default-logging
+
+  check-db-auth:
+    image: mysql:8.0
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-check-db-auth
+    restart: "no"
+    environment:
+      DB_PASSWORD_ROTATE_COMMAND: docker compose -f docker-compose.full.yml --profile tools up rotate-db-password
+    volumes:
+      - app_config:/workdir:ro
+      - ./deploy/docker/check-db-auth.sh:/check-db-auth.sh:ro
+    command: sh /check-db-auth.sh
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+    networks:
+      - data
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-redis
+    restart: unless-stopped
+    entrypoint: ["sh", "/redis-entrypoint.sh"]
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - redis_data:/data
+      - app_config:/workdir:ro
+      - ./deploy/docker/redis-entrypoint.sh:/redis-entrypoint.sh:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          . /workdir/.env &&
+          if [ -n "$${REDIS_PASSWORD:-}" ]; then
+            redis-cli --no-auth-warning -a "$$REDIS_PASSWORD" ping;
+          else
+            redis-cli ping;
+          fi
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+    networks:
+      - data
+    logging: *default-logging
+
+  backend:
+    image: ${MALLBASE_BACKEND_IMAGE:-xiaofantuan/mallbase-backend:latest}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-backend
+    restart: unless-stopped
+    init: true
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      APP_DEBUG: "false"
+      CRON_ENABLE: "${CRON_ENABLE:-true}"
+      QUEUE_CONNECTION: "${QUEUE_CONNECTION:-redis}"
+      SWOOLE_QUEUE_ENABLE: "${SWOOLE_QUEUE_ENABLE:-true}"
+      QUEUE_REDIS_QUEUE: "${QUEUE_REDIS_QUEUE:-default}"
+      QUEUE_REDIS_HOST: redis
+      QUEUE_REDIS_PORT: "6379"
+      QUEUE_REDIS_SELECT: "${QUEUE_REDIS_SELECT:-1}"
+      QUEUE_REDIS_USE_CACHE_AUTH: "true"
+      SWOOLE_HTTP_PORT: "${SWOOLE_HTTP_PORT:-8080}"
+      BACKEND_ENV_PATH: /app-config/.env
+    expose:
+      - "${SWOOLE_HTTP_PORT:-8080}"
+    volumes:
+      - backend_runtime:/app/runtime
+      - backend_uploads:/app/public/uploads
+      - backend_certs:/app/storage/cert
+      - backend_config:/app-config
+      - backend_bootstrap:/workspace:ro
+    healthcheck:
+      test: ["CMD", "php", "/usr/local/bin/mallbase-healthcheck.php"]
+      interval: 10s
+      timeout: 8s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      check-db-auth:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  rotate-db-password:
+    profiles: ["tools"]
+    image: mysql:8.0
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-rotate-db-password
+    restart: "no"
+    volumes:
+      - .:/workdir
+      - ./deploy/docker/rotate-db-password.sh:/rotate-db-password.sh:ro
+    command: sh /rotate-db-password.sh
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+    networks:
+      - data
+    logging: *default-logging
+
+  web:
+    image: ${MALLBASE_WEB_IMAGE:-xiaofantuan/mallbase-web:latest}
+    build:
+      context: .
+      dockerfile: deploy/docker/web/Dockerfile
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-web
+    restart: unless-stopped
+    environment:
+      BACKEND_HOST: backend
+      BACKEND_PORT: "${SWOOLE_HTTP_PORT:-8080}"
+    ports:
+      - "${MALLBASE_BIND_HOST:-127.0.0.1}:${MALLBASE_HTTP_PORT:-8080}:8080"
+    volumes:
+      - backend_uploads:/srv/mallbase-uploads:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - edge
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+networks:
+  edge:
+  data:
+    internal: true
+
+volumes:
+  app_config:
+  backend_bootstrap:
+  backend_runtime:
+  backend_uploads:
+  backend_certs:
+  backend_config:
+  mysql_data:
+  redis_data:

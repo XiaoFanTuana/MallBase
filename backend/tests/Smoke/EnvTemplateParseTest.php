@@ -54,6 +54,10 @@ final class EnvTemplateParseTest extends TestCase
         );
 
         $required = [
+            'MALLBASE_BACKEND_IMAGE',
+            'MALLBASE_WEB_IMAGE',
+            'MALLBASE_BIND_HOST',
+            'MALLBASE_HTTP_PORT',
             'SWOOLE_HTTP_PORT',
             'SWOOLE_WORKER_NUM',
             'APP_DEBUG',
@@ -82,6 +86,7 @@ final class EnvTemplateParseTest extends TestCase
         }
 
         $this->assertSame('false', $parsed['APP_DEBUG'] ?? null);
+        $this->assertSame('127.0.0.1', $parsed['MALLBASE_BIND_HOST'] ?? null);
         $this->assertSame('6379', $parsed['REDIS_HOST_PORT'] ?? null);
         $this->assertSame('6379', $parsed['REDIS_PORT'] ?? null);
         $this->assertArrayNotHasKey('CRON_ENABLE', $parsed, 'Cron should be configured by install wizard or explicit production override, not root template default');
@@ -101,7 +106,10 @@ final class EnvTemplateParseTest extends TestCase
 
         try {
             exec(
-                'WORKDIR=' . escapeshellarg($root) . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
+                'WORKDIR=' . escapeshellarg($root)
+                . ' ROOT_ENV_EXPORT=' . escapeshellarg($root . '/runtime-config/.env')
+                . ' BACKEND_ENV_EXPORT=' . escapeshellarg($root . '/runtime-config/backend.env')
+                . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
                 $output,
                 $exitCode
             );
@@ -113,6 +121,8 @@ final class EnvTemplateParseTest extends TestCase
 
             $this->assertNotFalse($rootParsed, 'derived root .env should remain parse_ini_file-compatible');
             $this->assertNotFalse($backendParsed, 'derived backend/.env should remain parse_ini_file-compatible');
+            $this->assertFileEquals($root . '/.env', $root . '/runtime-config/.env');
+            $this->assertFileEquals($root . '/backend/.env', $root . '/runtime-config/backend.env');
             $this->assertSame('1', $rootParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame('1', $backendParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame($rootParsed['DB_HOST'] ?? null, $backendParsed['DB_HOST'] ?? null);
@@ -129,6 +139,7 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertSame($rootParsed['CORS_ALLOW_CREDENTIALS'] ?? null, $backendParsed['CORS_ALLOW_CREDENTIALS'] ?? null);
             $this->assertSame($rootParsed['PLATFORM_REPORT_DISABLED'] ?? null, $backendParsed['PLATFORM_REPORT_DISABLED'] ?? null);
             $this->assertArrayNotHasKey('REDIS_HOST_PORT', $backendParsed);
+            $this->assertArrayNotHasKey('MYSQL_ROOT_PASSWORD', $backendParsed);
             $this->assertArrayNotHasKey('CRON_ENABLE', $rootParsed);
             $this->assertArrayNotHasKey('SWOOLE_QUEUE_ENABLE', $rootParsed);
             $this->assertSame('false', $backendParsed['CRON_ENABLE'] ?? null);
@@ -163,7 +174,7 @@ final class EnvTemplateParseTest extends TestCase
             'DB_PASS=db-pass',
             'REDIS_HOST=redis',
             'REDIS_CACHE_DB=0',
-            'REDIS_PASSWORD=',
+            'REDIS_PASSWORD=redis-pass',
             'CACHE_DRIVER=redis',
             'SITE_URL=http://localhost:8080',
             '',
@@ -186,8 +197,63 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertSame('16379', $rootParsed['REDIS_HOST_PORT'] ?? null);
             $this->assertSame('6379', $rootParsed['REDIS_PORT'] ?? null);
             $this->assertSame('6379', $backendParsed['REDIS_PORT'] ?? null);
+            $this->assertSame('redis-pass', $backendParsed['REDIS_PASSWORD'] ?? null);
+            $this->assertSame('redis-pass', $backendParsed['QUEUE_REDIS_PASSWORD'] ?? null);
             $this->assertSame($rootParsed['JWT_SECRET'] ?? null, $backendParsed['JWT_SECRET'] ?? null);
             $this->assertArrayNotHasKey('REDIS_HOST_PORT', $backendParsed);
+
+            $rootContent = (string) file_get_contents($root . '/.env');
+            $rootContent = (string) preg_replace('/^REDIS_PASSWORD=.*$/m', 'REDIS_PASSWORD=', $rootContent);
+            file_put_contents($root . '/.env', $rootContent);
+
+            exec(
+                'WORKDIR=' . escapeshellarg($root) . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
+                $clearOutput,
+                $clearExitCode
+            );
+
+            $this->assertSame(0, $clearExitCode, implode("\n", $clearOutput));
+            $clearedBackend = @parse_ini_file($root . '/backend/.env', true, INI_SCANNER_RAW);
+            $this->assertNotFalse($clearedBackend);
+            $this->assertSame('', $clearedBackend['REDIS_PASSWORD'] ?? null);
+            $this->assertSame('', $clearedBackend['QUEUE_REDIS_PASSWORD'] ?? null);
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
+    public function testEnsureEnvRestoresMissingRootEnvFromPersistentExport(): void
+    {
+        $root = sys_get_temp_dir() . '/mallbase-env-restore-' . bin2hex(random_bytes(6));
+
+        mkdir($root . '/backend', 0777, true);
+        mkdir($root . '/deploy/docker', 0777, true);
+        mkdir($root . '/runtime-config', 0777, true);
+
+        copy(dirname(__DIR__, 2) . '/.example.env', $root . '/backend/.example.env');
+        copy(dirname(__DIR__, 3) . '/deploy/docker/.example.env', $root . '/deploy/docker/.example.env');
+        copy(dirname(__DIR__, 3) . '/deploy/docker/ensure-env.sh', $root . '/deploy/docker/ensure-env.sh');
+
+        $persistentEnv = (string) file_get_contents($root . '/deploy/docker/.example.env');
+        $persistentEnv = preg_replace('/^DB_PASS=.*$/m', 'DB_PASS=persisted-db-pass', $persistentEnv);
+        $persistentEnv = preg_replace('/^MYSQL_ROOT_PASSWORD=.*$/m', 'MYSQL_ROOT_PASSWORD=persisted-root-pass', (string) $persistentEnv);
+        file_put_contents($root . '/runtime-config/.env', $persistentEnv);
+
+        try {
+            exec(
+                'WORKDIR=' . escapeshellarg($root)
+                . ' ROOT_ENV_EXPORT=' . escapeshellarg($root . '/runtime-config/.env')
+                . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
+                $output,
+                $exitCode
+            );
+
+            $this->assertSame(0, $exitCode, implode("\n", $output));
+
+            $restored = @parse_ini_file($root . '/.env', true, INI_SCANNER_RAW);
+            $this->assertNotFalse($restored);
+            $this->assertSame('persisted-db-pass', $restored['DB_PASS'] ?? null);
+            $this->assertSame('persisted-root-pass', $restored['MYSQL_ROOT_PASSWORD'] ?? null);
         } finally {
             $this->removeDirectory($root);
         }

@@ -95,6 +95,7 @@ mall-base/
 ├── docs/                            # 文档中心
 ├── docker-compose.dev.yml           # 后端 + MySQL + Redis 开发环境
 ├── docker-compose.yml               # 后端容器部署入口
+├── docker-compose.full.yml          # Admin + H5 + 后端 + MySQL + Redis 生产入口
 └── README.md
 ```
 
@@ -105,7 +106,8 @@ mall-base/
 | [文档中心](docs/index.md) | 按使用场景浏览项目文档。 |
 | [常见问题](docs/faq.md) | 查找常见业务问题与对应文档入口。 |
 | [安装与部署](docs/install/index.md) | 选择本地、Docker 或生产环境安装方式。 |
-| [Docker Hub 多架构镜像发布](docs/install/docker-image-publish.md) | 自动构建并发布 AMD64、ARM64 后端镜像。 |
+| [Docker 生产全功能部署](docs/install/docker-fullstack-production.md) | 一套 Compose 启动 Web、后端、MySQL、Redis、Cron 和队列。 |
+| [Docker Hub 多架构镜像发布](docs/install/docker-image-publish.md) | 自动构建并发布 AMD64、ARM64 后端和 Web 镜像。 |
 | [前端发布制品](docs/install/frontend-release-artifacts.md) | 自动构建 Admin、H5 和微信小程序制品。 |
 | [操作文档](docs/operation/index.md) | 查看后台配置与业务操作流程。 |
 | [业务逻辑](docs/logic/index.md) | 了解核心业务规则与状态流转。 |
