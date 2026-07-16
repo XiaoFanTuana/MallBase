@@ -17,6 +17,7 @@ final class SimpleUpgradeGate
     ];
 
     private readonly string $runDirectory;
+    private readonly int $runGid;
 
     public function __construct(string $runDirectory)
     {
@@ -30,10 +31,13 @@ final class SimpleUpgradeGate
             throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
         }
         $resolved = realpath($runDirectory);
-        if (!is_string($resolved) || !is_dir($resolved)) {
+        $directoryStat = is_string($resolved) ? @lstat($resolved) : false;
+        if (!is_string($resolved) || !is_array($directoryStat)
+            || ($directoryStat['mode'] & 0170000) !== 0040000) {
             throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
         }
         $this->runDirectory = $resolved;
+        $this->runGid = (int) $directoryStat['gid'];
         $this->initialize();
     }
 
@@ -173,12 +177,45 @@ final class SimpleUpgradeGate
     /** @return resource */
     private function openLock(string $name)
     {
-        $handle = @fopen($this->runDirectory . DIRECTORY_SEPARATOR . $name, 'c+b');
+        $path = $this->runDirectory . DIRECTORY_SEPARATOR . $name;
+        $handle = @fopen($path, 'c+b');
         if (!is_resource($handle)) {
             throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
         }
+        try {
+            $opened = @fstat($handle);
+            $named = @lstat($path);
+            if (!$this->sameRegularLock($opened, $named)) {
+                throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
+            }
+            if (($opened['mode'] & 0777) !== 0660 && !@chmod($path, 0660)) {
+                throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
+            }
+            if ((int) $opened['gid'] !== $this->runGid && !@chgrp($path, $this->runGid)) {
+                throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
+            }
+            $after = @fstat($handle);
+            $namedAfter = @lstat($path);
+            if (!$this->sameRegularLock($after, $namedAfter)
+                || ($after['mode'] & 0777) !== 0660 || (int) $after['gid'] !== $this->runGid) {
+                throw new RuntimeException('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE');
+            }
+        } catch (Throwable $exception) {
+            fclose($handle);
+            throw $exception;
+        }
 
         return $handle;
+    }
+
+    /** @param array<string|int,mixed>|false $opened @param array<string|int,mixed>|false $named */
+    private function sameRegularLock(array|false $opened, array|false $named): bool
+    {
+        return is_array($opened) && is_array($named)
+            && ($opened['mode'] & 0170000) === 0100000
+            && ($named['mode'] & 0170000) === 0100000
+            && (int) $opened['nlink'] === 1 && (int) $named['nlink'] === 1
+            && $opened['dev'] === $named['dev'] && $opened['ino'] === $named['ino'];
     }
 
     private function openAndCloseLock(string $name): void

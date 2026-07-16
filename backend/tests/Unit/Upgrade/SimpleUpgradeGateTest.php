@@ -42,10 +42,29 @@ final class SimpleUpgradeGateTest extends TestCase
         self::assertSame('normal', $gate->state());
         self::assertFileExists($this->runDirectory . '/admission.lock');
         self::assertFileExists($this->runDirectory . '/activity.lock');
+        self::assertSame(0660, fileperms($this->runDirectory . '/admission.lock') & 0777);
+        self::assertSame(0660, fileperms($this->runDirectory . '/activity.lock') & 0777);
         self::assertSame(
             "{\"schema_version\":1,\"state\":\"normal\"}\n",
             file_get_contents($this->runDirectory . '/state.json'),
         );
+    }
+
+    public function testRejectsSymlinkLockWithoutChangingItsTarget(): void
+    {
+        mkdir($this->runDirectory, 0770, true);
+        $target = $this->runDirectory . '/lock-target';
+        file_put_contents($target, 'target');
+        chmod($target, 0600);
+        symlink($target, $this->runDirectory . '/admission.lock');
+
+        try {
+            new SimpleUpgradeGate($this->runDirectory);
+            self::fail('Expected symlink lock to be rejected');
+        } catch (RuntimeException $exception) {
+            self::assertSame('SIMPLE_UPGRADE_GATE_STORAGE_UNAVAILABLE', $exception->getMessage());
+        }
+        self::assertSame(0600, fileperms($target) & 0777);
     }
 
     public function testRejectsNonCanonicalOrUnknownStateDocument(): void
