@@ -94,7 +94,7 @@ if ($count === false || $count > 1) {
     exit(1);
 }
 if ($count === 1) {
-    $content = preg_replace($pattern, static fn(): string => $line, $content, 1);
+    $content = preg_replace_callback($pattern, static fn(): string => $line, $content, 1);
 } else {
     $content = rtrim($content, "\n") . ($content === "" ? "" : "\n") . $line . "\n";
 }
