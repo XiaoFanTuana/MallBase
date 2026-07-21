@@ -21,7 +21,10 @@ final class InstallRouteContractTest extends TestCase
         $source = (string) file_get_contents(dirname(__DIR__, 3) . '/route/app.php');
 
         $this->assertStringContainsString('if (is_dir($filePath))', $source);
-        $this->assertStringContainsString("\$indexPath = rtrim(\$filePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'index.html';", $source);
+        $this->assertStringContainsString(
+            "\$indexPath = realpath(rtrim(\$filePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'index.html');",
+            $source,
+        );
         $this->assertStringContainsString('if (!is_file($filePath))', $source);
         $this->assertStringNotContainsString('if (!file_exists($filePath))', $source);
     }
