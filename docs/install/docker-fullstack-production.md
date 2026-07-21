@@ -3,9 +3,12 @@
 这套方式用一份 Compose 同时运行以下服务：
 
 - `web`：Nginx、Admin 后台和 UniApp H5
-- `backend`：PHP 8.2、Swoole、定时任务和 Redis 队列 Worker
+- `backend`：PHP 8.2 与 Swoole HTTP 服务
+- `queue`：独立 Redis 队列 Worker
+- `cron`：独立定时任务进程
 - `mysql`：MySQL 8.0，数据使用命名卷持久化
 - `redis`：Redis 7，AOF 数据使用命名卷持久化
+- `ensure-env`、`prepare-backend-volumes`、`check-db-auth`：启动前一次性配置与兼容迁移任务
 
 只有 Web 端口对宿主机开放，MySQL 和 Redis 只在 Docker 内部网络可访问。微信小程序不能运行在 Docker 中，仍需使用 GitHub Actions 生成的制品在微信开发者工具中上传发布。
 
@@ -52,7 +55,9 @@ docker compose -f docker-compose.full.yml ps
 docker compose -f docker-compose.full.yml logs -f backend web
 ```
 
-`mysql`、`redis`、`backend` 和 `web` 最终都应显示为 `healthy`。backend 健康检查会验证 Swoole、业务数据库、缓存 Redis 和队列 Redis；安装完成后还会检查关键表。`ensure-env` 和 `check-db-auth` 正常完成后显示 `Exited (0)`。
+`mysql`、`redis`、`backend` 和 `web` 最终都应显示为 `healthy`，`queue` 与 `cron` 应显示为运行中。backend 健康检查会验证 Swoole、业务数据库、缓存 Redis 和队列 Redis；安装完成后还会检查关键表。`ensure-env`、`prepare-backend-volumes` 和 `check-db-auth` 正常完成后显示 `Exited (0)`。
+
+从旧版完整 Compose 升级时，`prepare-backend-volumes` 会把 `backend_config` 卷中的旧 `.env` 原子迁移为 `backend.env`，并把原来由 root 创建的后端卷切换给固定 UID/GID `10000:10000`。已有安装标记和业务配置不会被模板覆盖。
 
 ## 3. 完成首次安装
 
@@ -77,12 +82,12 @@ Redis 主机: redis
 Redis 端口: 6379
 ```
 
-确认“定时任务”和“Swoole 队列 Worker”保持开启，再设置管理员账号并完成安装。数据库必须由安装器面对空库导入，不能提前只导入部分 SQL。
+设置管理员账号并完成安装。完整 Compose 已用独立 `queue` 和 `cron` 服务承载队列与定时任务，不依赖 HTTP 容器内的 Swoole 队列 Worker。数据库必须由安装器面对空库导入，不能提前只导入部分 SQL。
 
 安装完成后重启后端，让常驻 Swoole 进程加载最终配置：
 
 ```bash
-docker compose -f docker-compose.full.yml restart backend
+docker compose -f docker-compose.full.yml restart backend queue cron
 ```
 
 确认安装锁已经生效、Admin 可以登录后，再启用公网 TLS 反向代理。不要把仅有 HTTP 的 `0.0.0.0:8080` 当作最终生产入口。
@@ -104,6 +109,9 @@ docker compose -f docker-compose.full.yml restart backend
 | `backend_certs` | 微信支付等商户证书 |
 | `backend_config` | 安装器写入的后端运行配置和运行标记 |
 | `backend_bootstrap` | 不含 MySQL root 密码的后端启动配置 |
+| `backend_demo` | 安装器与后台维护的演示素材 |
+| `backend_public_storage` | 本地 public storage 业务文件 |
+| `backend_upgrade` | 维护门禁状态及升级任务共享目录；完整镜像模式不在其中保存应用代码 |
 | `app_config` | MySQL、Redis 和工具容器读取的基础设施配置副本 |
 
 `docker compose down` 不会删除这些数据。不要在生产环境执行 `docker compose down -v`，该命令会删除数据库、Redis、上传文件、商户证书、后端配置和安装状态。
@@ -124,7 +132,9 @@ docker compose -f docker-compose.full.yml up -d --remove-orphans
 docker compose -f docker-compose.full.yml up -d --force-recreate
 ```
 
-当前完整模式把 Cron 和队列 Worker 放在同一个后端容器内，因此不要横向扩容 `backend`；多副本会导致定时任务重复执行。
+HTTP、Queue、Cron 已拆成三个角色。可以按压测结果调整 HTTP 层，但不要横向扩容 `cron`；多个 Cron 实例会重复调度任务。扩容 `queue` 前也应确认具体任务具备幂等性。
+
+后台新增的宿主机在线升级 Agent 面向“宿主机源码 + systemd”部署，会修改宿主机代码树并要求重新构建三个业务镜像；它不适用于 Docker Hub 不可变镜像模式。完整 Compose 请继续使用本节的 `docker compose pull` 和 `up -d --remove-orphans` 更新，不要从后台发起在线升级。
 
 ## 6. 备份
 
@@ -134,7 +144,7 @@ docker compose -f docker-compose.full.yml up -d --force-recreate
 docker compose -f docker-compose.full.yml exec -T mysql sh -c '. /workdir/.env; exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction "$DB_NAME"' > mallbase.sql
 ```
 
-还需要定期备份 `backend_uploads`、`backend_certs` 和 `backend_config`，并安全保管根目录 `.env`。商户证书和配置备份应加密，备份文件应复制到另一台服务器或对象存储，不能只留在同一块磁盘。
+还需要定期备份 `backend_uploads`、`backend_certs`、`backend_config`、`backend_demo` 和 `backend_public_storage`，并安全保管根目录 `.env`。商户证书和配置备份应加密，备份文件应复制到另一台服务器或对象存储，不能只留在同一块磁盘。
 
 ## 7. Docker 不会自动完成的配置
 

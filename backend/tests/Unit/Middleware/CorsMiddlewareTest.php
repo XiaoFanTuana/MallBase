@@ -8,6 +8,8 @@ use app\middleware\CorsMiddleware;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use think\facade\Env;
+use think\Request;
+use think\Response;
 
 final class CorsMiddlewareTest extends TestCase
 {
@@ -59,6 +61,36 @@ final class CorsMiddlewareTest extends TestCase
 
         $this->setEnv('CORS_ALLOW_CREDENTIALS', 'false');
         $this->assertTrue($method->invoke($middleware, 'https://evil.example.com'));
+    }
+
+    public function testAllowListedJwtCorsNeverEnablesCredentialsByDefault(): void
+    {
+        $this->setEnv('CORS_ALLOWED_ORIGINS', 'https://admin.example.com');
+        $request = (new Request())
+            ->setMethod('GET')
+            ->withHeader(['Origin' => 'https://admin.example.com']);
+
+        $response = (new CorsMiddleware())->handle(
+            $request,
+            static fn (): Response => Response::create('ok', 'html', 200),
+        );
+        $headers = array_change_key_case($response->getHeader(), CASE_LOWER);
+
+        $this->assertSame('https://admin.example.com', $headers['access-control-allow-origin'] ?? null);
+        $this->assertArrayNotHasKey('access-control-allow-credentials', $headers);
+        $this->assertSame('Origin', $headers['vary'] ?? null);
+    }
+
+    public function testSameOriginRequestWithoutOriginDoesNotEmitCorsHeaders(): void
+    {
+        $response = (new CorsMiddleware())->handle(
+            (new Request())->setMethod('GET'),
+            static fn (): Response => Response::create('ok', 'html', 200),
+        );
+        $headers = array_change_key_case($response->getHeader(), CASE_LOWER);
+
+        $this->assertArrayNotHasKey('access-control-allow-origin', $headers);
+        $this->assertArrayNotHasKey('access-control-allow-credentials', $headers);
     }
 
     private function setEnv(string $key, string $value): void

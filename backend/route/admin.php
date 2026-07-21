@@ -5,7 +5,8 @@ use app\middleware\admin\{
     JwtAuth,
     CheckPermission,
     AdminOperationLogMiddleware,
-    RequestLockMiddleware
+    RequestLockMiddleware,
+    UpgradeAdminGateMiddleware,
 };
 
 Route::group('admin', function () {
@@ -36,6 +37,7 @@ Route::group('admin', function () {
             '_group_name' => '后台管理'
         ])
         ->middleware([
+            UpgradeAdminGateMiddleware::class,
             JwtAuth::class,
             CheckPermission::class,
             RequestLockMiddleware::class,
@@ -49,12 +51,19 @@ Route::group('admin', function () {
     | pathinfo 现在包含 admin/ 前缀，需要 strip 后查找静态文件
     */
     Route::miss(function () {
-        $path = request()->pathinfo();
-        $path = preg_replace('#^admin/?#', '', $path);
+        $path = (string) preg_replace('#^admin/?#', '', (string) request()->pathinfo());
+        $path = str_replace('\\', '/', trim($path, '/'));
+        if (str_contains($path, "\0") || preg_match('#(?:^|/)\.\.(?:/|$)#', $path) === 1) {
+            abort(404, '前端页面未找到');
+        }
         $publicPath = app()->getRootPath() . 'public' . DIRECTORY_SEPARATOR;
+        $adminRoot = realpath($publicPath . 'admin');
 
-        $filePath = $publicPath . 'admin' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
-        if (is_file($filePath)) {
+        $filePath = is_string($adminRoot) && $path !== ''
+            ? realpath($adminRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path))
+            : false;
+        if (is_string($filePath) && str_starts_with($filePath, $adminRoot . DIRECTORY_SEPARATOR)
+            && is_file($filePath)) {
             $mimeTypes = [
                 'js'    => 'application/javascript',
                 'mjs'   => 'application/javascript',
@@ -73,19 +82,22 @@ Route::group('admin', function () {
             ];
 
             $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-            $mimeType = $mimeTypes[$ext] ?? mime_content_type($filePath);
+            $mimeType = $mimeTypes[$ext] ?? (mime_content_type($filePath) ?: 'application/octet-stream');
 
             return response(file_get_contents($filePath), 200, [
                 'Content-Type'  => $mimeType,
+                'X-Content-Type-Options' => 'nosniff',
                 // 不启用一年强缓存，避免构建产物或静态文件同名更新后浏览器继续使用旧文件。
                 // 'Cache-Control' => 'public, max-age=31536000, immutable',
             ]);
         }
 
-        $indexPath = $publicPath . 'admin' . DIRECTORY_SEPARATOR . 'index.html';
-        if (is_file($indexPath)) {
+        $indexPath = is_string($adminRoot) ? realpath($adminRoot . DIRECTORY_SEPARATOR . 'index.html') : false;
+        if (is_string($indexPath) && str_starts_with($indexPath, $adminRoot . DIRECTORY_SEPARATOR)
+            && is_file($indexPath)) {
             return response(file_get_contents($indexPath), 200, [
                 'Content-Type' => 'text/html; charset=utf-8',
+                'X-Content-Type-Options' => 'nosniff',
             ]);
         }
 

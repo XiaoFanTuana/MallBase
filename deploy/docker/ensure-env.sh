@@ -16,6 +16,7 @@
 #   4. 用根 .env 覆盖数据库、Redis、JWT、CORS 与实例统计等共享字段
 # ============================================================
 set -eu
+umask 077
 
 WORKDIR="${WORKDIR:-/workdir}"
 BACKEND_ENV="${WORKDIR}/backend/.env"
@@ -162,6 +163,7 @@ rebuild_backend_env() {
         printf '\n'
         cat "$tmp_env"
     } > "$BACKEND_ENV"
+    chmod 0600 "$BACKEND_ENV"
 
     rm -f "$tmp_env"
 }

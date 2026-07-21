@@ -8,14 +8,15 @@ use PHPUnit\Framework\TestCase;
 
 final class InstallEnvSourceContractTest extends TestCase
 {
-    public function testDockerBackendOnlyUsesRootEnvAsManualSource(): void
+    public function testDockerBackendUsesRootEnvFileWithoutWorkspaceAlias(): void
     {
         $root = dirname(__DIR__, 4);
         $compose = (string) file_get_contents($root . '/docker-compose.dev.yml');
         $entrypoint = (string) file_get_contents($root . '/deploy/docker/docker-entrypoint.sh');
         $docs = (string) file_get_contents($root . '/docs/install/docker-backend-only.md');
 
-        $this->assertStringContainsString('- .:/workspace:ro', $compose);
+        $this->assertStringNotContainsString('- .:/workspace:ro', $compose);
+        $this->assertGreaterThanOrEqual(2, substr_count($compose, "env_file:\n      - .env"));
         $this->assertStringContainsString('"${REDIS_HOST_PORT:-6379}:6379"', $compose);
         $this->assertStringNotContainsString('"${REDIS_PORT:-6379}:6379"', $compose);
         $this->assertStringContainsString('ROOT_ENV="/workspace/.env"', $entrypoint);
@@ -69,15 +70,22 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString('MALLBASE_WEB_IMAGE', $compose);
         $this->assertStringContainsString('backend_bootstrap:/workspace:ro', $compose);
         $this->assertStringContainsString('BACKEND_ENV_EXPORT: /bootstrap/.env', $compose);
-        $this->assertStringContainsString('CRON_ENABLE: "${CRON_ENABLE:-true}"', $compose);
         $this->assertStringContainsString('QUEUE_CONNECTION: "${QUEUE_CONNECTION:-redis}"', $compose);
-        $this->assertStringContainsString('SWOOLE_QUEUE_ENABLE: "${SWOOLE_QUEUE_ENABLE:-true}"', $compose);
         $this->assertStringContainsString('QUEUE_REDIS_USE_CACHE_AUTH: "true"', $compose);
         $this->assertStringContainsString('${MALLBASE_BIND_HOST:-127.0.0.1}', $compose);
         $this->assertStringContainsString('backend_certs:/app/storage/cert', $compose);
-        $this->assertStringContainsString('backend_config:/app-config', $compose);
+        $this->assertStringContainsString('backend_config:/app/.mallbase-env', $compose);
         $this->assertStringContainsString('backend_uploads:/srv/mallbase-uploads:ro', $compose);
-        $this->assertStringContainsString('BACKEND_ENV_PATH: /app-config/.env', $compose);
+        $this->assertStringContainsString('MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env', $compose);
+        $this->assertStringContainsString('prepare-backend-volumes:', $compose);
+        $this->assertStringContainsString('backend_demo:/app/public/static/demo', $compose);
+        $this->assertStringContainsString('backend_public_storage:/app/public/storage', $compose);
+        $this->assertStringContainsString('backend_upgrade:/app/upgrade', $compose);
+        $this->assertSame(3, substr_count($compose, '<<: *backend-runtime'));
+        foreach (['http', 'queue', 'cron'] as $role) {
+            $this->assertStringContainsString('MALLBASE_RUNTIME_ROLE: ' . $role, $compose);
+        }
+        $this->assertSame(2, substr_count($compose, "healthcheck:\n      disable: true"));
         $this->assertStringContainsString('http://127.0.0.1:8080/healthz', $compose);
         $this->assertStringContainsString('/usr/local/bin/mallbase-healthcheck.php', $compose);
         $this->assertStringContainsString('internal: true', $compose);
@@ -99,7 +107,7 @@ final class InstallEnvSourceContractTest extends TestCase
         $entrypoint = (string) file_get_contents($root . '/deploy/docker/docker-entrypoint.sh');
         $docs = (string) file_get_contents($root . '/docs/install/docker-production.md');
 
-        $this->assertStringContainsString("env_file:\n      - .env", $compose);
+        $this->assertMatchesRegularExpression('/env_file:\s+- \.env/s', $compose);
         $this->assertStringNotContainsString('/workspace', $compose);
         $this->assertStringNotContainsString('backend/.env', $compose);
         $this->assertStringContainsString('COPY .version /.version', $dockerfile);
@@ -111,9 +119,9 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringContainsString('安装完成后请把最终生效值同步回项目根目录 `.env`', $docs);
         $this->assertStringContainsString('不要手动复制或编辑 `backend/.env`', $docs);
         $this->assertStringContainsString('生产 compose 不挂载 `/workspace`', $docs);
-        $this->assertStringContainsString('生产单后端容器不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
+        $this->assertStringContainsString('生产的三个业务角色不启动 MySQL / Redis 容器，所以不需要配置 `MYSQL_PORT` / `REDIS_HOST_PORT`', $docs);
         $this->assertStringContainsString('`backend_runtime` volume', $docs);
         $this->assertStringContainsString('`backend_uploads` volume', $docs);
-        $this->assertStringContainsString('`backend_certs` volume', $docs);
+        $this->assertStringContainsString('`data/backend/cert`', $docs);
     }
 }

@@ -13,8 +13,15 @@ final class ClientRouteContractTest extends TestCase
         $source = (string) file_get_contents(dirname(__DIR__, 3) . '/route/client.php');
 
         $this->assertStringContainsString('| 客户端 H5 SPA 兜底', $source);
-        $this->assertStringContainsString("preg_replace('#^client/?#', '', \$path)", $source);
-        $this->assertStringContainsString("'client' . DIRECTORY_SEPARATOR . 'index.html'", $source);
+        $this->assertStringContainsString(
+            "preg_replace('#^client/?#', '', (string) request()->pathinfo())",
+            $source,
+        );
+        $this->assertStringContainsString("\$clientRoot = realpath(\$publicPath . 'client')", $source);
+        $this->assertStringContainsString(
+            "realpath(\$clientRoot . DIRECTORY_SEPARATOR . 'index.html')",
+            $source,
+        );
         $this->assertStringContainsString("abort(404, '客户端 H5 页面未找到，请先构建 H5 前端');", $source);
     }
 

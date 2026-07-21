@@ -16,3 +16,15 @@ frontend/admin/**/dist
 frontend/admin/**/.turbo
 frontend/uniapp/node_modules
 frontend/uniapp/dist
+
+# Keep committed build-mode configuration, but never send developer-local
+# overrides or credentials to a remote BuildKit builder.
+frontend/**/.env.local
+frontend/**/.env.*.local
+frontend/**/.env.secret*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
