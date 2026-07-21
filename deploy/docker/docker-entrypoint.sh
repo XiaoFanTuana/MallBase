@@ -76,7 +76,7 @@ $key = $argv[3];
 $value = $argv[4];
 if (preg_match("/^[A-Z][A-Z0-9_]*$/D", $key) !== 1
     || strpbrk($value, "\0\r\n") !== false
-    || preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value) === 1) {
+    || preg_match("/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]/", $value) === 1) {
     fwrite(STDERR, "RUNTIME_ENV_VALUE_INVALID\n");
     exit(1);
 }
