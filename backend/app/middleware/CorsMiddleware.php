@@ -9,8 +9,9 @@ use think\Request;
 /**
  * CORS 跨域中间件。
  *
- * 仅允许 CORS_ALLOWED_ORIGINS 中配置的来源。必须放在安装检查中间件之前，
- * 避免 OPTIONS 预检请求被重定向到安装页。
+ * 仅允许 CORS_ALLOWED_ORIGINS 中配置的来源，默认不允许跨域 Cookie 凭据。
+ * 本中间件必须位于全局链首位，避免 OPTIONS 预检被安装检查或升级维护门禁拦截。
+ * 升级页面使用 HttpOnly Cookie，并由服务端执行同源校验。
  */
 class CorsMiddleware
 {

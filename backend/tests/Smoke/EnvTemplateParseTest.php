@@ -123,6 +123,7 @@ final class EnvTemplateParseTest extends TestCase
             $this->assertNotFalse($backendParsed, 'derived backend/.env should remain parse_ini_file-compatible');
             $this->assertFileEquals($root . '/.env', $root . '/runtime-config/.env');
             $this->assertFileEquals($root . '/backend/.env', $root . '/runtime-config/backend.env');
+            $this->assertSame(0600, fileperms($root . '/backend/.env') & 0777);
             $this->assertSame('1', $rootParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame('1', $backendParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame($rootParsed['DB_HOST'] ?? null, $backendParsed['DB_HOST'] ?? null);

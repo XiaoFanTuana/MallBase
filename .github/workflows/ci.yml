@@ -156,13 +156,56 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Validate shell scripts
-        run: sh -n deploy/docker/ensure-env.sh deploy/docker/docker-entrypoint.sh deploy/docker/mysql-entrypoint.sh deploy/docker/redis-entrypoint.sh deploy/docker/check-db-auth.sh deploy/docker/rotate-db-password.sh
+        run: >-
+          sh -n
+          deploy/docker/ensure-env.sh
+          deploy/docker/docker-entrypoint.sh
+          deploy/docker/prepare-backend-volumes.sh
+          deploy/docker/mysql-entrypoint.sh
+          deploy/docker/redis-entrypoint.sh
+          deploy/docker/check-db-auth.sh
+          deploy/docker/rotate-db-password.sh
+          deploy/docker/host-preflight.sh
+          deploy/docker/tests/host-preflight-test.sh
+          deploy/release/build-full-release.sh
+          deploy/release/tests/build-full-release-test.sh
 
-      - name: Validate full stack Compose
+      - name: Validate Compose files
         run: |
           cp deploy/docker/.example.env .env
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.dev.yml config --quiet
           docker compose -f docker-compose.full.yml config --quiet
           docker compose -f docker-compose.frontend-build.yml config --quiet
+          docker compose -f docker-compose.uniapp-build.yml config --quiet
+
+      - name: Verify legacy Backend config volume migration
+        run: |
+          prefix=mallbase-volume-migration-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          for name in runtime uploads cert config bootstrap demo public-storage upgrade; do
+            docker volume create "${prefix}-${name}"
+          done
+          cleanup() {
+            for name in runtime uploads cert config bootstrap demo public-storage upgrade; do
+              docker volume rm -f "${prefix}-${name}" >/dev/null
+            done
+          }
+          trap cleanup EXIT
+          docker run --rm -v "${prefix}-config:/config" alpine:3.24.1 \
+            sh -c 'printf "JWT_SECRET=legacy-secret\nINSTALL_RUNTIME_MARKER=preserved\n" > /config/.env; chmod 600 /config/.env'
+          docker run --rm \
+            -v "${prefix}-runtime:/runtime" \
+            -v "${prefix}-uploads:/uploads" \
+            -v "${prefix}-cert:/cert" \
+            -v "${prefix}-config:/config" \
+            -v "${prefix}-bootstrap:/bootstrap:ro" \
+            -v "${prefix}-demo:/demo" \
+            -v "${prefix}-public-storage:/public-storage" \
+            -v "${prefix}-upgrade:/upgrade" \
+            -v "$PWD/deploy/docker/prepare-backend-volumes.sh:/prepare-backend-volumes.sh:ro" \
+            alpine:3.24.1 sh /prepare-backend-volumes.sh
+          docker run --rm -v "${prefix}-config:/config:ro" alpine:3.24.1 sh -c \
+            'test ! -e /config/.env && grep -q "^INSTALL_RUNTIME_MARKER=preserved$" /config/backend.env && test "$(stat -c %u /config/backend.env)" = 10000 && test "$(stat -c %a /config/backend.env)" = 600'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -206,16 +249,15 @@ jobs:
           volume=mallbase-backend-config-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
           docker volume create "$volume"
           trap 'docker volume rm -f "$volume"' EXIT
+          docker run --rm -v "$volume:/config" alpine:3.24.1 chown 10000:10000 /config
           docker run --rm \
-            -e BACKEND_ENV_PATH=/app-config/.env \
-            -v "$volume:/app-config" \
+            -v "$volume:/app/.mallbase-env" \
             mallbase-backend:test \
-            sh -c 'test -L /app/.env; sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=old-password/; s/^QUEUE_REDIS_PASSWORD=.*/QUEUE_REDIS_PASSWORD=old-password/" /app-config/.env; printf "INSTALL_RUNTIME_MARKER=ci-persisted\n" >> /app-config/.env'
+            sh -c 'test -L /app/.env; sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=old-password/; s/^QUEUE_REDIS_PASSWORD=.*/QUEUE_REDIS_PASSWORD=old-password/" /app/.mallbase-env/backend.env; printf "INSTALL_RUNTIME_MARKER=ci-persisted\n" >> /app/.mallbase-env/backend.env'
           docker run --rm \
-            -e BACKEND_ENV_PATH=/app-config/.env \
             -e REDIS_PASSWORD= \
             -e QUEUE_REDIS_USE_CACHE_AUTH=true \
-            -v "$volume:/app-config" \
+            -v "$volume:/app/.mallbase-env" \
             mallbase-backend:test \
             sh -c 'test -L /app/.env && grep -q "^INSTALL_RUNTIME_MARKER=ci-persisted$" /app/.env && grep -q "^REDIS_PASSWORD=$" /app/.env && grep -q "^QUEUE_REDIS_PASSWORD=$" /app/.env'
           docker run --rm mallbase-backend:test \

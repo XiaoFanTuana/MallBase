@@ -1,5 +1,6 @@
 import config from '@/config/index'
 import { clearAuthSession, readAuthSession, writeAuthSession } from '@/utils/auth-session'
+import { handleMaintenanceBody } from '@/utils/maintenance'
 
 const REQUEST_TIMEOUT = 15000
 const REFRESH_URL = '/client/api/user/auth/refreshToken'
@@ -125,7 +126,7 @@ function refreshAccessToken() {
   return refreshingPromise
 }
 
-function request(options, allowRefresh = true) {
+export function request(options, allowRefresh = true) {
   const {
     url,
     method = 'GET',
@@ -133,6 +134,7 @@ function request(options, allowRefresh = true) {
     header = {},
     redirectOnUnauthorized = true,
     showErrorToast = true,
+    allowMaintenanceResponse = false,
   } = options
   const requestUrl = `${config.baseUrl}${url}`
   const token = getToken()
@@ -160,6 +162,15 @@ function request(options, allowRefresh = true) {
             statusCode: res.statusCode,
             data: summarizeResponseData(res.data)
           }, showErrorToast)
+          return
+        }
+
+        if (
+          !allowMaintenanceResponse &&
+          res.statusCode === 503 &&
+          handleMaintenanceBody(body)
+        ) {
+          reject(new Error('SYSTEM_MAINTENANCE'))
           return
         }
 
@@ -236,6 +247,11 @@ export function uploadFile(url, filePath, name = 'file', formData = {}, allowRef
             statusCode: res.statusCode,
             data: summarizeResponseData(res.data)
           })
+          return
+        }
+
+        if (res.statusCode === 503 && handleMaintenanceBody(body)) {
+          reject(new Error('SYSTEM_MAINTENANCE'))
           return
         }
 

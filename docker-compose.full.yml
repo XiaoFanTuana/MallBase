@@ -1,5 +1,6 @@
-# Production full stack: Web (Admin + H5), backend, MySQL and Redis.
-# Run from the repository root with: docker compose -f docker-compose.full.yml up -d
+# Production full stack: Web (Admin + H5), HTTP backend, queue, cron,
+# MySQL and Redis. Run from the repository root with:
+# docker compose -f docker-compose.full.yml up -d
 
 name: ${MALLBASE_COMPOSE_PROJECT_NAME:-mallbase}
 
@@ -8,6 +9,59 @@ x-logging: &default-logging
   options:
     max-size: "10m"
     max-file: "3"
+
+x-backend-environment: &backend-environment
+  TZ: ${TZ:-Asia/Shanghai}
+  MALLBASE_RUNTIME_MODE: production
+  MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env
+  MALLBASE_UPGRADE_ROOT: /app/upgrade
+  MALLBASE_UPGRADE_SHARED_GID: "10000"
+  APP_DEBUG: "false"
+  QUEUE_CONNECTION: "${QUEUE_CONNECTION:-redis}"
+  QUEUE_REDIS_QUEUE: "${QUEUE_REDIS_QUEUE:-default}"
+  QUEUE_REDIS_HOST: redis
+  QUEUE_REDIS_PORT: "6379"
+  QUEUE_REDIS_SELECT: "${QUEUE_REDIS_SELECT:-1}"
+  QUEUE_REDIS_USE_CACHE_AUTH: "true"
+  SWOOLE_HTTP_PORT: "${SWOOLE_HTTP_PORT:-8080}"
+  PLATFORM_REPORT_DISABLED: "${PLATFORM_REPORT_DISABLED:-true}"
+
+x-backend-runtime: &backend-runtime
+  image: ${MALLBASE_BACKEND_IMAGE:-xiaofantuan/mallbase-backend:latest}
+  build:
+    context: .
+    dockerfile: deploy/docker/Dockerfile
+  restart: unless-stopped
+  init: true
+  user: "10000:10000"
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+  volumes:
+    - backend_runtime:/app/runtime
+    - backend_uploads:/app/public/uploads
+    - backend_certs:/app/storage/cert
+    - backend_config:/app/.mallbase-env
+    - backend_bootstrap:/workspace:ro
+    - backend_demo:/app/public/static/demo
+    - backend_public_storage:/app/public/storage
+    - backend_upgrade:/app/upgrade
+  depends_on:
+    prepare-backend-volumes:
+      condition: service_completed_successfully
+    mysql:
+      condition: service_healthy
+    check-db-auth:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+  networks:
+    - data
+  logging: *default-logging
 
 services:
   ensure-env:
@@ -23,6 +77,29 @@ services:
       - backend_bootstrap:/bootstrap
       - ./deploy/docker/ensure-env.sh:/ensure-env.sh:ro
     command: sh /ensure-env.sh
+    logging: *default-logging
+
+  prepare-backend-volumes:
+    image: alpine:3.24.1
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-prepare-volumes
+    restart: "no"
+    environment:
+      MALLBASE_APP_UID: "10000"
+      MALLBASE_APP_GID: "10000"
+    volumes:
+      - backend_runtime:/runtime
+      - backend_uploads:/uploads
+      - backend_certs:/cert
+      - backend_config:/config
+      - backend_bootstrap:/bootstrap:ro
+      - backend_demo:/demo
+      - backend_public_storage:/public-storage
+      - backend_upgrade:/upgrade
+      - ./deploy/docker/prepare-backend-volumes.sh:/prepare-backend-volumes.sh:ro
+    command: sh /prepare-backend-volumes.sh
+    depends_on:
+      ensure-env:
+        condition: service_completed_successfully
     logging: *default-logging
 
   mysql:
@@ -107,55 +184,50 @@ services:
     logging: *default-logging
 
   backend:
-    image: ${MALLBASE_BACKEND_IMAGE:-xiaofantuan/mallbase-backend:latest}
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile
+    <<: *backend-runtime
     container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-backend
-    restart: unless-stopped
-    init: true
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      APP_DEBUG: "false"
-      CRON_ENABLE: "${CRON_ENABLE:-true}"
-      QUEUE_CONNECTION: "${QUEUE_CONNECTION:-redis}"
-      SWOOLE_QUEUE_ENABLE: "${SWOOLE_QUEUE_ENABLE:-true}"
-      QUEUE_REDIS_QUEUE: "${QUEUE_REDIS_QUEUE:-default}"
-      QUEUE_REDIS_HOST: redis
-      QUEUE_REDIS_PORT: "6379"
-      QUEUE_REDIS_SELECT: "${QUEUE_REDIS_SELECT:-1}"
-      QUEUE_REDIS_USE_CACHE_AUTH: "true"
-      SWOOLE_HTTP_PORT: "${SWOOLE_HTTP_PORT:-8080}"
-      BACKEND_ENV_PATH: /app-config/.env
+      <<: *backend-environment
+      MALLBASE_RUNTIME_ROLE: http
+      CRON_ENABLE: "false"
+      SWOOLE_QUEUE_ENABLE: "false"
     expose:
       - "${SWOOLE_HTTP_PORT:-8080}"
-    volumes:
-      - backend_runtime:/app/runtime
-      - backend_uploads:/app/public/uploads
-      - backend_certs:/app/storage/cert
-      - backend_config:/app-config
-      - backend_bootstrap:/workspace:ro
     healthcheck:
       test: ["CMD", "php", "/usr/local/bin/mallbase-healthcheck.php"]
       interval: 10s
       timeout: 8s
       retries: 20
       start_period: 30s
-    depends_on:
-      ensure-env:
-        condition: service_completed_successfully
-      mysql:
-        condition: service_healthy
-      check-db-auth:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
+    command: ["php", "think", "swoole"]
     networks:
       - edge
       - data
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
+
+  queue:
+    <<: *backend-runtime
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-queue
+    environment:
+      <<: *backend-environment
+      MALLBASE_RUNTIME_ROLE: queue
+      CRON_ENABLE: "false"
+      SWOOLE_QUEUE_ENABLE: "false"
+    healthcheck:
+      disable: true
+    command: ["php", "think", "queue:work", "redis", "--queue=default", "--tries=3"]
+
+  cron:
+    <<: *backend-runtime
+    container_name: ${MALLBASE_CONTAINER_PREFIX:-mallbase}-cron
+    environment:
+      <<: *backend-environment
+      MALLBASE_RUNTIME_ROLE: cron
+      CRON_ENABLE: "true"
+      SWOOLE_QUEUE_ENABLE: "false"
+      SWOOLE_WORKER_NUM: "1"
+    healthcheck:
+      disable: true
+    command: ["php", "think", "swoole"]
 
   rotate-db-password:
     profiles: ["tools"]
@@ -216,5 +288,8 @@ volumes:
   backend_uploads:
   backend_certs:
   backend_config:
+  backend_demo:
+  backend_public_storage:
+  backend_upgrade:
   mysql_data:
   redis_data:

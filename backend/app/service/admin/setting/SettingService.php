@@ -12,6 +12,7 @@ use app\model\setting\SettingSection;
 use app\service\cache\SettingCacheService;
 use app\service\content\RichTextSanitizer;
 use app\service\upload\AssetHydrator;
+use app\support\upload\LocalUploadRootPolicy;
 use app\validate\admin\setting\SettingValueValidate;
 use app\service\UploadService;
 use mall_base\base\BaseService;
@@ -1514,6 +1515,11 @@ class SettingService extends BaseService
      */
     public function createSetting(array $data): array
     {
+        $this->assertLocalUploadRootSettingValue(
+            $data['code'] ?? null,
+            $data['value'] ?? '',
+        );
+
         // 验证分组是否存在
         $group = $this->model()->find($data['group_id']);
         if (!$group) {
@@ -1575,6 +1581,13 @@ class SettingService extends BaseService
         $setting = $this->model(Setting::class)->find($id);
         if (!$setting) {
             throw new BusinessException('设置项不存在');
+        }
+
+        if (array_key_exists('value', $data) || array_key_exists('code', $data)) {
+            $this->assertLocalUploadRootSettingValue(
+                $data['code'] ?? $setting->code,
+                $data['value'] ?? $setting->value,
+            );
         }
 
         if ((int)($setting->is_system ?? 0) === 1) {
@@ -2083,6 +2096,59 @@ class SettingService extends BaseService
         });
     }
 
+    /**
+     * Read the un-cached local upload root used by the isolated bootstrap
+     * retention finalizer. This deliberately bypasses the ordinary setting
+     * cache so a response-loss replay observes the committed database value.
+     */
+    public function getLocalUploadRootForBootstrap(): string
+    {
+        $setting = $this->model(Setting::class)
+            ->where('code', 'local_root_path')
+            ->find();
+        if (!$setting) {
+            throw new BusinessException('BOOTSTRAP_LOCAL_UPLOAD_SETTING_MISSING');
+        }
+
+        return (string) $setting->value;
+    }
+
+    /**
+     * The sole automatic migration of local_root_path. All validation is done
+     * by the caller before this method; the transaction contains only one
+     * expected-old-value conditional write.
+     */
+    public function compareAndSetLocalUploadRootForBootstrap(string $expectedOldValue): void
+    {
+        $current = $this->getLocalUploadRootForBootstrap();
+        if ($current === 'uploads') {
+            $this->clearLocalUploadRootBootstrapCache();
+            return;
+        }
+        if ($current !== $expectedOldValue) {
+            throw new BusinessException('BOOTSTRAP_LOCAL_UPLOAD_SETTING_CONFLICT');
+        }
+
+        $updated = (int) $this->transaction(function () use ($expectedOldValue): int {
+            return $this->model(Setting::class)
+                ->where('code', 'local_root_path')
+                ->where('value', $expectedOldValue)
+                ->update(['value' => 'uploads']);
+        });
+
+        if ($updated !== 1 && $this->getLocalUploadRootForBootstrap() !== 'uploads') {
+            throw new BusinessException('BOOTSTRAP_LOCAL_UPLOAD_SETTING_CONFLICT');
+        }
+        $this->clearLocalUploadRootBootstrapCache();
+    }
+
+    private function clearLocalUploadRootBootstrapCache(): void
+    {
+        $this->cacheService->clearSettingValue('local_root_path');
+        $this->cacheService->clearGroup('UploadLocal');
+        $this->cacheService->clearAll();
+    }
+
     // ==================== 配置读取/保存 ====================
 
     /**
@@ -2573,6 +2639,8 @@ class SettingService extends BaseService
      */
     public function saveGroupValues(string $groupCode, array $values): bool
     {
+        $this->assertLocalUploadRootGroupValues($values);
+
         $group = $this->model()->where('code', $groupCode)->find();
         if (!$group) {
             throw new BusinessException('分组不存在');
@@ -2628,6 +2696,8 @@ class SettingService extends BaseService
 
     private function saveSettingValue(Setting $setting, mixed $value): ?string
     {
+        $this->assertLocalUploadRootSettingValue($setting->code, $value);
+
         if ($this->isSensitiveSetting($setting) && $this->isBlankSensitiveValue($value)) {
             return null;
         }
@@ -2694,6 +2764,8 @@ class SettingService extends BaseService
      */
     public function saveGroupValuesWithValidation(string $groupCode, array $values): bool
     {
+        $this->assertLocalUploadRootGroupValues($values);
+
         $config = $this->getGroupConfig($groupCode);
         $valuesForValidation = $this->fillSensitiveValuesForValidation($config, $values);
         $effectiveValues = array_replace($this->collectValuesFromConfig($config), $valuesForValidation);
@@ -2707,6 +2779,34 @@ class SettingService extends BaseService
         }
 
         return $this->saveGroupValues($groupCode, $values);
+    }
+
+    /**
+     * @param array<string,mixed> $values
+     */
+    private function assertLocalUploadRootGroupValues(array $values): void
+    {
+        if (!array_key_exists('local_root_path', $values)) {
+            return;
+        }
+
+        $this->assertLocalUploadRootSettingValue(
+            'local_root_path',
+            $values['local_root_path'],
+        );
+    }
+
+    private function assertLocalUploadRootSettingValue(mixed $code, mixed $value): void
+    {
+        if ($code !== 'local_root_path') {
+            return;
+        }
+
+        try {
+            (new LocalUploadRootPolicy())->assertCanonical($value);
+        } catch (\RuntimeException) {
+            throw new BusinessException(LocalUploadRootPolicy::MIGRATION_REQUIRED_MESSAGE);
+        }
     }
 
     /**

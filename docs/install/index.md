@@ -9,7 +9,7 @@
 | 方式一：手动安装（无 Docker） | 低配服务器、需要完全控制 PHP / MySQL / Redis / Nginx | [manual.md](./manual.md) |
 | 方式二：Docker 开发（仅后端） | 本地开发，宿主机已有 MySQL / Redis | [docker-backend-only.md](./docker-backend-only.md) |
 | 方式三：Docker 开发（全套） | 本地一键起后端 + MySQL + Redis，前端打包单独执行 | [docker-fullstack.md](./docker-fullstack.md) |
-| 方式四：Docker 生产 | 单后端容器 + 宿主机 Nginx 的生产部署 | [docker-production.md](./docker-production.md) |
+| 方式四：Docker 生产 | HTTP + Queue + Cron 独立容器 + 宿主机 Nginx | [docker-production.md](./docker-production.md) |
 | 方式五：Docker 生产全功能（推荐） | 一套 Compose 启动 Admin、H5、后端、MySQL、Redis、Cron 和队列 | [docker-fullstack-production.md](./docker-fullstack-production.md) |
 
 五种方式都配合 [commands.md](./commands.md)（命令导航）和 [troubleshooting.md](./troubleshooting.md)（排障）使用。
@@ -34,6 +34,7 @@
 | [docker-image-publish.md](./docker-image-publish.md) | GitHub Actions 自动构建 amd64/arm64 后端和 Web 镜像并推送到 Docker Hub |
 | [frontend-release-artifacts.md](./frontend-release-artifacts.md) | GitHub Actions 自动构建 Admin、H5 和微信小程序发布制品 |
 | [nginx-reverse-proxy.md](./nginx-reverse-proxy.md) | `/`、`/client/`、`/admin/`、`/client/api/`、`/admin/api/` 等路径的代理与静态托管规则 |
+| [upgrade-agent.md](./upgrade-agent.md) | 一次性升级 Agent 的职责、systemd 安装与排障 |
 | [cloud-storage-upload.md](./cloud-storage-upload.md) | 本地存储、阿里云 OSS、腾讯云 COS 上传驱动配置与验证 |
 | [issues/docker-fullstack-first-run.md](./issues/docker-fullstack-first-run.md) | 方式三首次启动的密码错位、时序问题专题记录 |
 
