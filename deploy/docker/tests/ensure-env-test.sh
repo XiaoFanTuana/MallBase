@@ -85,7 +85,8 @@ output=$(WORKDIR=$FIXTURE \
     MALLBASE_DEV_GID=$TEST_GID \
     sh "$ENSURE_SCRIPT")
 printf '%s\n' "$output" | grep -F '检测到新旧两份运行配置；保留旧 backend/.env，不覆盖新路径' >/dev/null
-grep -Fx 'CRON_ENABLE=false' "$FIXTURE/backend/.mallbase-env/backend.env" >/dev/null
+# The fork keeps root .env authoritative for full-stack Docker settings.
+grep -Fx 'CRON_ENABLE=true' "$FIXTURE/backend/.mallbase-env/backend.env" >/dev/null
 grep -Fx 'INSTALL_RUNTIME_MARKER=installed-runtime-marker' "$FIXTURE/backend/.mallbase-env/backend.env" >/dev/null
 grep -Fx 'CRON_ENABLE=true' "$FIXTURE/backend/.env" >/dev/null
 
@@ -121,7 +122,7 @@ if WORKDIR=$SYMLINK_FIXTURE \
     exit 1
 fi
 
-grep -F 'BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}' "$ENTRYPOINT" >/dev/null
+grep -F 'BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-${BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}}' "$ENTRYPOINT" >/dev/null
 grep -F '/app/public/static/demo' "$ENTRYPOINT" >/dev/null
 awk '
     /^  rotate-db-password:$/ { service = 1; next }
