@@ -130,7 +130,7 @@ final class AgentDeploymentContractTest extends TestCase
             'prepare-data-dirs, ensure-env and rotate-db-password must receive the backend GID',
         );
         self::assertMatchesRegularExpression(
-            '/ensure-env:\s+image: alpine:3\.19\s+container_name:.*?environment:\s+'
+            '/ensure-env:\s+image: alpine:3\.24\.1\s+container_name:.*?environment:\s+'
             . 'MALLBASE_DEV_UID: "\$\{MALLBASE_DEV_UID:-10000\}"\s+'
             . 'MALLBASE_DEV_GID: "\$\{MALLBASE_DEV_GID:-10000\}"/s',
             $compose,

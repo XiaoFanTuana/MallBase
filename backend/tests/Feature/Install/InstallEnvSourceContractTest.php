@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 final class InstallEnvSourceContractTest extends TestCase
 {
-    public function testDockerBackendUsesRootEnvFileWithoutWorkspaceAlias(): void
+    public function testDockerBackendUsesRootEnvFileWithLegacyPathFallback(): void
     {
         $root = dirname(__DIR__, 4);
         $compose = (string) file_get_contents($root . '/docker-compose.dev.yml');
@@ -33,7 +33,10 @@ final class InstallEnvSourceContractTest extends TestCase
         $this->assertStringNotContainsString('cp backend/.example.env backend/.env', $docs);
         $this->assertStringContainsString('不要手动复制或编辑 `backend/.mallbase-env/backend.env`', $docs);
         $this->assertStringContainsString('MALLBASE_BACKEND_ENV_PATH: /app/.mallbase-env/backend.env', $compose);
-        $this->assertStringContainsString('BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}', $entrypoint);
+        $this->assertStringContainsString(
+            'BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-${BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}}',
+            $entrypoint,
+        );
     }
 
     public function testInstallServiceLetsRootEnvOverrideDerivedRuntimeEnvForInstallMeta(): void
