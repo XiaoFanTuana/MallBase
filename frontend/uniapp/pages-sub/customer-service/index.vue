@@ -1,11 +1,17 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import { onHide, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
+import UniIcons from '@dcloudio/uni-ui/lib/uni-icons/uni-icons.vue'
 import {
   createExternalCustomerServiceConversation,
+  getCustomerServiceComposer,
   getCustomerServiceMessages,
   markCustomerServiceRead,
+  requestCustomerServiceHandoff,
   resolveCustomerServiceAssetUrl,
+  searchCustomerServiceResourceCandidates,
+  sendCustomerServiceResourceMessage,
+  sendCustomerServiceVisitorMessage,
   uploadCustomerServiceAttachment,
 } from '@/api/customer-service'
 import { useDecorateStore } from '@/store/decorate'
@@ -19,9 +25,17 @@ import {
   isLoggedIn,
 } from '@/utils/auth'
 import {
+  createCustomerServiceClientId,
+  normalizeCustomerServiceComposerActions,
+} from '@/utils/customer-service-composer'
+import {
   normalizeCustomerServiceConversationResource,
   parseCustomerServiceResourceCard,
 } from '@/utils/customer-service-resource'
+import {
+  CUSTOMER_SERVICE_MIN_RECORDING_MS,
+  createCustomerServiceRecorder,
+} from '@/utils/customer-service-recorder'
 import { createCustomerServiceSocket } from '@/utils/customer-service-socket'
 
 const decorateStore = useDecorateStore()
@@ -43,29 +57,106 @@ const sending = ref(false)
 const uploading = ref(false)
 const scrollIntoView = ref('')
 const playingMessageId = ref('')
+const voiceMode = ref(false)
+const voiceSupported = ref(true)
+const recording = ref(false)
+const recordingElapsedMs = ref(0)
+const recordingCancelled = ref(false)
+const activeComposerPanel = ref('')
+const composer = ref(null)
+const composerLoading = ref(false)
+const resourceSheetVisible = ref(false)
+const selectedResourceAction = ref(null)
+const resourceQuery = ref('')
+const resourceCandidates = ref([])
+const resourceNextCursor = ref('')
+const resourceLoading = ref(false)
+const resourceLoadingMore = ref(false)
+const resourceSendingToken = ref('')
+const handoffRequesting = ref(false)
+
+const MESSAGE_POLL_INTERVAL_MS = 3000
+const emojiOptions = [
+  '😀', '😄', '😁', '😂', '😊', '😍', '🥰', '😘',
+  '😎', '🤔', '😅', '😭', '😤', '😡', '👍', '👎',
+  '👌', '👏', '🙏', '💪', '🎉', '❤️', '🔥', '✨',
+  '🌹', '🎁', '💯', '✅', '👀', '🙌', '🤝', '💬',
+]
 
 let launchContext = null
 let socket = null
 let destroyed = false
-let sendTimer = null
-let pendingDraft = ''
 let audioContext = null
 let authRedirecting = false
 let pageVisible = false
 let reloadMessagesPending = false
 let authSessionId = ''
+let recorder = null
+let recordingTimer = null
+let resourceSearchSequence = 0
+let handoffRequestClientId = ''
+let messagePollTimer = null
+let messagePollCount = 0
+let recordingGestureActive = false
+let recordingStartY = 0
+
+const windowInfo = getCustomerServiceWindowInfo()
+const menuButtonRect = getCustomerServiceMenuButtonRect()
+const statusBarHeight = Number(windowInfo.statusBarHeight) || 0
+const headerContentHeight = menuButtonRect
+  ? Math.max(44, (menuButtonRect.top - statusBarHeight) * 2 + menuButtonRect.height)
+  : 48
+const headerRightInset = menuButtonRect
+  ? Math.max(12, Number(windowInfo.windowWidth || 375) - menuButtonRect.left + 8)
+  : 12
+const headerStatusStyle = { height: `${statusBarHeight}px` }
+const headerContentStyle = {
+  height: `${headerContentHeight}px`,
+  paddingRight: `${headerRightInset}px`,
+}
 
 const sessionReady = computed(() => Boolean(conversation.value?.id && visitorToken.value))
 const conversationClosed = computed(() => conversation.value?.status === 'CLOSED')
+const composerFeatures = computed(() => normalizeCustomerServiceComposerActions(composer.value))
+const resourceComposerActions = computed(() => composerFeatures.value.resources
+  .map((action) => ({
+    ...action,
+    icon: resourceActionIcon(action.resourceDefinitionCode),
+  }))
+  .filter((action) => action.icon === 'shop' || action.icon === 'list'))
+const emojiAvailable = computed(() => composerFeatures.value.emojiEnabled)
+const imageAvailable = computed(() => Boolean(composerFeatures.value.imageAttachment))
+const voiceAvailable = computed(() => (
+  voiceSupported.value && Boolean(composerFeatures.value.audioAttachment)
+))
+const hasMoreActions = computed(() => imageAvailable.value || resourceComposerActions.value.length > 0)
+const handoffState = computed(() => composerFeatures.value.handoff)
+const handoffVisible = computed(() => handoffState.value.enabled)
+const canRequestHandoff = computed(() => (
+  sessionReady.value
+  && !conversationClosed.value
+  && !handoffRequesting.value
+  && handoffState.value.status === 'AVAILABLE'
+))
+const handoffLabel = computed(() => {
+  if (handoffRequesting.value) return '提交中'
+  if (handoffState.value.status === 'QUEUED') return '排队中'
+  if (handoffState.value.status === 'ASSIGNED') return '人工服务中'
+  if (handoffState.value.status === 'UNAVAILABLE') return '人工暂不可用'
+  return '转人工'
+})
 const canSend = computed(() => (
   sessionReady.value
-  && socketConnected.value
-  && conversationJoined.value
   && !conversationClosed.value
   && !sending.value
   && !uploading.value
+  && !recording.value
 ))
-const canSendText = computed(() => canSend.value && Boolean(draft.value.trim()))
+const canSendText = computed(() => (
+  canSend.value
+  && composerFeatures.value.textEnabled
+  && Boolean(draft.value.trim())
+))
 const contextResource = computed(() => {
   const resources = Array.isArray(conversation.value?.resources)
     ? conversation.value.resources
@@ -78,6 +169,7 @@ const contextResource = computed(() => {
 })
 const visibleMessages = computed(() => messages.value.map((message) => ({
   ...message,
+  displayBody: formatCustomerServiceMessageBody(message.body),
   displayTime: formatMessageTime(message.createdAt),
   attachmentUrl: resolveCustomerServiceAssetUrl(apiBase.value, message.attachment?.url),
   resourceCard: message.type === 'RESOURCE_CARD'
@@ -89,24 +181,49 @@ const connectionText = computed(() => {
   if (socketConnected.value && conversationJoined.value) {
     if (agentOnlineCount.value === 0) return '客服当前离线，可继续留言'
     if (Number(agentOnlineCount.value) > 0) return '客服在线'
-    return '已连接客服'
+    return '在线服务中'
   }
-  if (sessionReady.value) return '实时连接中断，正在重试'
+  if (sessionReady.value) return '已连接，可正常发送'
   return '正在连接客服'
 })
 const connectionClass = computed(() => {
   if (conversationClosed.value) return 'is-closed'
   if (socketConnected.value && conversationJoined.value) return 'is-online'
+  if (sessionReady.value) return 'is-fallback'
   return 'is-connecting'
 })
 const composerPlaceholder = computed(() => {
   if (conversationClosed.value) return '会话已结束'
-  if (!socketConnected.value || !conversationJoined.value) return '连接恢复后可继续发送'
   return '请输入您的问题'
 })
+const recordingElapsedText = computed(() => `${Math.max(1, Math.ceil(recordingElapsedMs.value / 1000))}″`)
+const composerHint = computed(() => {
+  const labels = [...new Set(resourceComposerActions.value.map((action) => action.label).filter(Boolean))]
+  return labels.length ? `点击 + 可发送${labels.join('或')}` : ''
+})
+
+function getCustomerServiceWindowInfo() {
+  try {
+    if (typeof uni.getWindowInfo === 'function') {
+      return uni.getWindowInfo()
+    }
+  } catch {}
+  return { statusBarHeight: 0, windowWidth: 375 }
+}
+
+function getCustomerServiceMenuButtonRect() {
+  try {
+    if (typeof uni.getMenuButtonBoundingClientRect === 'function') {
+      const rect = uni.getMenuButtonBoundingClientRect()
+      return rect?.width && rect?.height ? rect : null
+    }
+  } catch {}
+  return null
+}
 
 onLoad(() => {
   uni.$on(AUTH_CLEARED_EVENT, handleAuthCleared)
+  initializeRecorder()
   if (!ensureCustomerServiceLogin()) return
   authSessionId = getAuthSessionId()
   launchContext = consumeCustomerServiceLaunch()
@@ -129,12 +246,17 @@ onShow(() => {
   }
   if (!sessionReady.value) return
   loadMessages()
+  loadComposer()
+  startMessagePolling()
   if (!socket) connectSocket()
 })
 
 onHide(() => {
   pageVisible = false
   reloadMessagesPending = false
+  closeComposerPanels()
+  cancelRecording()
+  stopMessagePolling()
   disconnectSocket()
 })
 
@@ -143,7 +265,8 @@ onUnload(() => {
   destroyed = true
   reloadMessagesPending = false
   uni.$off(AUTH_CLEARED_EVENT, handleAuthCleared)
-  clearSendTimer()
+  stopMessagePolling()
+  destroyRecorder()
   disconnectSocket()
   destroyAudio()
 })
@@ -171,9 +294,12 @@ async function initializeConversation() {
     socketBase.value = launchContext.socketBase
     launchContext = null
 
-    await loadMessages()
+    await Promise.all([loadMessages(), loadComposer()])
     if (destroyed) return
-    if (pageVisible && !socket) connectSocket()
+    if (pageVisible) {
+      startMessagePolling()
+      if (!socket) connectSocket()
+    }
   } catch (error) {
     if (destroyed) return
     fatalError.value = error?.message || '客服会话创建失败，请稍后重试'
@@ -208,6 +334,46 @@ async function loadMessages() {
   }
 }
 
+function startMessagePolling() {
+  if (messagePollTimer || !pageVisible || !sessionReady.value) return
+  messagePollCount = 0
+  messagePollTimer = setInterval(() => {
+    if (!pageVisible || destroyed || !sessionReady.value) return
+    loadMessages()
+    messagePollCount += 1
+    if (messagePollCount % 5 === 0) loadComposer()
+  }, MESSAGE_POLL_INTERVAL_MS)
+}
+
+function stopMessagePolling() {
+  if (!messagePollTimer) return
+  clearInterval(messagePollTimer)
+  messagePollTimer = null
+  messagePollCount = 0
+}
+
+async function loadComposer() {
+  if (!sessionReady.value || composerLoading.value) return
+  const conversationId = conversation.value.id
+  const token = visitorToken.value
+  composerLoading.value = true
+  try {
+    const nextComposer = await getCustomerServiceComposer(apiBase.value, conversationId, token)
+    if (destroyed || conversation.value?.id !== conversationId || visitorToken.value !== token) return
+    composer.value = nextComposer
+    const features = normalizeCustomerServiceComposerActions(nextComposer)
+    if (!features.emojiEnabled && activeComposerPanel.value === 'emoji') closeComposerPanels()
+    if (!features.audioAttachment && voiceMode.value) voiceMode.value = false
+    if (!features.resources.some((action) => action.code === selectedResourceAction.value?.code)) {
+      closeResourceSheet()
+    }
+  } catch (error) {
+    if (!composer.value) notice.value = error?.message || '会话功能加载失败'
+  } finally {
+    composerLoading.value = false
+  }
+}
+
 function connectSocket() {
   disconnectSocket()
   try {
@@ -228,49 +394,59 @@ function connectSocket() {
     conversationJoined.value = true
     notice.value = ''
     loadMessages()
+    loadComposer()
   })
   socket.on('message:new', (payload) => {
     if (payload?.conversationId !== conversation.value?.id) return
     mergeMessages([payload])
-    if (payload.senderType === 'VISITOR') {
-      finishSending(true)
-    } else if (payload.senderType === 'AGENT' || payload.senderType === 'AI') {
+    if (payload.senderType === 'AGENT' || payload.senderType === 'AI') {
       markReadQuietly()
     }
   })
   socket.on('message:sent', (payload) => {
     if (payload?.conversationId !== conversation.value?.id) return
     mergeMessages([payload])
-    if (payload.senderType === 'VISITOR') finishSending(true)
   })
   socket.on('conversation:updated', (payload) => {
     if (payload?.id !== conversation.value?.id) return
     conversation.value = payload
     loadMessages()
+    loadComposer()
+  })
+  socket.on('handoff:updated', (payload) => {
+    if (!composer.value || !payload?.status) return
+    composer.value = {
+      ...composer.value,
+      handoff: payload,
+    }
+    if (payload.status === 'ASSIGNED') handoffRequestClientId = ''
   })
   socket.on('online:updated', (payload) => {
     if (typeof payload?.agentOnlineCount === 'number') {
       agentOnlineCount.value = payload.agentOnlineCount
+      if (
+        payload.agentOnlineCount > 0
+        && handoffState.value.status === 'QUEUED'
+        && !handoffRequesting.value
+      ) {
+        requestHandoff(true)
+      }
     }
   })
   socket.on('disconnect', () => {
     socketConnected.value = false
     conversationJoined.value = false
-    if (!destroyed) notice.value = '实时连接已断开，正在重试'
-    finishSending(false)
   })
   socket.on('connect_error', () => {
     socketConnected.value = false
     conversationJoined.value = false
-    notice.value = '客服连接异常，正在重试'
-    finishSending(false)
   })
-  socket.on('error', (payload) => {
-    notice.value = typeof payload === 'string'
-      ? payload
-      : payload?.message || '客服消息处理失败'
-    finishSending(false)
-  })
+  const handleSocketError = () => {
+    socketConnected.value = false
+    conversationJoined.value = false
+  }
+  socket.on('error', handleSocketError)
+  socket.on('exception', handleSocketError)
   socket.connect()
 }
 
@@ -292,13 +468,18 @@ function ensureCustomerServiceLogin() {
   destroyed = true
   clearCustomerServiceLaunch()
   launchContext = null
-  clearSendTimer()
+  stopMessagePolling()
   reloadMessagesPending = false
   disconnectSocket()
+  destroyRecorder()
   destroyAudio()
   conversation.value = null
+  composer.value = null
+  closeResourceSheet()
   visitorToken.value = ''
   messages.value = []
+  handoffRequesting.value = false
+  handoffRequestClientId = ''
   loading.value = false
 
   uni.redirectTo({
@@ -320,13 +501,18 @@ function invalidateCustomerServiceSession() {
   clearCustomerServiceLaunch()
   launchContext = null
   authSessionId = ''
-  clearSendTimer()
+  stopMessagePolling()
   reloadMessagesPending = false
   disconnectSocket()
+  destroyRecorder()
   destroyAudio()
   conversation.value = null
+  composer.value = null
+  closeResourceSheet()
   visitorToken.value = ''
   messages.value = []
+  handoffRequesting.value = false
+  handoffRequestClientId = ''
   loading.value = false
   fatalError.value = '登录状态已变化，请返回原页面重新进入客服'
 }
@@ -372,14 +558,319 @@ async function markReadQuietly() {
   } catch {}
 }
 
+function initializeRecorder() {
+  if (recorder) return
+  recorder = createCustomerServiceRecorder({
+    onStart() {
+      if (!recordingGestureActive) {
+        recorder?.cancel()
+        return
+      }
+      recording.value = true
+      recordingCancelled.value = false
+      recordingElapsedMs.value = 0
+      const startedAt = Date.now()
+      clearRecordingTimer()
+      recordingTimer = setInterval(() => {
+        recordingElapsedMs.value = Date.now() - startedAt
+      }, 200)
+    },
+    onStop(result) {
+      const durationMs = Math.max(recordingElapsedMs.value, Number(result?.durationMs) || 0)
+      recordingGestureActive = false
+      recording.value = false
+      recordingCancelled.value = false
+      clearRecordingTimer()
+      recordingElapsedMs.value = 0
+      uploadAndSendVoice({ ...result, durationMs })
+    },
+    onError(message) {
+      recordingGestureActive = false
+      recording.value = false
+      recordingCancelled.value = false
+      clearRecordingTimer()
+      recordingElapsedMs.value = 0
+      notice.value = String(message || '录音失败，请稍后重试')
+    },
+  })
+  voiceSupported.value = recorder.isSupported
+}
+
+function destroyRecorder() {
+  clearRecordingTimer()
+  recorder?.destroy()
+  recorder = null
+  recordingGestureActive = false
+  recording.value = false
+  recordingCancelled.value = false
+  recordingElapsedMs.value = 0
+}
+
+function clearRecordingTimer() {
+  if (!recordingTimer) return
+  clearInterval(recordingTimer)
+  recordingTimer = null
+}
+
+function toggleVoiceMode() {
+  if (!voiceAvailable.value) {
+    uni.showToast({ title: '当前会话暂不支持语音', icon: 'none' })
+    return
+  }
+  if (conversationClosed.value || sending.value || uploading.value) return
+  if (recording.value) cancelRecording()
+  voiceMode.value = !voiceMode.value
+  activeComposerPanel.value = ''
+  hideKeyboardQuietly()
+}
+
+function toggleEmojiPanel() {
+  if (!emojiAvailable.value || recording.value || conversationClosed.value) return
+  voiceMode.value = false
+  activeComposerPanel.value = activeComposerPanel.value === 'emoji' ? '' : 'emoji'
+  hideKeyboardQuietly()
+}
+
+function toggleActionPanel() {
+  if (!hasMoreActions.value || recording.value || conversationClosed.value) return
+  activeComposerPanel.value = activeComposerPanel.value === 'actions' ? '' : 'actions'
+  hideKeyboardQuietly()
+}
+
+function closeComposerPanels() {
+  activeComposerPanel.value = ''
+}
+
+function hideKeyboardQuietly() {
+  try {
+    uni.hideKeyboard?.()
+  } catch {}
+}
+
+function appendEmoji(emoji) {
+  const next = `${draft.value}${emoji}`
+  draft.value = next.slice(0, 1000)
+}
+
+async function requestHandoff(silent = false) {
+  const status = handoffState.value.status
+  const canRetryQueued = silent && status === 'QUEUED'
+  if ((!canRequestHandoff.value && !canRetryQueued) || handoffRequesting.value) return
+
+  handoffRequesting.value = true
+  if (!handoffRequestClientId) {
+    handoffRequestClientId = createCustomerServiceClientId('handoff')
+  }
+  try {
+    const nextState = await requestCustomerServiceHandoff(
+      apiBase.value,
+      conversation.value.id,
+      visitorToken.value,
+      handoffRequestClientId,
+    )
+    if (!composer.value) return
+    composer.value = {
+      ...composer.value,
+      handoff: nextState,
+    }
+    notice.value = ''
+    if (nextState.status === 'ASSIGNED') {
+      handoffRequestClientId = ''
+      if (!silent) uni.showToast({ title: '已接入人工客服', icon: 'none' })
+    } else if (nextState.status === 'QUEUED' && !silent) {
+      uni.showToast({ title: '已进入人工服务队列', icon: 'none' })
+    }
+  } catch (error) {
+    if (!silent) notice.value = error?.message || '转人工请求失败'
+  } finally {
+    handoffRequesting.value = false
+  }
+}
+
+function resourceActionIcon(resourceDefinitionCode) {
+  const code = String(resourceDefinitionCode || '').toLowerCase()
+  if (/(product|goods|catalog)/.test(code)) return 'shop'
+  if (/order/.test(code)) return 'list'
+  return 'link'
+}
+
+async function openComposerResource(action) {
+  if (!canSend.value || !action) return
+  if (action.availability === 'LOGIN_REQUIRED') {
+    uni.showToast({ title: '登录后可选择此资源', icon: 'none' })
+    return
+  }
+  closeComposerPanels()
+  selectedResourceAction.value = action
+  resourceQuery.value = ''
+  resourceCandidates.value = []
+  resourceNextCursor.value = ''
+  resourceSheetVisible.value = true
+  await searchResourceCandidates(false)
+}
+
+function switchContextResource() {
+  const icon = contextResource.value?.type === 'order' ? 'list' : 'shop'
+  const action = resourceComposerActions.value.find((item) => (
+    item.icon === icon && item.availability === 'ENABLED'
+  ))
+  if (action) {
+    openComposerResource(action)
+    return
+  }
+  openResource(contextResource.value)
+}
+
+function closeResourceSheet() {
+  resourceSearchSequence += 1
+  resourceSheetVisible.value = false
+  selectedResourceAction.value = null
+  resourceQuery.value = ''
+  resourceCandidates.value = []
+  resourceNextCursor.value = ''
+  resourceLoading.value = false
+  resourceLoadingMore.value = false
+  resourceSendingToken.value = ''
+}
+
+async function searchResourceCandidates(append = false) {
+  const action = selectedResourceAction.value
+  if (!resourceSheetVisible.value || !action || !sessionReady.value) return
+  if (append && (!resourceNextCursor.value || resourceLoadingMore.value)) return
+  if (!append && resourceLoading.value) return
+
+  const sequence = ++resourceSearchSequence
+  const cursor = append ? resourceNextCursor.value : ''
+  if (append) resourceLoadingMore.value = true
+  else resourceLoading.value = true
+  try {
+    const result = await searchCustomerServiceResourceCandidates(
+      apiBase.value,
+      conversation.value.id,
+      visitorToken.value,
+      {
+        actionCode: action.code,
+        query: resourceQuery.value.trim(),
+        cursor,
+        limit: 10,
+        clientRequestId: createCustomerServiceClientId('resource-search'),
+      },
+    )
+    if (sequence !== resourceSearchSequence || selectedResourceAction.value?.code !== action.code) return
+    resourceCandidates.value = append
+      ? mergeResourceCandidates(resourceCandidates.value, result.items)
+      : result.items
+    resourceNextCursor.value = result.page.nextCursor || ''
+  } catch (error) {
+    if (sequence !== resourceSearchSequence) return
+    if (isResourceCandidateExpired(error)) {
+      resourceCandidates.value = []
+      resourceNextCursor.value = ''
+      notice.value = '选择列表已过期，请重新搜索'
+    } else {
+      notice.value = error?.message || `${action.label}加载失败`
+    }
+  } finally {
+    if (sequence === resourceSearchSequence) {
+      resourceLoading.value = false
+      resourceLoadingMore.value = false
+    }
+  }
+}
+
+function mergeResourceCandidates(current, incoming) {
+  const merged = new Map()
+  ;[...current, ...incoming].forEach((candidate) => {
+    if (candidate?.candidateToken) merged.set(candidate.candidateToken, candidate)
+  })
+  return Array.from(merged.values())
+}
+
+function isResourceCandidateExpired(error) {
+  if (Number(error?.statusCode) === 410) return true
+  const body = error?.responseBody
+  const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message
+  return String(message || error?.message || '').includes('RESOURCE_CANDIDATE_EXPIRED')
+}
+
+async function sendResourceCandidate(candidate) {
+  const token = String(candidate?.candidateToken || '')
+  if (!token || resourceSendingToken.value || !canSend.value) return
+  resourceSendingToken.value = token
+  try {
+    const message = await sendCustomerServiceResourceMessage(
+      apiBase.value,
+      conversation.value.id,
+      visitorToken.value,
+      token,
+      createCustomerServiceClientId('resource-message'),
+    )
+    mergeMessages([message])
+    notice.value = ''
+    closeResourceSheet()
+  } catch (error) {
+    if (isResourceCandidateExpired(error)) {
+      notice.value = '当前选择已过期，请重新选择'
+      resourceCandidates.value = []
+      resourceNextCursor.value = ''
+      await searchResourceCandidates(false)
+    } else {
+      notice.value = error?.message || '资源发送失败'
+    }
+  } finally {
+    resourceSendingToken.value = ''
+  }
+}
+
+async function startRecording(event) {
+  if (!canSend.value || !voiceAvailable.value || !voiceMode.value || !recorder || recording.value) return
+  const touch = event?.touches?.[0] || event?.changedTouches?.[0]
+  recordingGestureActive = true
+  recordingCancelled.value = false
+  recordingStartY = Number(touch?.clientY || touch?.pageY || 0)
+  notice.value = ''
+  closeComposerPanels()
+  const started = await recorder.start()
+  if (!started) recordingGestureActive = false
+}
+
+function updateRecordingGesture(event) {
+  if (!recordingGestureActive) return
+  const touch = event?.touches?.[0] || event?.changedTouches?.[0]
+  const currentY = Number(touch?.clientY || touch?.pageY || recordingStartY)
+  const cancelDistance = typeof uni.upx2px === 'function' ? uni.upx2px(120) : 60
+  recordingCancelled.value = recordingStartY - currentY >= cancelDistance
+}
+
+function finishRecording() {
+  if (!recordingGestureActive && !recording.value) return
+  recordingGestureActive = false
+  if (recordingCancelled.value) {
+    cancelRecording()
+    return
+  }
+  recorder?.stop()
+}
+
+function cancelRecording() {
+  recordingGestureActive = false
+  recorder?.cancel()
+  recording.value = false
+  recordingCancelled.value = false
+  clearRecordingTimer()
+  recordingElapsedMs.value = 0
+}
+
 function sendText() {
   const body = draft.value.trim()
-  if (!canSend.value || !body) return
+  if (!canSendText.value || !body) return
+  closeComposerPanels()
   emitMessage('TEXT', body)
 }
 
 function chooseImage() {
-  if (!canSend.value) return
+  if (!canSend.value || !imageAvailable.value) return
+  closeComposerPanels()
   uni.chooseImage({
     count: 1,
     sizeType: ['compressed'],
@@ -397,16 +888,13 @@ async function uploadAndSendImage(filePath) {
   try {
     const attachment = await uploadCustomerServiceAttachment(
       apiBase.value,
+      conversation.value.id,
       filePath,
       visitorToken.value,
     )
     notice.value = ''
     uploading.value = false
-    if (!canSend.value) {
-      notice.value = '图片已上传，但实时连接已中断，请恢复后重新选择'
-      return
-    }
-    emitMessage('IMAGE', '', attachment)
+    await emitMessage('IMAGE', '', attachment)
   } catch (error) {
     notice.value = error?.message || '图片发送失败'
   } finally {
@@ -414,37 +902,61 @@ async function uploadAndSendImage(filePath) {
   }
 }
 
-function emitMessage(type, body, attachment = null) {
-  if (!canSend.value || !socket) return
-  pendingDraft = type === 'TEXT' ? body : ''
+async function uploadAndSendVoice(result) {
+  const durationMs = Number(result?.durationMs) || 0
+  if (durationMs < CUSTOMER_SERVICE_MIN_RECORDING_MS) {
+    uni.showToast({ title: '说话时间太短', icon: 'none' })
+    return
+  }
+  uploading.value = true
+  notice.value = '语音上传中'
+  try {
+    const attachment = await uploadCustomerServiceAttachment(
+      apiBase.value,
+      conversation.value.id,
+      {
+        file: result?.file || null,
+        filePath: String(result?.filePath || ''),
+      },
+      visitorToken.value,
+    )
+    notice.value = ''
+    uploading.value = false
+    await emitMessage('AUDIO', '', attachment)
+  } catch (error) {
+    notice.value = error?.message || '语音发送失败'
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function emitMessage(type, body, attachment = null) {
+  if (!canSend.value) return
+  const sentDraft = type === 'TEXT' ? body : ''
   sending.value = true
   notice.value = ''
-  socket.emit('message:send', {
-    ...sessionPayload(),
-    type,
-    body,
-    attachmentId: attachment?.id,
-  })
-  clearSendTimer()
-  sendTimer = setTimeout(() => {
-    notice.value = '消息发送超时，请检查连接后重试'
-    finishSending(false)
-  }, 12000)
-}
-
-function finishSending(succeeded) {
-  clearSendTimer()
-  if (succeeded && pendingDraft && draft.value.trim() === pendingDraft) {
-    draft.value = ''
+  try {
+    const message = await sendCustomerServiceVisitorMessage(
+      apiBase.value,
+      conversation.value.id,
+      visitorToken.value,
+      {
+        type,
+        body,
+        attachmentId: attachment?.id,
+        clientMessageId: createCustomerServiceClientId('message'),
+      },
+    )
+    mergeMessages([message])
+    if (sentDraft && draft.value.trim() === sentDraft) {
+      draft.value = ''
+    }
+    await loadMessages()
+  } catch (error) {
+    notice.value = error?.message || '消息发送失败，请稍后重试'
+  } finally {
+    sending.value = false
   }
-  pendingDraft = ''
-  sending.value = false
-}
-
-function clearSendTimer() {
-  if (!sendTimer) return
-  clearTimeout(sendTimer)
-  sendTimer = null
 }
 
 function openResource(resource) {
@@ -497,10 +1009,24 @@ function formatMessageTime(value) {
   return `${hours}:${minutes}`
 }
 
-function senderLabel(message) {
-  if (message.senderType === 'AI') return 'AI'
-  if (message.senderType === 'AGENT') return '客'
-  return '我'
+function formatCustomerServiceMessageBody(value) {
+  return String(value || '')
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```[a-z0-9_-]*\n?/gi, '').replace(/```/g, ''))
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]*[-*_]{3,}[ \t]*$/gm, '')
+    .replace(/^[ \t]*[-*][ \t]+/gm, '• ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function formatResourcePrice(value) {
+  const price = String(value || '').trim()
+  if (!price) return ''
+  if (/^[¥￥$€£]/.test(price)) return price
+  if (/^-?\d+(?:\.\d+)?$/.test(price)) return `¥${price}`
+  return price
 }
 
 function retryOrBack() {
@@ -526,7 +1052,39 @@ function goBack() {
     :class="[`theme-${decorateStore.resolvedThemeMode}`]"
     :style="decorateStore.themeStyle"
   >
-    <mb-navbar title="在线客服" />
+    <view class="customer-header">
+      <view class="customer-header__status" :style="headerStatusStyle" />
+      <view class="customer-header__content" :style="headerContentStyle">
+        <view
+          class="customer-header__back"
+          hover-class="customer-header__control--active"
+          @tap="goBack"
+        >
+          <uni-icons type="back" size="27" color="#191b23" />
+        </view>
+        <view class="customer-header__brand">
+          <view class="customer-header__avatar">
+            <image src="/static/logo.png" mode="aspectFit" />
+          </view>
+          <view class="customer-header__identity">
+            <text class="customer-header__title">MallBase 客服</text>
+            <view class="customer-header__presence" :class="connectionClass">
+              <view class="customer-header__presence-dot" />
+              <text>{{ connectionText }}</text>
+            </view>
+          </view>
+        </view>
+        <view
+          v-if="handoffVisible"
+          class="customer-header__handoff"
+          :class="{ 'is-disabled': !canRequestHandoff }"
+          hover-class="customer-header__control--active"
+          @tap="requestHandoff(false)"
+        >
+          <text>{{ handoffLabel }}</text>
+        </view>
+      </view>
+    </view>
 
     <view v-if="loading" class="page-state">
       <view class="page-state__spinner" />
@@ -542,29 +1100,41 @@ function goBack() {
     />
 
     <template v-else>
-      <view class="connection-strip" :class="connectionClass">
-        <view class="connection-strip__dot" />
-        <text class="connection-strip__text">{{ connectionText }}</text>
-        <text
-          v-if="loadingMessages"
-          class="connection-strip__extra"
-        >同步消息中</text>
-      </view>
-
-      <view
-        v-if="contextResource"
-        class="context-card"
-        hover-class="context-card--active"
-        @tap="openResource(contextResource)"
-      >
-        <view class="context-card__badge">{{ contextResource.label }}</view>
-        <view class="context-card__content">
-          <text class="context-card__title">{{ contextResource.title }}</text>
-          <text v-if="contextResource.summary" class="context-card__summary">
-            {{ contextResource.summary }}
-          </text>
+      <view v-if="contextResource" class="context-card">
+        <view
+          class="context-card__main"
+          hover-class="context-card--active"
+          @tap="openResource(contextResource)"
+        >
+          <image
+            v-if="contextResource.imageUrl"
+            class="context-card__image"
+            :src="contextResource.imageUrl"
+            mode="aspectFill"
+          />
+          <view v-else class="context-card__icon">
+            <uni-icons
+              :type="contextResource.type === 'order' ? 'list' : 'shop'"
+              size="25"
+              color="#0d50d5"
+            />
+          </view>
+          <view class="context-card__content">
+            <text class="context-card__label">当前咨询{{ contextResource.label }}</text>
+            <text class="context-card__title">{{ contextResource.title }}</text>
+            <text v-if="contextResource.price" class="context-card__price">
+              {{ formatResourcePrice(contextResource.price) }}
+            </text>
+          </view>
         </view>
-        <text class="context-card__action">查看</text>
+        <view
+          class="context-card__action"
+          hover-class="context-card--active"
+          @tap.stop="switchContextResource"
+        >
+          <text>切换</text>
+          <uni-icons type="right" size="18" color="#0d50d5" />
+        </view>
       </view>
 
       <view v-if="notice" class="notice-bar">
@@ -599,14 +1169,22 @@ function goBack() {
               class="message-row"
               :class="{ 'is-visitor': message.senderType === 'VISITOR' }"
             >
-              <view class="message-avatar">{{ senderLabel(message) }}</view>
+              <view v-if="message.senderType !== 'VISITOR'" class="message-avatar">
+                <image src="/static/logo.png" mode="aspectFit" />
+              </view>
               <view class="message-content">
-                <view class="message-bubble">
+                <view
+                  class="message-bubble"
+                  :class="{
+                    'message-bubble--resource': message.type === 'RESOURCE_CARD',
+                    'message-bubble--media': message.type === 'IMAGE',
+                  }"
+                >
                   <text
                     v-if="message.type === 'TEXT' || message.type === 'EMOJI'"
                     class="message-text"
                     user-select
-                  >{{ message.body }}</text>
+                  >{{ message.displayBody }}</text>
 
                   <image
                     v-else-if="message.type === 'IMAGE' && message.attachmentUrl"
@@ -621,9 +1199,12 @@ function goBack() {
                     class="audio-message"
                     @tap="playAudio(message)"
                   >
-                    <text class="audio-message__icon">
-                      {{ playingMessageId === message.id ? '■' : '▶' }}
-                    </text>
+                    <uni-icons
+                      class="audio-message__icon"
+                      :type="playingMessageId === message.id ? 'sound-filled' : 'sound'"
+                      size="20"
+                      :color="message.senderType === 'VISITOR' ? '#ffffff' : '#596273'"
+                    />
                     <text>语音消息</text>
                   </view>
 
@@ -646,7 +1227,9 @@ function goBack() {
                         {{ message.resourceCard.summary }}
                       </text>
                       <view class="resource-card__footer">
-                        <text class="resource-card__price">{{ message.resourceCard.price }}</text>
+                        <text class="resource-card__price">
+                          {{ formatResourcePrice(message.resourceCard.price) }}
+                        </text>
                         <text v-if="message.resourceCard.route" class="resource-card__link">查看详情</text>
                       </view>
                     </view>
@@ -666,38 +1249,173 @@ function goBack() {
         </view>
       </scroll-view>
 
+      <view v-if="composerHint" class="composer-hint">
+        <uni-icons type="help" size="16" color="#8a8f9d" />
+        <text>{{ composerHint }}</text>
+      </view>
+
       <view class="composer">
-        <view class="composer__main">
+        <view
+          v-if="activeComposerPanel === 'emoji'"
+          class="composer-panel composer-panel--emoji"
+        >
           <view
-            class="composer__image"
+            v-for="emoji in emojiOptions"
+            :key="emoji"
+            class="emoji-option"
+            hover-class="emoji-option--active"
+            @tap="appendEmoji(emoji)"
+          >
+            <text>{{ emoji }}</text>
+          </view>
+        </view>
+
+        <view
+          v-if="activeComposerPanel === 'actions'"
+          class="composer-panel composer-panel--actions"
+        >
+          <view
+            v-if="imageAvailable"
+            class="composer-action"
             :class="{ 'is-disabled': !canSend }"
+            hover-class="composer-action--active"
             @tap="chooseImage"
           >
-            <text>{{ uploading ? '上传中' : '图片' }}</text>
+            <view class="composer-action__icon">
+              <uni-icons type="image" size="26" color="#0d50d5" />
+            </view>
+            <text class="composer-action__label">图片</text>
           </view>
-          <textarea
-            v-model="draft"
-            class="composer__input"
-            :disabled="conversationClosed || sending"
-            :placeholder="composerPlaceholder"
-            :maxlength="1000"
-            auto-height
-            confirm-type="send"
-            :cursor-spacing="20"
-            @confirm="sendText"
-          />
-          <mb-button
+          <view
+            v-for="action in resourceComposerActions"
+            :key="action.code"
+            class="composer-action"
+            :class="{ 'is-disabled': !canSend || action.availability !== 'ENABLED' }"
+            hover-class="composer-action--active"
+            @tap="openComposerResource(action)"
+          >
+            <view class="composer-action__icon">
+              <uni-icons :type="action.icon || 'link'" size="26" color="#0d50d5" />
+            </view>
+            <text class="composer-action__label">{{ action.label }}</text>
+          </view>
+        </view>
+
+        <view class="composer__main">
+          <view
+            v-if="voiceAvailable"
+            class="composer__mode-toggle"
+            :class="{ 'is-active': voiceMode, 'is-disabled': conversationClosed }"
+            hover-class="composer-control--active"
+            @tap="toggleVoiceMode"
+          >
+            <uni-icons
+              :type="voiceMode ? 'compose' : 'mic'"
+              size="25"
+              :color="voiceMode ? '#0d50d5' : '#596273'"
+            />
+          </view>
+          <view v-if="!voiceMode" class="composer__input-shell">
+            <textarea
+              v-model="draft"
+              class="composer__input"
+              :disabled="conversationClosed || sending"
+              :placeholder="composerPlaceholder"
+              :maxlength="1000"
+              auto-height
+              confirm-type="send"
+              :cursor-spacing="20"
+              @focus="closeComposerPanels"
+              @confirm="sendText"
+            />
+            <view
+              v-if="emojiAvailable"
+              class="composer__emoji-toggle"
+              :class="{ 'is-active': activeComposerPanel === 'emoji', 'is-disabled': conversationClosed }"
+              hover-class="composer-control--active"
+              @tap="toggleEmojiPanel"
+            >
+              <uni-icons type="chatbubble" size="24" color="#596273" />
+            </view>
+          </view>
+          <view
+            v-else
+            class="composer__hold-to-talk"
+            :class="{
+              'is-recording': recording,
+              'is-cancelling': recording && recordingCancelled,
+              'is-disabled': !canSend && !recording,
+            }"
+            hover-class="composer__hold-to-talk--active"
+            @touchstart.stop.prevent="startRecording"
+            @touchmove.stop.prevent="updateRecordingGesture"
+            @touchend.stop.prevent="finishRecording"
+            @touchcancel.stop="cancelRecording"
+          >
+            <text v-if="recording && recordingCancelled">松开取消</text>
+            <text v-else>{{ recording ? `松开发送 ${recordingElapsedText}` : '按住说话' }}</text>
+          </view>
+          <view
+            v-if="hasMoreActions"
+            class="composer__action-toggle"
+            :class="{
+              'is-active': activeComposerPanel === 'actions',
+              'is-disabled': conversationClosed || sending || uploading,
+            }"
+            hover-class="composer-control--active"
+            @tap="toggleActionPanel"
+          >
+            <uni-icons type="plus" size="27" color="#596273" />
+          </view>
+          <view
             class="composer__send"
-            type="primary"
-            size="small"
-            label="发送"
-            :disabled="!canSendText"
-            :loading="sending"
-            @click="sendText"
-          />
+            :class="{ 'is-disabled': !canSendText }"
+            hover-class="composer-control--active"
+            @tap="sendText"
+          >
+            <uni-icons type="paperplane-filled" size="25" color="#ffffff" />
+          </view>
         </view>
         <view class="composer__safe-area" />
       </view>
+
+      <view
+        v-if="recording"
+        class="recording-overlay"
+        :class="{ 'is-cancelling': recordingCancelled }"
+      >
+        <view class="recording-overlay__card">
+          <view class="recording-overlay__icon">
+            <uni-icons
+              :type="recordingCancelled ? 'clear' : 'mic-filled'"
+              size="38"
+              color="#ffffff"
+            />
+          </view>
+          <text class="recording-overlay__time">{{ recordingElapsedText }}</text>
+          <text class="recording-overlay__title">
+            {{ recordingCancelled ? '松开手指，取消发送' : '正在录音' }}
+          </text>
+          <text class="recording-overlay__hint">
+            {{ recordingCancelled ? '移回按钮可继续录音' : '上滑可取消' }}
+          </text>
+        </view>
+      </view>
+
+      <mb-customer-service-resource-sheet
+        v-model:query="resourceQuery"
+        :visible="resourceSheetVisible"
+        :action="selectedResourceAction"
+        :items="resourceCandidates"
+        :loading="resourceLoading"
+        :loading-more="resourceLoadingMore"
+        :has-more="Boolean(resourceNextCursor)"
+        :sending-token="resourceSendingToken"
+        @close="closeResourceSheet"
+        @search="searchResourceCandidates(false)"
+        @load-more="searchResourceCandidates(true)"
+        @select="sendResourceCandidate"
+      />
     </template>
   </view>
 </template>
@@ -708,8 +1426,139 @@ function goBack() {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: var(--color-bg-secondary, #f5f7fb);
+  background: var(--color-bg-secondary, #faf8ff);
   color: var(--color-text, #191b23);
+}
+
+.customer-header {
+  position: relative;
+  z-index: 200;
+  flex-shrink: 0;
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
+  background: var(--color-bg, #ffffff);
+  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.04);
+}
+
+.customer-header__content {
+  display: flex;
+  min-height: 96rpx;
+  align-items: center;
+  gap: 12rpx;
+  padding-left: 8rpx;
+  box-sizing: border-box;
+}
+
+.customer-header__back {
+  display: flex;
+  width: 88rpx;
+  height: 88rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.customer-header__brand {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.customer-header__avatar {
+  display: flex;
+  width: 64rpx;
+  height: 64rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1rpx solid rgba(13, 80, 213, 0.14);
+  border-radius: 50%;
+  background: rgba(13, 80, 213, 0.06);
+}
+
+.customer-header__avatar image {
+  width: 48rpx;
+  height: 48rpx;
+}
+
+.customer-header__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.customer-header__title {
+  overflow: hidden;
+  color: var(--color-text, #191b23);
+  font-size: 30rpx;
+  font-weight: 650;
+  line-height: 40rpx;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.customer-header__presence {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--color-text-tertiary, #737686);
+  font-size: 22rpx;
+  line-height: 30rpx;
+}
+
+.customer-header__presence.is-online {
+  color: var(--color-success, #26733d);
+}
+
+.customer-header__presence.is-fallback {
+  color: var(--color-primary, #0d50d5);
+}
+
+.customer-header__presence.is-closed {
+  color: var(--color-text-tertiary, #737686);
+}
+
+.customer-header__presence-dot {
+  width: 12rpx;
+  height: 12rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.customer-header__handoff {
+  display: flex;
+  min-width: 112rpx;
+  height: 88rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4rpx;
+  color: var(--color-primary, #0d50d5);
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.customer-header__handoff text {
+  display: flex;
+  min-height: 58rpx;
+  align-items: center;
+  padding: 0 22rpx;
+  border: 2rpx solid rgba(13, 80, 213, 0.42);
+  border-radius: 31rpx;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.customer-header__handoff.is-disabled {
+  opacity: 0.5;
+}
+
+.customer-header__control--active {
+  opacity: 0.68;
 }
 
 .page-state {
@@ -735,70 +1584,43 @@ function goBack() {
   font-size: 28rpx;
 }
 
-.connection-strip {
+.context-card {
   display: flex;
+  min-height: 132rpx;
   flex-shrink: 0;
   align-items: center;
-  min-height: 64rpx;
-  padding: 0 28rpx;
-  background: var(--color-warning-soft, #fff7e6);
-  color: var(--color-warning, #8a5700);
-  font-size: 24rpx;
+  padding: 18rpx 32rpx;
+  border-bottom: 1rpx solid var(--color-divider, #f0f2f5);
+  background: var(--color-bg, #ffffff);
   box-sizing: border-box;
 }
 
-.connection-strip.is-online {
-  background: var(--color-success-soft, #edf8f0);
-  color: var(--color-success, #26733d);
-}
-
-.connection-strip.is-closed {
-  background: var(--color-bg-surface, #eef1f6);
-  color: var(--color-text-tertiary, #737686);
-}
-
-.connection-strip__dot {
-  width: 12rpx;
-  height: 12rpx;
-  margin-right: 12rpx;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.connection-strip__text {
-  flex: 1;
-}
-
-.connection-strip__extra {
-  margin-left: 16rpx;
-  opacity: 0.75;
-}
-
-.context-card {
+.context-card__main {
   display: flex;
-  flex-shrink: 0;
+  min-width: 0;
+  min-height: 96rpx;
+  flex: 1;
   align-items: center;
-  gap: 18rpx;
-  margin: 20rpx 24rpx 0;
-  padding: 20rpx 22rpx;
-  border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.2));
-  border-radius: var(--radius-lg, 20rpx);
-  background: var(--color-bg, #ffffff);
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.05);
+  gap: 20rpx;
 }
 
 .context-card--active {
   opacity: 0.82;
 }
 
-.context-card__badge {
+.context-card__image,
+.context-card__icon {
+  width: 88rpx;
+  height: 88rpx;
   flex-shrink: 0;
-  padding: 8rpx 14rpx;
-  border-radius: 999rpx;
-  background: var(--color-primary-softer, rgba(13, 80, 213, 0.08));
-  color: var(--color-primary, #0d50d5);
-  font-size: 22rpx;
-  font-weight: 600;
+  border-radius: 14rpx;
+  background: rgba(13, 80, 213, 0.06);
+}
+
+.context-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .context-card__content {
@@ -809,27 +1631,41 @@ function goBack() {
   gap: 4rpx;
 }
 
+.context-card__label,
 .context-card__title,
-.context-card__summary {
+.context-card__price {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.context-card__title {
-  font-size: 27rpx;
-  font-weight: 600;
+.context-card__label {
+  color: var(--color-text-tertiary, #737686);
+  font-size: 22rpx;
 }
 
-.context-card__summary {
-  color: var(--color-text-tertiary, #737686);
-  font-size: 23rpx;
+.context-card__title {
+  color: var(--color-text, #191b23);
+  font-size: 28rpx;
+  font-weight: 650;
+}
+
+.context-card__price {
+  color: var(--color-primary, #0d50d5);
+  font-size: 27rpx;
+  font-weight: 650;
 }
 
 .context-card__action {
+  display: flex;
+  min-width: 88rpx;
+  height: 88rpx;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4rpx;
   color: var(--color-primary, #0d50d5);
-  font-size: 24rpx;
+  font-size: 25rpx;
 }
 
 .notice-bar {
@@ -850,7 +1686,7 @@ function goBack() {
 }
 
 .message-list__inner {
-  padding: 28rpx 24rpx 36rpx;
+  padding: 30rpx 32rpx 40rpx;
 }
 
 .message-row {
@@ -861,7 +1697,7 @@ function goBack() {
 }
 
 .message-row.is-visitor {
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
 .message-avatar {
@@ -871,23 +1707,20 @@ function goBack() {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.2));
   border-radius: 50%;
   background: var(--color-bg, #ffffff);
-  color: var(--color-primary, #0d50d5);
-  font-size: 22rpx;
-  font-weight: 700;
 }
 
-.is-visitor .message-avatar {
-  border-color: transparent;
-  background: var(--color-primary, #0d50d5);
-  color: var(--color-text-inverse, #ffffff);
+.message-avatar image {
+  width: 46rpx;
+  height: 46rpx;
 }
 
 .message-content {
   display: flex;
-  max-width: 76%;
+  max-width: 80%;
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
@@ -912,6 +1745,19 @@ function goBack() {
   border-radius: 24rpx 8rpx 24rpx 24rpx;
   background: var(--color-primary, #0d50d5);
   color: var(--color-text-inverse, #ffffff);
+}
+
+.is-visitor .message-bubble--resource {
+  border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.18));
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text, #191b23);
+}
+
+.is-visitor .message-bubble--media {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .message-text {
@@ -947,12 +1793,15 @@ function goBack() {
 }
 
 .audio-message__icon {
-  font-size: 22rpx;
+  flex: 0 0 auto;
 }
 
 .resource-card {
-  width: 420rpx;
+  display: flex;
+  width: 520rpx;
   max-width: 100%;
+  align-items: stretch;
+  gap: 20rpx;
   overflow: hidden;
 }
 
@@ -962,15 +1811,17 @@ function goBack() {
 
 .resource-card__image {
   display: block;
-  width: 100%;
-  height: 190rpx;
-  margin-bottom: 16rpx;
+  width: 178rpx;
+  height: 170rpx;
+  flex-shrink: 0;
   border-radius: var(--radius-md, 14rpx);
   background: var(--color-bg-secondary, #f5f7fb);
 }
 
 .resource-card__body {
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
 }
 
@@ -1006,14 +1857,20 @@ function goBack() {
 }
 
 .resource-card__price {
-  color: var(--color-error, #ba1a1a);
-  font-size: 25rpx;
+  color: var(--color-primary, #0d50d5);
+  font-size: 30rpx;
   font-weight: 650;
 }
 
 .resource-card__link {
-  color: var(--color-primary, #0d50d5);
-  font-size: 23rpx;
+  display: flex;
+  min-height: 52rpx;
+  align-items: center;
+  padding: 0 20rpx;
+  border-radius: 26rpx;
+  background: var(--color-primary, #0d50d5);
+  color: #ffffff;
+  font-size: 22rpx;
 }
 
 .plain-card {
@@ -1049,54 +1906,288 @@ function goBack() {
   text-align: center;
 }
 
+.composer-hint {
+  display: flex;
+  min-height: 52rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  color: var(--color-text-tertiary, #737686);
+  font-size: 22rpx;
+}
+
 .composer {
+  position: relative;
+  z-index: 300;
   flex-shrink: 0;
   border-top: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.2));
   background: var(--color-bg, #ffffff);
   box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.04);
 }
 
-.composer__main {
-  display: flex;
-  align-items: flex-end;
-  gap: 14rpx;
-  padding: 18rpx 22rpx;
+.composer-panel {
+  border-bottom: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.16));
+  background: var(--color-bg, #ffffff);
 }
 
-.composer__image {
+.composer-panel--emoji {
   display: flex;
-  height: 64rpx;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 18rpx 20rpx 10rpx;
+}
+
+.emoji-option {
+  display: flex;
+  width: 12.5%;
+  height: 68rpx;
   align-items: center;
   justify-content: center;
-  padding: 0 18rpx;
-  border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.24));
-  border-radius: 999rpx;
-  color: var(--color-primary, #0d50d5);
-  font-size: 23rpx;
+  border-radius: var(--radius-md, 14rpx);
+  font-size: 42rpx;
   box-sizing: border-box;
 }
 
-.composer__image.is-disabled {
+.emoji-option--active {
+  background: var(--color-bg-secondary, #f5f7fb);
+}
+
+.composer-panel--actions {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 196rpx;
+  align-items: center;
+  padding: 18rpx;
+  box-sizing: border-box;
+}
+
+.composer-action {
+  display: flex;
+  width: 33.333%;
+  min-height: 152rpx;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10rpx;
+  padding-bottom: 14rpx;
+  box-sizing: border-box;
+}
+
+.composer-action.is-disabled {
   opacity: 0.45;
 }
 
-.composer__input {
-  min-height: 64rpx;
-  max-height: 180rpx;
+.composer-action--active .composer-action__icon {
+  background: var(--color-primary-softer, rgba(13, 80, 213, 0.14));
+}
+
+.composer-action__icon {
+  display: flex;
+  width: 76rpx;
+  height: 76rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg, 20rpx);
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.08));
+}
+
+.composer-action__label {
+  max-width: 130rpx;
+  overflow: hidden;
+  color: var(--color-text-secondary, #596273);
+  font-size: 22rpx;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.composer__main {
+  display: flex;
+  min-height: 112rpx;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 14rpx;
+  box-sizing: border-box;
+}
+
+.composer__mode-toggle,
+.composer__action-toggle,
+.composer__send {
+  display: flex;
+  width: 72rpx;
+  height: 88rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.composer__mode-toggle.is-active,
+.composer__action-toggle.is-active {
+  color: var(--color-primary, #0d50d5);
+}
+
+.composer__send {
+  width: 72rpx;
+  height: 72rpx;
+  margin: 8rpx;
+  border-radius: 50%;
+  background: var(--color-primary, #0d50d5);
+  box-shadow: 0 8rpx 18rpx rgba(13, 80, 213, 0.22);
+}
+
+.composer__mode-toggle.is-disabled,
+.composer__action-toggle.is-disabled,
+.composer__send.is-disabled {
+  opacity: 0.45;
+}
+
+.composer-control--active {
+  opacity: 0.72;
+}
+
+.composer__input-shell {
+  display: flex;
+  min-height: 72rpx;
+  max-height: 160rpx;
   flex: 1;
-  padding: 15rpx 20rpx;
+  align-items: center;
   border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.24));
-  border-radius: 28rpx;
+  border-radius: 36rpx;
   background: var(--color-bg-secondary, #f5f7fb);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.composer__input {
+  min-height: 70rpx;
+  max-height: 158rpx;
+  min-width: 0;
+  flex: 1;
+  padding: 16rpx 4rpx 16rpx 18rpx;
   color: var(--color-text, #191b23);
   font-size: 27rpx;
   line-height: 1.35;
   box-sizing: border-box;
 }
 
-.composer__send {
+/* #ifdef H5 */
+.customer-service-page {
+  height: 100dvh;
+}
+
+.composer__input {
+  min-height: 0;
+}
+/* #endif */
+
+.composer__emoji-toggle {
+  display: flex;
+  width: 72rpx;
+  height: 72rpx;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.composer__emoji-toggle.is-active {
+  color: var(--color-primary, #0d50d5);
+}
+
+.composer__emoji-toggle.is-disabled {
+  opacity: 0.45;
+}
+
+.composer__hold-to-talk {
+  display: flex;
+  min-height: 72rpx;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid var(--color-divider, rgba(148, 163, 184, 0.24));
+  border-radius: 36rpx;
+  background: var(--color-bg-secondary, #f5f7fb);
+  color: var(--color-text-secondary, #596273);
+  font-size: 26rpx;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.composer__hold-to-talk.is-recording,
+.composer__hold-to-talk--active {
+  border-color: var(--color-primary-softer, rgba(13, 80, 213, 0.24));
+  background: var(--color-primary-soft, rgba(13, 80, 213, 0.1));
+  color: var(--color-primary, #0d50d5);
+}
+
+.composer__hold-to-talk.is-cancelling {
+  border-color: rgba(186, 26, 26, 0.28);
+  background: rgba(186, 26, 26, 0.08);
+  color: var(--color-error, #ba1a1a);
+}
+
+.composer__hold-to-talk.is-disabled {
+  opacity: 0.5;
+}
+
+.recording-overlay {
+  position: fixed;
+  z-index: 1100;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.recording-overlay__card {
+  display: flex;
+  width: 330rpx;
+  min-height: 330rpx;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14rpx;
+  border-radius: 32rpx;
+  background: rgba(25, 27, 35, 0.9);
+  color: #ffffff;
+  box-shadow: 0 20rpx 48rpx rgba(15, 23, 42, 0.24);
+}
+
+.recording-overlay.is-cancelling .recording-overlay__card {
+  background: rgba(143, 22, 22, 0.92);
+}
+
+.recording-overlay__icon {
+  display: flex;
+  width: 92rpx;
+  height: 92rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-primary, #0d50d5);
+}
+
+.is-cancelling .recording-overlay__icon {
+  background: var(--color-error, #ba1a1a);
+}
+
+.recording-overlay__time {
+  font-size: 36rpx;
+  font-weight: 650;
+}
+
+.recording-overlay__title {
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.recording-overlay__hint {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 22rpx;
 }
 
 .composer__safe-area {

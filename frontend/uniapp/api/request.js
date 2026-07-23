@@ -323,12 +323,15 @@ function externalResponseMessage(body, fallback) {
   return String(message || fallback)
 }
 
-function rejectExternalResponse(reject, context, message, showErrorToast) {
+function rejectExternalResponse(reject, context, message, showErrorToast, responseBody = null) {
   console.error('[request:external-invalid-response]', context)
   if (showErrorToast) {
     uni.showToast({ title: message, icon: 'none' })
   }
-  reject(new Error(message))
+  const error = new Error(message)
+  error.statusCode = Number(context?.statusCode) || 0
+  error.responseBody = responseBody
+  reject(error)
 }
 
 /**
@@ -375,6 +378,7 @@ export function requestExternalJson(options) {
             { url: requestUrl, method, statusCode: res.statusCode },
             externalResponseMessage(body, '客服服务请求失败'),
             showErrorToast,
+            body,
           )
           return
         }
@@ -384,6 +388,7 @@ export function requestExternalJson(options) {
             { url: requestUrl, method, statusCode: res.statusCode },
             '客服服务响应异常',
             showErrorToast,
+            body,
           )
           return
         }
@@ -410,6 +415,7 @@ export function uploadExternalFile(options) {
   const {
     baseUrl,
     url,
+    file,
     filePath,
     name = 'file',
     formData = {},
@@ -418,7 +424,8 @@ export function uploadExternalFile(options) {
     showErrorToast = false,
   } = options || {}
   const requestUrl = externalRequestUrl(baseUrl, url)
-  if (!requestUrl || !filePath || typeof validate !== 'function') {
+  const hasUploadFile = Boolean(filePath || file)
+  if (!requestUrl || !hasUploadFile || typeof validate !== 'function') {
     const message = '外部上传配置无效'
     if (showErrorToast) {
       uni.showToast({ title: message, icon: 'none' })
@@ -427,9 +434,8 @@ export function uploadExternalFile(options) {
   }
 
   return new Promise((resolve, reject) => {
-    uni.uploadFile({
+    const uploadOptions = {
       url: requestUrl,
-      filePath,
       name,
       formData,
       timeout: REQUEST_TIMEOUT,
@@ -443,6 +449,7 @@ export function uploadExternalFile(options) {
             { url: requestUrl, method: 'UPLOAD', statusCode: res.statusCode },
             externalResponseMessage(body, '客服文件上传失败'),
             showErrorToast,
+            body,
           )
           return
         }
@@ -452,6 +459,7 @@ export function uploadExternalFile(options) {
             { url: requestUrl, method: 'UPLOAD', statusCode: res.statusCode },
             '客服上传响应异常',
             showErrorToast,
+            body,
           )
           return
         }
@@ -464,6 +472,9 @@ export function uploadExternalFile(options) {
         }
         reject(err)
       },
-    })
+    }
+    if (file) uploadOptions.file = file
+    if (filePath) uploadOptions.filePath = filePath
+    uni.uploadFile(uploadOptions)
   })
 }

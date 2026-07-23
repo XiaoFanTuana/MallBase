@@ -105,7 +105,7 @@ export function createCustomerServiceSocket(socketBase) {
     forceBase64: true,
     forceNew: true,
     reconnection: true,
-    reconnectionAttempts: Infinity,
+    reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 8000,
     timeout: 15000,

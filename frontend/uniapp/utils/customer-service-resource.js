@@ -28,6 +28,36 @@ function safeImageUrl(value) {
   return /^https?:\/\/[^\s]+$/i.test(url) ? url : ''
 }
 
+function normalizedDisplay(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null
+}
+
+function displayPrice(display) {
+  const fields = Array.isArray(display?.fields) ? display.fields : []
+  const field = fields.find((item) => (
+    item
+    && typeof item === 'object'
+    && !Array.isArray(item)
+    && (item.valueType === 'money' || ['price', 'pay', 'pay_amount'].includes(item.key))
+  ))
+  return normalizeText(field?.value, 60)
+}
+
+function displayImage(display) {
+  const components = Array.isArray(display?.canvas?.components)
+    ? display.canvas.components
+    : []
+  const component = components.find((item) => (
+    item
+    && typeof item === 'object'
+    && !Array.isArray(item)
+    && item.type === 'image'
+    && !item.hidden
+    && safeImageUrl(item.src)
+  ))
+  return safeImageUrl(component?.src)
+}
+
 export function buildCustomerServiceResourceRoute(typeValue, idValue) {
   const type = normalizeResourceType(typeValue)
   const id = normalizeResourceId(idValue)
@@ -42,13 +72,23 @@ export function normalizeCustomerServiceConversationResource(resource) {
   const externalId = normalizeResourceId(resource.externalId)
   const route = buildCustomerServiceResourceRoute(type, externalId)
   if (!route) return null
+  const metadata = resource.metadata
+    && typeof resource.metadata === 'object'
+    && !Array.isArray(resource.metadata)
+    ? resource.metadata
+    : null
+  const display = normalizedDisplay(metadata?.display)
 
   return {
     type,
     externalId,
     label: resourceLabel(type),
-    title: normalizeText(resource.title, 160) || `${resourceLabel(type)} #${externalId}`,
-    summary: normalizeText(resource.summary, 300),
+    title: normalizeText(resource.title, 160)
+      || normalizeText(display?.title, 160)
+      || `${resourceLabel(type)} #${externalId}`,
+    summary: normalizeText(resource.summary, 300) || normalizeText(display?.summary, 300),
+    price: displayPrice(display),
+    imageUrl: displayImage(display),
     route,
   }
 }
@@ -74,15 +114,16 @@ export function parseCustomerServiceResourceCard(body) {
   const type = normalizeResourceType(value.resourceType || value.resourceCode || action?.resourceCode)
   const externalId = normalizeResourceId(value.externalId || params?.externalId)
   const route = buildCustomerServiceResourceRoute(type, externalId)
+  const display = normalizedDisplay(value.display)
 
   return {
     type,
     externalId,
     label: resourceLabel(type),
-    title: normalizeText(value.title, 160) || '客服资源卡片',
-    summary: normalizeText(value.summary, 300),
-    price: normalizeText(value.price, 60),
-    imageUrl: safeImageUrl(value.imageUrl),
+    title: normalizeText(value.title, 160) || normalizeText(display?.title, 160) || '客服资源卡片',
+    summary: normalizeText(value.summary, 300) || normalizeText(display?.summary, 300),
+    price: normalizeText(value.price, 60) || displayPrice(display),
+    imageUrl: safeImageUrl(value.imageUrl) || displayImage(display),
     route,
   }
 }
