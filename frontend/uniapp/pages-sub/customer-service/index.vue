@@ -37,6 +37,8 @@ import {
   createCustomerServiceRecorder,
 } from '@/utils/customer-service-recorder'
 import { createCustomerServiceSocket } from '@/utils/customer-service-socket'
+import { chooseImageFiles } from '@/utils/image-picker'
+import { getUniWindowInfo } from '@/utils/system-info'
 
 const decorateStore = useDecorateStore()
 
@@ -100,7 +102,7 @@ let messagePollCount = 0
 let recordingGestureActive = false
 let recordingStartY = 0
 
-const windowInfo = getCustomerServiceWindowInfo()
+const windowInfo = getUniWindowInfo()
 const menuButtonRect = getCustomerServiceMenuButtonRect()
 const statusBarHeight = Number(windowInfo.statusBarHeight) || 0
 const headerContentHeight = menuButtonRect
@@ -201,15 +203,6 @@ const composerHint = computed(() => {
   const labels = [...new Set(resourceComposerActions.value.map((action) => action.label).filter(Boolean))]
   return labels.length ? `点击 + 可发送${labels.join('或')}` : ''
 })
-
-function getCustomerServiceWindowInfo() {
-  try {
-    if (typeof uni.getWindowInfo === 'function') {
-      return uni.getWindowInfo()
-    }
-  } catch {}
-  return { statusBarHeight: 0, windowWidth: 375 }
-}
 
 function getCustomerServiceMenuButtonRect() {
   try {
@@ -868,28 +861,27 @@ function sendText() {
   emitMessage('TEXT', body)
 }
 
-function chooseImage() {
+async function chooseImage() {
   if (!canSend.value || !imageAvailable.value) return
   closeComposerPanels()
-  uni.chooseImage({
+  const [image] = await chooseImageFiles({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success(result) {
-      const filePath = result.tempFilePaths?.[0]
-      if (filePath) uploadAndSendImage(filePath)
-    },
   })
+  if (image?.path || image?.file) uploadAndSendImage(image)
 }
 
-async function uploadAndSendImage(filePath) {
+async function uploadAndSendImage(image) {
   uploading.value = true
   notice.value = '图片上传中'
   try {
     const attachment = await uploadCustomerServiceAttachment(
       apiBase.value,
       conversation.value.id,
-      filePath,
+      image?.file
+        ? { file: image.file }
+        : { filePath: String(image?.path || '') },
       visitorToken.value,
     )
     notice.value = ''
