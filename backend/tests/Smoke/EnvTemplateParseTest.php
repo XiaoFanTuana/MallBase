@@ -28,6 +28,8 @@ final class EnvTemplateParseTest extends TestCase
             'DB_HOST',
             'DB_PORT',
             'REDIS_PORT',
+            'JWT_SECRET',
+            'INSTALL_RUNTIME_MARKER',
             'SWOOLE_HTTP_PORT',
             'SWOOLE_WORKER_NUM',
             'CORS_ALLOWED_ORIGINS',
@@ -103,10 +105,19 @@ final class EnvTemplateParseTest extends TestCase
         copy(dirname(__DIR__, 2) . '/.example.env', $root . '/backend/.example.env');
         copy(dirname(__DIR__, 3) . '/deploy/docker/.example.env', $root . '/deploy/docker/.example.env');
         copy(dirname(__DIR__, 3) . '/deploy/docker/ensure-env.sh', $root . '/deploy/docker/ensure-env.sh');
+        $mockBin = $this->installChownRecorder($root);
+        $projectUid = fileowner($root);
+        $projectGid = filegroup($root);
+        $this->assertIsInt($projectUid);
+        $this->assertIsInt($projectGid);
 
         try {
             exec(
-                'WORKDIR=' . escapeshellarg($root)
+                'PATH=' . escapeshellarg($mockBin . ':' . (string) getenv('PATH'))
+                . ' MALLBASE_ENV_CHOWN_LOG=' . escapeshellarg($root . '/chown.log')
+                . ' MALLBASE_DEV_UID=' . $projectUid
+                . ' MALLBASE_DEV_GID=' . $projectGid
+                . ' WORKDIR=' . escapeshellarg($root)
                 . ' ROOT_ENV_EXPORT=' . escapeshellarg($root . '/runtime-config/.env')
                 . ' BACKEND_ENV_EXPORT=' . escapeshellarg($root . '/runtime-config/backend.env')
                 . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
@@ -116,14 +127,29 @@ final class EnvTemplateParseTest extends TestCase
 
             $this->assertSame(0, $exitCode, implode("\n", $output));
 
+            $backendEnvPath = $root . '/backend/.mallbase-env/backend.env';
             $rootParsed = @parse_ini_file($root . '/.env', true, INI_SCANNER_RAW);
-            $backendParsed = @parse_ini_file($root . '/backend/.env', true, INI_SCANNER_RAW);
+            $backendParsed = @parse_ini_file($backendEnvPath, true, INI_SCANNER_RAW);
 
             $this->assertNotFalse($rootParsed, 'derived root .env should remain parse_ini_file-compatible');
-            $this->assertNotFalse($backendParsed, 'derived backend/.env should remain parse_ini_file-compatible');
+            $this->assertNotFalse($backendParsed, 'derived backend/.mallbase-env/backend.env should remain parse_ini_file-compatible');
             $this->assertFileEquals($root . '/.env', $root . '/runtime-config/.env');
-            $this->assertFileEquals($root . '/backend/.env', $root . '/runtime-config/backend.env');
-            $this->assertSame(0600, fileperms($root . '/backend/.env') & 0777);
+            $this->assertFileEquals($backendEnvPath, $root . '/runtime-config/backend.env');
+            $this->assertSame(0600, fileperms($root . '/.env') & 0777);
+            $this->assertSame($projectUid, fileowner($root . '/.env'));
+            $this->assertSame($projectGid, filegroup($root . '/.env'));
+            $this->assertSame(0600, fileperms($backendEnvPath) & 0777);
+            $this->assertSame($projectUid, fileowner($backendEnvPath));
+            $this->assertSame($projectGid, filegroup($backendEnvPath));
+            $chownLog = (string) file_get_contents($root . '/chown.log');
+            $this->assertStringContainsString(
+                $projectUid . ':' . $projectGid . ' ' . $root . '/.env',
+                $chownLog,
+            );
+            $this->assertStringContainsString(
+                $projectUid . ':' . $projectGid . ' ' . $backendEnvPath,
+                $chownLog,
+            );
             $this->assertSame('1', $rootParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame('1', $backendParsed['SWOOLE_WORKER_NUM'] ?? null);
             $this->assertSame($rootParsed['DB_HOST'] ?? null, $backendParsed['DB_HOST'] ?? null);
@@ -160,6 +186,11 @@ final class EnvTemplateParseTest extends TestCase
         copy(dirname(__DIR__, 2) . '/.example.env', $root . '/backend/.example.env');
         copy(dirname(__DIR__, 3) . '/deploy/docker/.example.env', $root . '/deploy/docker/.example.env');
         copy(dirname(__DIR__, 3) . '/deploy/docker/ensure-env.sh', $root . '/deploy/docker/ensure-env.sh');
+        $mockBin = $this->installChownRecorder($root);
+        $projectUid = fileowner($root);
+        $projectGid = filegroup($root);
+        $this->assertIsInt($projectUid);
+        $this->assertIsInt($projectGid);
 
         file_put_contents($root . '/.env', implode("\n", [
             'MALLBASE_COMPOSE_PROJECT_NAME=mallbase',
@@ -183,18 +214,30 @@ final class EnvTemplateParseTest extends TestCase
 
         try {
             exec(
-                'WORKDIR=' . escapeshellarg($root) . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
+                'PATH=' . escapeshellarg($mockBin . ':' . (string) getenv('PATH'))
+                . ' MALLBASE_ENV_CHOWN_LOG=' . escapeshellarg($root . '/chown.log')
+                . ' MALLBASE_DEV_UID=' . $projectUid
+                . ' MALLBASE_DEV_GID=' . $projectGid
+                . ' WORKDIR=' . escapeshellarg($root)
+                . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
                 $output,
                 $exitCode
             );
 
             $this->assertSame(0, $exitCode, implode("\n", $output));
 
+            $backendEnvPath = $root . '/backend/.mallbase-env/backend.env';
             $rootParsed = @parse_ini_file($root . '/.env', true, INI_SCANNER_RAW);
-            $backendParsed = @parse_ini_file($root . '/backend/.env', true, INI_SCANNER_RAW);
+            $backendParsed = @parse_ini_file($backendEnvPath, true, INI_SCANNER_RAW);
 
             $this->assertNotFalse($rootParsed, 'migrated root .env should remain parse_ini_file-compatible');
-            $this->assertNotFalse($backendParsed, 'migrated backend/.env should remain parse_ini_file-compatible');
+            $this->assertNotFalse($backendParsed, 'migrated backend/.mallbase-env/backend.env should remain parse_ini_file-compatible');
+            $this->assertSame(0600, fileperms($root . '/.env') & 0777);
+            $this->assertSame($projectUid, fileowner($root . '/.env'));
+            $this->assertSame($projectGid, filegroup($root . '/.env'));
+            $this->assertSame(0600, fileperms($backendEnvPath) & 0777);
+            $this->assertSame($projectUid, fileowner($backendEnvPath));
+            $this->assertSame($projectGid, filegroup($backendEnvPath));
             $this->assertSame('16379', $rootParsed['REDIS_HOST_PORT'] ?? null);
             $this->assertSame('6379', $rootParsed['REDIS_PORT'] ?? null);
             $this->assertSame('6379', $backendParsed['REDIS_PORT'] ?? null);
@@ -208,13 +251,18 @@ final class EnvTemplateParseTest extends TestCase
             file_put_contents($root . '/.env', $rootContent);
 
             exec(
-                'WORKDIR=' . escapeshellarg($root) . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
+                'PATH=' . escapeshellarg($mockBin . ':' . (string) getenv('PATH'))
+                . ' MALLBASE_ENV_CHOWN_LOG=' . escapeshellarg($root . '/chown.log')
+                . ' MALLBASE_DEV_UID=' . $projectUid
+                . ' MALLBASE_DEV_GID=' . $projectGid
+                . ' WORKDIR=' . escapeshellarg($root)
+                . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
                 $clearOutput,
                 $clearExitCode
             );
 
             $this->assertSame(0, $clearExitCode, implode("\n", $clearOutput));
-            $clearedBackend = @parse_ini_file($root . '/backend/.env', true, INI_SCANNER_RAW);
+            $clearedBackend = @parse_ini_file($backendEnvPath, true, INI_SCANNER_RAW);
             $this->assertNotFalse($clearedBackend);
             $this->assertSame('', $clearedBackend['REDIS_PASSWORD'] ?? null);
             $this->assertSame('', $clearedBackend['QUEUE_REDIS_PASSWORD'] ?? null);
@@ -234,6 +282,11 @@ final class EnvTemplateParseTest extends TestCase
         copy(dirname(__DIR__, 2) . '/.example.env', $root . '/backend/.example.env');
         copy(dirname(__DIR__, 3) . '/deploy/docker/.example.env', $root . '/deploy/docker/.example.env');
         copy(dirname(__DIR__, 3) . '/deploy/docker/ensure-env.sh', $root . '/deploy/docker/ensure-env.sh');
+        $mockBin = $this->installChownRecorder($root);
+        $projectUid = fileowner($root);
+        $projectGid = filegroup($root);
+        $this->assertIsInt($projectUid);
+        $this->assertIsInt($projectGid);
 
         $persistentEnv = (string) file_get_contents($root . '/deploy/docker/.example.env');
         $persistentEnv = preg_replace('/^DB_PASS=.*$/m', 'DB_PASS=persisted-db-pass', $persistentEnv);
@@ -242,7 +295,11 @@ final class EnvTemplateParseTest extends TestCase
 
         try {
             exec(
-                'WORKDIR=' . escapeshellarg($root)
+                'PATH=' . escapeshellarg($mockBin . ':' . (string) getenv('PATH'))
+                . ' MALLBASE_ENV_CHOWN_LOG=' . escapeshellarg($root . '/chown.log')
+                . ' MALLBASE_DEV_UID=' . $projectUid
+                . ' MALLBASE_DEV_GID=' . $projectGid
+                . ' WORKDIR=' . escapeshellarg($root)
                 . ' ROOT_ENV_EXPORT=' . escapeshellarg($root . '/runtime-config/.env')
                 . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
                 $output,
@@ -258,6 +315,66 @@ final class EnvTemplateParseTest extends TestCase
         } finally {
             $this->removeDirectory($root);
         }
+    }
+
+    public function testEnsureEnvRejectsEnvSymlinksBeforeWritingTargets(): void
+    {
+        foreach (['.env', 'backend/.env', 'backend/.mallbase-env'] as $relativePath) {
+            $root = sys_get_temp_dir() . '/mallbase-env-symlink-' . bin2hex(random_bytes(6));
+
+            mkdir($root . '/backend', 0777, true);
+            mkdir($root . '/deploy/docker', 0777, true);
+            copy(dirname(__DIR__, 2) . '/.example.env', $root . '/backend/.example.env');
+            copy(dirname(__DIR__, 3) . '/deploy/docker/.example.env', $root . '/deploy/docker/.example.env');
+            copy(dirname(__DIR__, 3) . '/deploy/docker/ensure-env.sh', $root . '/deploy/docker/ensure-env.sh');
+
+            if ($relativePath !== '.env') {
+                copy($root . '/deploy/docker/.example.env', $root . '/.env');
+            }
+
+            $outsideTarget = $root . '/outside-target';
+            $outsideState = "outside-state\n";
+            file_put_contents($outsideTarget, $outsideState);
+            $outsideMode = fileperms($outsideTarget) & 0777;
+            $outsideUid = fileowner($outsideTarget);
+            $outsideGid = filegroup($outsideTarget);
+            symlink($outsideTarget, $root . '/' . $relativePath);
+
+            try {
+                exec(
+                    'MALLBASE_DEV_UID=' . (int) fileowner($root)
+                    . ' MALLBASE_DEV_GID=' . (int) filegroup($root)
+                    . ' WORKDIR=' . escapeshellarg($root)
+                    . ' sh ' . escapeshellarg($root . '/deploy/docker/ensure-env.sh') . ' 2>&1',
+                    $output,
+                    $exitCode,
+                );
+
+                $this->assertNotSame(0, $exitCode, $relativePath . ' symlink must be rejected');
+                $this->assertSame($outsideState, file_get_contents($outsideTarget));
+                $this->assertSame($outsideMode, fileperms($outsideTarget) & 0777);
+                $this->assertSame($outsideUid, fileowner($outsideTarget));
+                $this->assertSame($outsideGid, filegroup($outsideTarget));
+            } finally {
+                $this->removeDirectory($root);
+            }
+        }
+    }
+
+    private function installChownRecorder(string $root): string
+    {
+        $mockBin = $root . '/mock-bin';
+        mkdir($mockBin, 0777, true);
+        file_put_contents($mockBin . '/chown', <<<'SH'
+#!/bin/sh
+set -eu
+: "${MALLBASE_ENV_CHOWN_LOG:?}"
+printf '%s\n' "$*" >> "$MALLBASE_ENV_CHOWN_LOG"
+SH);
+        chmod($mockBin . '/chown', 0755);
+        file_put_contents($root . '/chown.log', '');
+
+        return $mockBin;
     }
 
     private function removeDirectory(string $path): void

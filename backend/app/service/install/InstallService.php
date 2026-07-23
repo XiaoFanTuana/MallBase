@@ -14,7 +14,6 @@ use Redis;
 use RedisException;
 use think\facade\Cache;
 use think\facade\Config;
-use think\facade\Console;
 use think\facade\Db;
 
 /**
@@ -28,6 +27,7 @@ class InstallService extends BaseService
      */
     private array $stepTitles = [
         'db_test'                  => '校验并准备数据库',
+        'environment'              => '检查安装环境',
         'redis_test'               => '校验 Redis 连接',
         'write_env'                => '写入配置文件',
         'create_db'                => '创建数据库',
@@ -88,7 +88,28 @@ class InstallService extends BaseService
      */
     private const DEFAULT_AVATAR_PATH = '/static/admin/logo.png';
 
-    private const APP_CODE = 'mallbase';
+    private const PLATFORM_BASE_URL = 'https://platform.gosowong.cn';
+    private const PLATFORM_APP_CODE = 'mallbase';
+    private const PLATFORM_CONNECT_TIMEOUT_MS = 2000;
+    private const PLATFORM_TIMEOUT_MS = 5000;
+    private const PERMISSION_SYNC_TIMEOUT_MS = 120_000;
+    private const ENV_SECRET_PLACEHOLDER = 'please-change-or-leave-for-random';
+    /** @var array<int, string> */
+    private const INSTALL_CURL_FUNCTIONS = [
+        'curl_init',
+        'curl_setopt_array',
+        'curl_exec',
+        'curl_error',
+        'curl_getinfo',
+        'curl_close',
+    ];
+    /** @var array<int, string> */
+    private const INSTALL_PROCESS_FUNCTIONS = [
+        'proc_open',
+        'proc_get_status',
+        'proc_terminate',
+        'proc_close',
+    ];
 
     protected string $modelClass = BaseModel::class;
 
@@ -156,20 +177,40 @@ class InstallService extends BaseService
 
     public function getInstallAgreement(): array
     {
-        $licensePath = dirname(rtrim((string) root_path(), DIRECTORY_SEPARATOR)) . DIRECTORY_SEPARATOR . 'LICENSE';
-        $license = @file_get_contents($licensePath);
-        $available = is_string($license) && trim($license) !== '';
+        $response = $this->fetchPlatformInstallAgreement();
+        if (($response['success'] ?? false) !== true) {
+            return $this->unavailableInstallAgreement((string) ($response['message'] ?? 'request_failed'));
+        }
+
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $enabled = $this->platformBoolean($data['enabled'] ?? true, true);
+        $rawTitle = $data['title'] ?? '';
+        $title = is_scalar($rawTitle) ? trim((string) $rawTitle) : '';
+        $title = $title !== '' ? $title : 'MallBase 安装协议';
+        $content = is_string($data['content'] ?? null) ? trim($data['content']) : '';
+
+        if (!$enabled) {
+            return [
+                'app_code' => self::PLATFORM_APP_CODE,
+                'enabled'  => false,
+                'available' => true,
+                'title'    => $title,
+                'content'  => '',
+                'source'   => 'platform',
+            ];
+        }
+
+        if ($content === '') {
+            return $this->unavailableInstallAgreement('empty_content');
+        }
 
         return [
-            'app_code' => self::APP_CODE,
+            'app_code' => self::PLATFORM_APP_CODE,
             'enabled'  => true,
-            'available' => $available,
-            'title'    => 'MallBase 开源许可',
-            'content'  => $available
-                ? '<pre>' . htmlspecialchars($license, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>'
-                : '',
-            'source'   => 'local',
-            'error'    => $available ? '' : 'license_unavailable',
+            'available' => true,
+            'title'    => $title,
+            'content'  => $content,
+            'source'   => 'platform',
         ];
     }
 
@@ -212,6 +253,99 @@ class InstallService extends BaseService
         $text = strtolower(trim((string) $value));
 
         return in_array($text, ['1', 'true', 'on', 'yes'], true) ? 'true' : 'false';
+    }
+
+    private function unavailableInstallAgreement(string $reason): array
+    {
+        return [
+            'app_code' => self::PLATFORM_APP_CODE,
+            'enabled'  => true,
+            'available' => false,
+            'title'    => 'MallBase 安装协议',
+            'content'  => '',
+            'source'   => 'platform',
+            'error'    => $reason !== '' ? $reason : 'request_failed',
+        ];
+    }
+
+    /**
+     * @return array{success: bool, data?: array<string, mixed>, message?: string}
+     */
+    private function fetchPlatformInstallAgreement(): array
+    {
+        $missingCurlFunctions = $this->missingEnvironmentFunctions(self::INSTALL_CURL_FUNCTIONS);
+        if ($missingCurlFunctions !== []) {
+            return [
+                'success' => false,
+                'message' => 'curl_missing:' . implode(',', $missingCurlFunctions),
+            ];
+        }
+
+        $url = rtrim(self::PLATFORM_BASE_URL, '/')
+            . '/api/v1/install/agreement?'
+            . http_build_query(['app_code' => self::PLATFORM_APP_CODE]);
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return ['success' => false, 'message' => 'curl_init_failed'];
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_HTTPGET => true,
+            CURLOPT_HTTPHEADER => ['Accept: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT_MS => self::PLATFORM_CONNECT_TIMEOUT_MS,
+            CURLOPT_TIMEOUT_MS => self::PLATFORM_TIMEOUT_MS,
+        ]);
+
+        $raw = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+
+        if (!is_string($raw)) {
+            return ['success' => false, 'message' => $curlError !== '' ? $curlError : 'request_failed'];
+        }
+
+        if ($status < 200 || $status >= 300) {
+            return ['success' => false, 'message' => 'http_' . $status];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return ['success' => false, 'message' => 'invalid_json'];
+        }
+
+        if (!is_array($decoded['data'] ?? null)) {
+            return ['success' => false, 'message' => 'invalid_payload'];
+        }
+
+        return ['success' => true, 'data' => $decoded['data']];
+    }
+
+    private function platformBoolean(mixed $value, bool $default): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (!is_scalar($value)) {
+            return $default;
+        }
+
+        $text = strtolower(trim((string) $value));
+        if ($text === '') {
+            return $default;
+        }
+
+        if (in_array($text, ['1', 'true', 'on', 'yes', 'enabled'], true)) {
+            return true;
+        }
+
+        if (in_array($text, ['0', 'false', 'off', 'no', 'disabled'], true)) {
+            return false;
+        }
+
+        return $default;
     }
 
     public function checkEnvironment(): array
@@ -260,22 +394,97 @@ class InstallService extends BaseService
             'pass'     => extension_loaded('mbstring'),
         ];
 
-        $runtimePath = app()->getRuntimePath();
-        $runtimeWritable = is_dir($runtimePath) && is_writable($runtimePath);
+        $missingCurlFunctions = $this->missingEnvironmentFunctions(self::INSTALL_CURL_FUNCTIONS);
+        $items[] = [
+            'name'     => 'cURL 能力',
+            'required' => '可用',
+            'current'  => $missingCurlFunctions === []
+                ? '可用'
+                : '缺失：' . implode('、', $missingCurlFunctions),
+            'pass'     => $missingCurlFunctions === [],
+        ];
+
+        $missingProcessFunctions = $this->missingEnvironmentFunctions(self::INSTALL_PROCESS_FUNCTIONS);
+        $items[] = [
+            'name'     => 'PHP 子进程函数组',
+            'required' => '可用',
+            'current'  => $missingProcessFunctions === []
+                ? '可用'
+                : '缺失：' . implode('、', $missingProcessFunctions),
+            'pass'     => $missingProcessFunctions === [],
+        ];
+
+        $phpCli = $missingProcessFunctions === [] ? $this->resolveExecutablePhpCli() : null;
+        $items[] = [
+            'name'     => 'PHP CLI 可执行',
+            'required' => '可用',
+            'current'  => $phpCli !== null ? '可用' : '不可用',
+            'pass'     => $phpCli !== null,
+        ];
+
+        $paths = $this->installationEnvironmentPaths();
+
+        $openBasedir = trim($this->configuredOpenBasedir());
+        $openBasedirPass = $openBasedir === '' || $this->openBasedirCoversPaths($openBasedir, [
+            dirname($paths['public']),
+            $paths['backend_env_directory'],
+        ]);
+        $items[] = [
+            'name'     => 'open_basedir 路径覆盖',
+            'required' => '覆盖后端目录及环境配置目录',
+            'current'  => $openBasedir === '' ? '未限制' : ($openBasedirPass ? '已覆盖' : '未覆盖'),
+            'pass'     => $openBasedirPass,
+        ];
+
+        $runtimeWritable = $this->installLockDirectoryReady($paths['runtime']);
         $items[] = [
             'name'     => 'runtime 目录可写',
-            'required' => '可写',
-            'current'  => $runtimeWritable ? '可写' : '不可写',
+            'required' => '可写且可收紧权限',
+            'current'  => $runtimeWritable ? '可写且可收紧权限' : '不可写或无法收紧权限',
             'pass'     => $runtimeWritable,
         ];
 
-        $publicPath = app()->getRootPath() . 'public';
-        $publicWritable = is_dir($publicPath) && is_writable($publicPath);
+        $installDirectory = rtrim($paths['runtime'], '/\\') . DIRECTORY_SEPARATOR . 'install';
+        $installDirectoryWritable = $this->prepareInstallLockDirectory($installDirectory, $runtimeWritable);
         $items[] = [
-            'name'     => 'public 目录可写',
+            'name'     => 'runtime/install 目录可写',
+            'required' => '可写且可收紧权限',
+            'current'  => $installDirectoryWritable ? '可写且可收紧权限' : '不可写或无法收紧权限',
+            'pass'     => $installDirectoryWritable,
+        ];
+
+        $envDirectoryWritable = !is_link($paths['backend_env_directory'])
+            && is_dir($paths['backend_env_directory'])
+            && is_writable($paths['backend_env_directory']);
+        $items[] = [
+            'name'     => 'backend 环境配置目录可写',
             'required' => '可写',
-            'current'  => $publicWritable ? '可写' : '不可写',
-            'pass'     => $publicWritable,
+            'current'  => $envDirectoryWritable ? '可写' : '不可写',
+            'pass'     => $envDirectoryWritable,
+        ];
+
+        $publicReadable = is_dir($paths['public']) && is_readable($paths['public']);
+        $items[] = [
+            'name'     => 'public 目录可读',
+            'required' => '可读',
+            'current'  => $publicReadable ? '可读' : '不可读',
+            'pass'     => $publicReadable,
+        ];
+
+        $uploadsWritable = is_dir($paths['uploads']) && is_writable($paths['uploads']);
+        $items[] = [
+            'name'     => 'public/uploads 目录可写',
+            'required' => '可写',
+            'current'  => $uploadsWritable ? '可写' : '不可写',
+            'pass'     => $uploadsWritable,
+        ];
+
+        $demoWritable = is_dir($paths['demo']) && is_writable($paths['demo']);
+        $items[] = [
+            'name'     => 'public/static/demo 目录可写',
+            'required' => '可写',
+            'current'  => $demoWritable ? '可写' : '不可写',
+            'pass'     => $demoWritable,
         ];
 
         $allPass = true;
@@ -287,6 +496,240 @@ class InstallService extends BaseService
         }
 
         return ['items' => $items, 'pass' => $allPass];
+    }
+
+    /**
+     * @return array{runtime:string,backend_env_directory:string,public:string,uploads:string,demo:string}
+     */
+    protected function installationEnvironmentPaths(): array
+    {
+        $public = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'public';
+
+        return [
+            'runtime' => app()->getRuntimePath(),
+            'backend_env_directory' => dirname($this->resolveBackendEnvPath()),
+            'public' => $public,
+            'uploads' => $public . DIRECTORY_SEPARATOR . 'uploads',
+            'demo' => $public . DIRECTORY_SEPARATOR . 'static' . DIRECTORY_SEPARATOR . 'demo',
+        ];
+    }
+
+    protected function environmentFunctionAvailable(string $function): bool
+    {
+        return function_exists($function);
+    }
+
+    /** @return array<int, string> */
+    protected function phpCliCandidates(): array
+    {
+        $candidates = [];
+        $binaryName = basename(PHP_BINARY);
+        if (preg_match('/^php(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$/iD', $binaryName) === 1) {
+            $candidates[] = PHP_BINARY;
+        }
+        $candidates[] = PHP_BINDIR . DIRECTORY_SEPARATOR
+            . (DIRECTORY_SEPARATOR === '\\' ? 'php.exe' : 'php');
+
+        return array_values(array_unique($candidates));
+    }
+
+    protected function probePhpCliExecution(string $candidate): bool
+    {
+        $pipes = [];
+        $process = null;
+
+        try {
+            $process = @proc_open(
+                [
+                    $candidate,
+                    '-r',
+                    'exit(PHP_SAPI === "cli" && PHP_VERSION_ID >= 80200 ? 0 : 1);',
+                ],
+                [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ],
+                $pipes,
+                null,
+                null,
+                ['bypass_shell' => true],
+            );
+            if (!is_resource($process)) {
+                return false;
+            }
+
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            $pipes = [];
+
+            return proc_close($process) === 0;
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if (is_resource($process)) {
+                @proc_terminate($process);
+                @proc_close($process);
+            }
+        }
+    }
+
+    protected function configuredOpenBasedir(): string
+    {
+        $value = ini_get('open_basedir');
+
+        return is_string($value) ? $value : '';
+    }
+
+    protected function probeDirectoryChmodCapability(string $path): bool
+    {
+        $requiredMode = 0755;
+        if (!@chmod($path, $requiredMode)) {
+            return false;
+        }
+
+        clearstatcache(true, $path);
+        $currentPermissions = @fileperms($path);
+
+        return is_int($currentPermissions) && ($currentPermissions & 0777) === $requiredMode;
+    }
+
+    /**
+     * @param array<int, string> $functions
+     * @return array<int, string>
+     */
+    private function missingEnvironmentFunctions(array $functions): array
+    {
+        return array_values(array_filter(
+            $functions,
+            fn(string $function): bool => !$this->environmentFunctionAvailable($function),
+        ));
+    }
+
+    private function resolveExecutablePhpCli(): ?string
+    {
+        foreach ($this->phpCliCandidates() as $candidate) {
+            if (!$this->trustedPhpCliCandidate($candidate)) {
+                continue;
+            }
+            if ($this->probePhpCliExecution($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function trustedPhpCliCandidate(string $candidate): bool
+    {
+        if ($candidate === '' || str_contains($candidate, "\0")) {
+            return false;
+        }
+        if (!str_starts_with($candidate, DIRECTORY_SEPARATOR)
+            && preg_match('/^[A-Za-z]:[\\\\\/]/D', $candidate) !== 1
+        ) {
+            return false;
+        }
+
+        return preg_match(
+            '/^php(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$/iD',
+            basename($candidate),
+        ) === 1;
+    }
+
+    /** @param array<int, string> $paths */
+    private function openBasedirCoversPaths(string $configuration, array $paths): bool
+    {
+        $allowedRoots = [];
+        foreach (explode(PATH_SEPARATOR, $configuration) as $configuredPath) {
+            $configuredPath = trim($configuredPath);
+            if ($configuredPath === '') {
+                continue;
+            }
+            if ($configuredPath === '.') {
+                $configuredPath = getcwd() ?: '';
+            }
+            $resolved = $configuredPath !== '' ? @realpath($configuredPath) : false;
+            if (is_string($resolved)) {
+                $allowedRoots[] = $this->normalizeCanonicalPath($resolved);
+            }
+        }
+        if ($allowedRoots === []) {
+            return false;
+        }
+
+        foreach ($paths as $path) {
+            $resolvedPath = @realpath($path);
+            if (!is_string($resolvedPath)) {
+                return false;
+            }
+            $target = $this->normalizeCanonicalPath($resolvedPath);
+            $covered = false;
+            foreach ($allowedRoots as $allowedRoot) {
+                if ($this->canonicalPathCoveredBy($target, $allowedRoot)) {
+                    $covered = true;
+                    break;
+                }
+            }
+            if (!$covered) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function normalizeCanonicalPath(string $path): string
+    {
+        $normalized = str_replace('\\', '/', $path);
+        if ($normalized !== '/') {
+            $normalized = rtrim($normalized, '/');
+        }
+
+        return DIRECTORY_SEPARATOR === '\\' ? strtolower($normalized) : $normalized;
+    }
+
+    private function canonicalPathCoveredBy(string $target, string $allowedRoot): bool
+    {
+        if ($target === $allowedRoot) {
+            return true;
+        }
+        if ($allowedRoot === '/') {
+            return str_starts_with($target, '/');
+        }
+
+        return str_starts_with($target, $allowedRoot . '/');
+    }
+
+    private function installLockDirectoryReady(string $path): bool
+    {
+        return !is_link($path)
+            && is_dir($path)
+            && is_writable($path)
+            && $this->probeDirectoryChmodCapability($path);
+    }
+
+    private function prepareInstallLockDirectory(string $path, bool $runtimeReady): bool
+    {
+        if (is_link($path)) {
+            return false;
+        }
+        if (!file_exists($path)) {
+            if (!$runtimeReady || (!@mkdir($path, 0755) && !is_dir($path))) {
+                return false;
+            }
+        }
+
+        return $this->installLockDirectoryReady($path);
     }
 
     public function testDatabase(array $config): array
@@ -591,7 +1034,7 @@ class InstallService extends BaseService
      */
     private function readBackendEnvFile(): array
     {
-        return $this->parseEnvFile(app()->getRootPath() . '.env');
+        return $this->parseEnvFile($this->resolveBackendEnvPath());
     }
 
     /**
@@ -699,6 +1142,35 @@ class InstallService extends BaseService
             }
         };
 
+        $emit('environment', 'running', '正在检查安装环境…');
+        try {
+            $environment = $this->checkEnvironment();
+        } catch (\Throwable $e) {
+            $message = '安装环境检查失败：' . $e->getMessage();
+            $emit('environment', 'error', $message);
+
+            return $this->buildFailureResponse('environment', $message, $steps, $e->getMessage());
+        }
+        if (($environment['pass'] ?? false) !== true) {
+            $failedNames = [];
+            foreach (($environment['items'] ?? []) as $item) {
+                if (is_array($item) && ($item['pass'] ?? false) !== true) {
+                    $name = trim((string) ($item['name'] ?? ''));
+                    if ($name !== '') {
+                        $failedNames[] = $name;
+                    }
+                }
+            }
+            $message = '安装环境检查未通过';
+            if ($failedNames !== []) {
+                $message .= '：' . implode('、', $failedNames);
+            }
+            $emit('environment', 'error', $message, ['items' => $environment['items'] ?? []]);
+
+            return $this->buildFailureResponse('environment', $message, $steps);
+        }
+        $emit('environment', 'success', '安装环境检查通过');
+
         $dbConfig = [
             'host' => trim((string) ($params['db_host'] ?? '')),
             'port' => (int) ($params['db_port'] ?? 3306),
@@ -733,10 +1205,7 @@ class InstallService extends BaseService
                 $steps
             );
         }
-        $jwtSecret = trim((string) ($params['jwt_secret'] ?? ''));
-        if ($jwtSecret === '') {
-            $jwtSecret = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
-        }
+        $jwtSecret = $this->resolveJwtSecret($params, $this->readEnvFile());
         $runtimeMarker = bin2hex(random_bytes(16));
 
         $emit('db_test', 'running', '正在校验并准备数据库…');
@@ -763,7 +1232,7 @@ class InstallService extends BaseService
             'is_empty'  => $redisTest['is_empty'] ?? false,
         ]);
 
-        $emit('write_env', 'running', '正在写入 backend/.env…');
+        $emit('write_env', 'running', '正在写入后端运行配置…');
         try {
             // 注意：
             // - SITE_URL 写入 env 作为 **静态副本**，便于运维通过 grep / docker exec printenv
@@ -890,7 +1359,7 @@ class InstallService extends BaseService
 
         try {
             $emit('sync_permissions', 'running', '正在同步路由权限与菜单…');
-            Console::call('sync:permissions');
+            $this->syncRoutePermissionsInCliProcess();
             $emit('sync_permissions', 'success', '路由权限已同步');
         } catch (\Throwable $e) {
             $message = '权限同步失败：' . $e->getMessage();
@@ -1150,10 +1619,45 @@ class InstallService extends BaseService
      */
     private function writeEnvFile(array $envData): void
     {
-        $configuredPath = trim((string) getenv('MALLBASE_BACKEND_ENV_PATH'));
-        $envPath = $configuredPath !== '' ? $configuredPath : app()->getRootPath() . '.env';
         $templatePath = app()->getRootPath() . '.example.env';
-        (new BackendEnvFileStore())->write($envPath, $templatePath, $envData);
+        (new BackendEnvFileStore())->write($this->resolveBackendEnvPath(), $templatePath, $envData);
+    }
+
+    /**
+     * 安装时沿用当前配置源中的 JWT 密钥，避免 Docker 再次派生运行配置后密钥回退。
+     *
+     * @param array<string, mixed> $params
+     * @param array<string, string> $envValues
+     */
+    private function resolveJwtSecret(array $params, array $envValues): string
+    {
+        $jwtSecret = trim((string) ($params['jwt_secret'] ?? ''));
+        if ($jwtSecret === '') {
+            $jwtSecret = trim((string) ($envValues['JWT_SECRET'] ?? ''));
+        }
+
+        if ($jwtSecret === '' || $jwtSecret === self::ENV_SECRET_PLACEHOLDER) {
+            return rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
+        }
+
+        return $jwtSecret;
+    }
+
+    protected function resolveBackendEnvPath(): string
+    {
+        $configuredPath = trim((string) getenv('MALLBASE_BACKEND_ENV_PATH'));
+
+        return $configuredPath !== '' ? $configuredPath : app()->getRootPath() . '.env';
+    }
+
+    private function syncRoutePermissionsInCliProcess(): void
+    {
+        $backendRoot = rtrim(app()->getRootPath(), DIRECTORY_SEPARATOR);
+        app()->make(InstallCommandRunner::class)->runThinkCommand(
+            $backendRoot,
+            ['sync:permissions'],
+            self::PERMISSION_SYNC_TIMEOUT_MS,
+        );
     }
 
     /**

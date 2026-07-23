@@ -160,6 +160,8 @@ jobs:
           sh -n
           deploy/docker/ensure-env.sh
           deploy/docker/docker-entrypoint.sh
+          deploy/docker/cleanup-dev.sh
+          deploy/docker/prepare-data-dirs.sh
           deploy/docker/prepare-backend-volumes.sh
           deploy/docker/mysql-entrypoint.sh
           deploy/docker/redis-entrypoint.sh
@@ -167,8 +169,17 @@ jobs:
           deploy/docker/rotate-db-password.sh
           deploy/docker/host-preflight.sh
           deploy/docker/tests/host-preflight-test.sh
+          deploy/docker/tests/cleanup-dev-test.sh
+          deploy/docker/tests/ensure-env-test.sh
+          deploy/docker/tests/prepare-data-dirs-test.sh
           deploy/release/build-full-release.sh
           deploy/release/tests/build-full-release-test.sh
+
+      - name: Run Docker environment contract tests
+        run: |
+          sh deploy/docker/tests/cleanup-dev-test.sh
+          sh deploy/docker/tests/ensure-env-test.sh
+          sh deploy/docker/tests/prepare-data-dirs-test.sh
 
       - name: Validate Compose files
         run: |
