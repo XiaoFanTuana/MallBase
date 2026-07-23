@@ -82,7 +82,7 @@ rg -n "会员|积分|余额|装修|充值|成长值" README.md docs
 | [development/points.md](./development/points.md) | 积分账户、积分规则、积分抵扣、积分商城和兑换单开发入口 |
 | [development/wallet.md](./development/wallet.md) | 余额账户、余额流水、余额支付、余额退款和充值套餐开发入口 |
 | [development/client-diy.md](./development/client-diy.md) | 页面库、装修方案、主题、配置读取和 UniApp 渲染开发入口 |
-| [客服 H5 资源跳转设计](./development/customer-service-h5-resource-action.md) | 客服 Widget 商品与订单资源地址模板，以及 H5 顶层跳转的安全边界 |
+| [UniApp 原生客服页接入](./development/customer-service-native-page.md) | H5/微信小程序原生会话页、REST/Socket.IO 协议与安全边界 |
 
 ## 安装与部署
 
@@ -95,7 +95,7 @@ rg -n "会员|积分|余额|装修|充值|成长值" README.md docs
 | [install/docker-production.md](./install/docker-production.md) | 方式四：Docker 生产 |
 | [install/cli-install.md](./install/cli-install.md) | 本地安装失败后的 `php think install:auto` 命令行安装 |
 | [install/troubleshooting.md](./install/troubleshooting.md) | 安装、Docker、静态资源与运行时排障 |
-| [install/env-files.md](./install/env-files.md) | 根 `.env`、`backend/.env` 与运行时配置职责 |
+| [install/env-files.md](./install/env-files.md) | 根 `.env`、Docker 开发运行配置与本地 `backend/.env` 的职责 |
 | [install/docker-image-publish.md](./install/docker-image-publish.md) | GitHub Actions 自动构建 amd64/arm64 后端镜像并推送到 Docker Hub |
 | [install/frontend-release-artifacts.md](./install/frontend-release-artifacts.md) | GitHub Actions 自动构建 Admin、H5 和微信小程序发布制品 |
 | [install/nginx-reverse-proxy.md](./install/nginx-reverse-proxy.md) | Nginx 反向代理与静态资源路径规则 |

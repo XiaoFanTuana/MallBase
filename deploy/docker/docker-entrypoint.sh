@@ -8,8 +8,8 @@ case "$MALLBASE_RUNTIME_MODE" in
         BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-${BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}}
         ;;
     development)
-        BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-${BACKEND_ENV_PATH:-/app/.env}}
-        mkdir -p /app/runtime /app/public/uploads
+        BACKEND_ENV=${MALLBASE_BACKEND_ENV_PATH:-${BACKEND_ENV_PATH:-/app/.mallbase-env/backend.env}}
+        mkdir -p /app/runtime /app/public/uploads /app/public/static/demo "$(dirname "$BACKEND_ENV")"
         ;;
     *)
         echo "RUNTIME_MODE_INVALID" >&2
@@ -257,8 +257,8 @@ if [ "$MALLBASE_RUNTIME_MODE" = "production" ]; then
     done
 fi
 
-# The persisted file is initialized once and then refreshed atomically with
-# known operator-controlled values. Installer-owned fields remain untouched.
+# ThinkPHP / Swoole 配置保存在可原子替换的持久目录；首次并发启动时只允许
+# 一个角色初始化。刷新仅覆盖运维可控字段，安装器管理的字段保持不变。
 ensure_backend_env
 refresh_backend_env
 

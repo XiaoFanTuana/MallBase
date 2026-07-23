@@ -74,6 +74,69 @@ final class AgentDeploymentContractTest extends TestCase
         }
     }
 
+    public function testDevelopmentComposeBootstrapsIgnoredUpgradeRuntimeDirectories(): void
+    {
+        $compose = $this->read('docker-compose.dev.yml');
+        $prepare = $this->read('deploy/docker/prepare-data-dirs.sh');
+        $ignore = $this->read('upgrade/.gitignore');
+
+        self::assertStringContainsString(
+            'MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"',
+            $compose,
+        );
+        self::assertStringContainsString(
+            'MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"',
+            $compose,
+        );
+        foreach (['config', 'run', 'jobs', 'backups'] as $directory) {
+            self::assertSame(
+                2,
+                preg_match_all(
+                    '/source: \.\/upgrade\/' . preg_quote($directory, '/')
+                        . '\s+target: \/app\/upgrade\/' . preg_quote($directory, '/')
+                        . '\s+bind:\s+create_host_path: true/',
+                    $compose,
+                ),
+                $directory,
+            );
+            self::assertStringContainsString('/' . $directory . '/', $ignore);
+            self::assertStringContainsString(
+                'prepare_upgrade_dir "upgrade/' . $directory . '"',
+                $prepare,
+            );
+        }
+        self::assertStringContainsString('prepare_upgrade_dir "upgrade/run/requests"', $prepare);
+        self::assertStringContainsString('chmod 2770 "$path"', $prepare);
+        self::assertStringNotContainsString(
+            'chown -R "${MALLBASE_DEV_UID}:${MALLBASE_DEV_GID}"',
+            $prepare,
+        );
+    }
+
+    public function testDevelopmentComposeRebuildsBackendImageAndPassesOwnershipToRuntimeInitTools(): void
+    {
+        $compose = $this->read('docker-compose.dev.yml');
+
+        self::assertSame(2, substr_count($compose, 'pull_policy: build'));
+        self::assertStringNotContainsString('pull_policy: never', $compose);
+        self::assertSame(
+            3,
+            substr_count($compose, 'MALLBASE_DEV_UID: "${MALLBASE_DEV_UID:-10000}"'),
+            'prepare-data-dirs, ensure-env and rotate-db-password must receive the backend UID',
+        );
+        self::assertSame(
+            3,
+            substr_count($compose, 'MALLBASE_DEV_GID: "${MALLBASE_DEV_GID:-10000}"'),
+            'prepare-data-dirs, ensure-env and rotate-db-password must receive the backend GID',
+        );
+        self::assertMatchesRegularExpression(
+            '/ensure-env:\s+image: alpine:3\.24\.1\s+container_name:.*?environment:\s+'
+            . 'MALLBASE_DEV_UID: "\$\{MALLBASE_DEV_UID:-10000\}"\s+'
+            . 'MALLBASE_DEV_GID: "\$\{MALLBASE_DEV_GID:-10000\}"/s',
+            $compose,
+        );
+    }
+
     public function testProductionKeepsBusinessDataInPlainNamedVolumes(): void
     {
         $compose = $this->read('docker-compose.yml');
@@ -122,6 +185,49 @@ final class AgentDeploymentContractTest extends TestCase
         foreach (['frontend/**/.env.local', 'frontend/**/.env.*.local', '**/*.key', '**/*.pem'] as $pattern) {
             self::assertStringContainsString($pattern, $webDockerignore);
         }
+    }
+
+    public function testDockerImagesContainTheReadOnlyProjectLicenseWithoutComposeOverride(): void
+    {
+        $license = $this->read('LICENSE');
+        self::assertNotSame('', trim($license));
+
+        foreach ([
+            'deploy/docker/Dockerfile.dev',
+            'deploy/docker/Dockerfile',
+        ] as $dockerfilePath) {
+            $dockerfile = $this->read($dockerfilePath);
+            self::assertStringContainsString(
+                'COPY --chmod=0444 LICENSE /LICENSE',
+                $dockerfile,
+                $dockerfilePath . ' must make the project license available beside /app',
+            );
+        }
+
+        self::assertFalse(
+            $this->dockerignoreExcludes('LICENSE', $this->read('.dockerignore')),
+            '.dockerignore must keep the root LICENSE in the Docker build context',
+        );
+
+        foreach (['docker-compose.dev.yml', 'docker-compose.yml'] as $composePath) {
+            $compose = $this->read($composePath);
+            self::assertStringNotContainsString('target: /LICENSE', $compose);
+            self::assertDoesNotMatchRegularExpression(
+                '/^\\s*-\\s+[^#\\r\\n]*:\/LICENSE(?::(?:ro|rw))?\\s*$/m',
+                $compose,
+                $composePath . ' must not shadow the image-owned /LICENSE',
+            );
+        }
+    }
+
+    public function testDevelopmentDockerfileUsesWritableComposerHome(): void
+    {
+        $dockerfile = $this->read('deploy/docker/Dockerfile.dev');
+
+        self::assertStringContainsString(
+            'ENV COMPOSER_HOME=/tmp/mallbase-composer',
+            $dockerfile,
+        );
     }
 
     public function testHostPreflightOnlyPreparesTheSimpleUpgradeWorkspace(): void
@@ -368,5 +474,33 @@ final class AgentDeploymentContractTest extends TestCase
         self::assertIsString($contents);
 
         return $contents;
+    }
+
+    private function dockerignoreExcludes(string $path, string $dockerignore): bool
+    {
+        $excluded = false;
+        foreach (preg_split('/\\R/', $dockerignore) ?: [] as $rule) {
+            $rule = trim($rule);
+            if ($rule === '' || str_starts_with($rule, '#')) {
+                continue;
+            }
+
+            $negated = str_starts_with($rule, '!');
+            if ($negated) {
+                $rule = substr($rule, 1);
+            }
+            $rule = trim($rule, '/');
+            if ($rule === '') {
+                continue;
+            }
+
+            $matches = fnmatch($rule, $path, FNM_PATHNAME)
+                || (!str_contains($rule, '/') && fnmatch($rule, basename($path)));
+            if ($matches) {
+                $excluded = !$negated;
+            }
+        }
+
+        return $excluded;
     }
 }

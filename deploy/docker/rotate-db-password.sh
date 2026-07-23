@@ -31,7 +31,7 @@ sql_escape() {
 escaped_user=$(sql_escape "$DB_USER")
 escaped_pass=$(sql_escape "$DB_PASS")
 
-echo ">>> [rotate-db-password] 先按根 .env 重新派生 backend/.env"
+echo ">>> [rotate-db-password] 先按根 .env 重新派生 backend/.mallbase-env/backend.env"
 sh /workdir/deploy/docker/ensure-env.sh
 
 echo ">>> [rotate-db-password] 开始把 MySQL 中的业务账号密码同步为根 .env 的 DB_PASS"

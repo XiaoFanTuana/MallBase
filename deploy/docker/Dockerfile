@@ -79,6 +79,7 @@ RUN chmod 0555 \
     /usr/local/bin/export-backend-env.php \
     /usr/local/bin/mallbase-healthcheck.php \
     && php -l /usr/local/bin/mallbase-healthcheck.php
+COPY --chmod=0444 LICENSE /LICENSE
 
 EXPOSE 8080
 

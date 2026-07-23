@@ -6,6 +6,7 @@ import {
   subscribeAuthSession,
   writeAuthSession,
 } from '@/utils/auth-session'
+import { notifyAuthCleared, rotateAuthSessionId } from '@/utils/auth'
 
 let stopAuthSubscription = null
 
@@ -38,9 +39,11 @@ export const useUserStore = defineStore('user', {
     },
     setToken(accessToken, refreshToken) {
       this.applyAuthSession(writeAuthSession(accessToken, refreshToken))
+      rotateAuthSessionId()
     },
     clearAuth() {
       this.applyAuthSession(clearAuthSession())
+      notifyAuthCleared()
     },
     async fetchUserInfo() {
       if (!this.token) {
