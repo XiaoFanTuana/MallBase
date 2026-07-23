@@ -18,13 +18,13 @@ COPY frontend/admin/package.json \
      frontend/admin/.npmrc \
      ./
 
-RUN --mount=type=cache,id=mallbase-admin-pnpm,target=/pnpm/store,sharing=locked \
-    pnpm fetch --frozen-lockfile
+# Keep the fetched store in the image layer: remote BuildKit cache restores
+# layers, but not cache-mount contents required by the offline install.
+RUN pnpm fetch --frozen-lockfile
 
 COPY frontend/admin/ ./
 
-RUN --mount=type=cache,id=mallbase-admin-pnpm,target=/pnpm/store,sharing=locked \
-    pnpm install --offline --frozen-lockfile \
+RUN pnpm install --offline --frozen-lockfile \
     && pnpm run build:antd \
     && test -s apps/web-antd/dist/index.html
 

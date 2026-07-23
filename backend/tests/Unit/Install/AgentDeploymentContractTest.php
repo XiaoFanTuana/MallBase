@@ -187,6 +187,15 @@ final class AgentDeploymentContractTest extends TestCase
         }
     }
 
+    public function testWebDockerfileKeepsOfflinePnpmStoreInBuildLayer(): void
+    {
+        $dockerfile = $this->read('deploy/docker/web/Dockerfile');
+
+        self::assertStringContainsString('RUN pnpm fetch --frozen-lockfile', $dockerfile);
+        self::assertStringContainsString('pnpm install --offline --frozen-lockfile', $dockerfile);
+        self::assertStringNotContainsString('id=mallbase-admin-pnpm', $dockerfile);
+    }
+
     public function testDockerImagesContainTheReadOnlyProjectLicenseWithoutComposeOverride(): void
     {
         $license = $this->read('LICENSE');
